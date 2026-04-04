@@ -20,8 +20,12 @@ export interface ApproveInput {
  */
 export function findHeldTask(runtimeDir: string, slug: string): string | null {
   const taskPath = join(runtimeDir, "12-hold", slug);
-  if (existsSync(taskPath) && statSync(taskPath).isDirectory()) {
-    return taskPath;
+  try {
+    if (existsSync(taskPath) && statSync(taskPath).isDirectory()) {
+      return taskPath;
+    }
+  } catch {
+    // Directory may have been removed between existsSync and statSync
   }
   return null;
 }
@@ -41,7 +45,12 @@ export function listHeldTasks(runtimeDir: string): string[] {
 
   return readdirSync(holdDir).filter((entry) => {
     const entryPath = join(holdDir, entry);
-    return statSync(entryPath).isDirectory();
+    try {
+      return statSync(entryPath).isDirectory();
+    } catch {
+      // Entry may have been deleted between readdirSync and statSync
+      return false;
+    }
   });
 }
 

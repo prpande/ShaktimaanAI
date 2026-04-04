@@ -1,7 +1,7 @@
 import { readdirSync, statSync, existsSync } from "node:fs";
 import { join } from "node:path";
 
-import { STAGE_DIR_MAP } from "./pipeline.js";
+import { STAGE_DIR_MAP } from "./stage-map.js";
 import { type Pipeline } from "./pipeline.js";
 import { type TaskLogger } from "./logger.js";
 
@@ -83,11 +83,18 @@ export async function runRecovery(
 
   const items = scanForRecovery(runtimeDir);
 
+  const RECOVERY_TIMEOUT_MS = 30_000; // 30 seconds per task
+
   for (const item of items) {
     const stageSubdir = join(STAGE_DIR_MAP[item.stage], "pending");
     try {
       logger.info(`Recovering task "${item.slug}" from stage "${item.stage}"`);
-      await pipeline.resumeRun(item.slug, stageSubdir);
+      await Promise.race([
+        pipeline.resumeRun(item.slug, stageSubdir),
+        new Promise<never>((_, reject) =>
+          setTimeout(() => reject(new Error(`Recovery timed out after ${RECOVERY_TIMEOUT_MS / 1000}s`)), RECOVERY_TIMEOUT_MS),
+        ),
+      ]);
       result.resumed.push(item.slug);
     } catch (err) {
       const errorMsg = err instanceof Error ? err.message : String(err);

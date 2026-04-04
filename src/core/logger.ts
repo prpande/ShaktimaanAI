@@ -17,7 +17,11 @@ export function createTaskLogger(logDir: string, slug: string): TaskLogger {
   const logFile = join(logDir, `${slug}.log`);
 
   function write(level: string, msg: string): void {
-    appendFileSync(logFile, formatLogLine(level, msg), "utf8");
+    try {
+      appendFileSync(logFile, formatLogLine(level, msg), "utf8");
+    } catch {
+      // Logging should never crash the pipeline — silently swallow write errors
+    }
   }
 
   return {

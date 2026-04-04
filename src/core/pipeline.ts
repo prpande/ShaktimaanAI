@@ -6,24 +6,10 @@ import { type ResolvedConfig } from "../config/loader.js";
 import { type AgentRunnerFn, type AgentRunOptions, type RunState, type CompletedStage } from "./types.js";
 import { type AgentRegistry } from "./registry.js";
 import { type TaskLogger, createTaskLogger } from "./logger.js";
+import { STAGE_DIR_MAP, DIR_STAGE_MAP } from "./stage-map.js";
 
-// ─── Stage ↔ Directory Maps ────────────────────────────────────────────────
-
-export const STAGE_DIR_MAP: Record<string, string> = {
-  questions: "01-questions",
-  research: "02-research",
-  design: "03-design",
-  structure: "04-structure",
-  plan: "05-plan",
-  impl: "06-impl",
-  validate: "07-validate",
-  review: "08-review",
-  pr: "09-pr",
-};
-
-export const DIR_STAGE_MAP: Record<string, string> = Object.fromEntries(
-  Object.entries(STAGE_DIR_MAP).map(([stage, dir]) => [dir, stage]),
-);
+// Re-export for backwards compatibility
+export { STAGE_DIR_MAP, DIR_STAGE_MAP };
 
 // ─── Pure Utilities ─────────────────────────────────────────────────────────
 
@@ -70,8 +56,18 @@ export function createRunState(
 const RUN_STATE_FILE = "run-state.json";
 
 export function readRunState(taskDir: string): RunState {
-  const raw = readFileSync(join(taskDir, RUN_STATE_FILE), "utf-8");
-  return JSON.parse(raw) as RunState;
+  const filePath = join(taskDir, RUN_STATE_FILE);
+  let raw: string;
+  try {
+    raw = readFileSync(filePath, "utf-8");
+  } catch (err) {
+    throw new Error(`Failed to read run state at "${filePath}": ${err instanceof Error ? err.message : String(err)}`);
+  }
+  try {
+    return JSON.parse(raw) as RunState;
+  } catch (err) {
+    throw new Error(`Corrupt run state JSON at "${filePath}": ${err instanceof Error ? err.message : String(err)}`);
+  }
 }
 
 export function writeRunState(taskDir: string, state: RunState): void {
@@ -103,7 +99,14 @@ export function moveTaskDir(
   const destParent = join(runtimeDir, toSubdir);
   mkdirSync(destParent, { recursive: true });
   const dest = join(destParent, slug);
-  renameSync(src, dest);
+  try {
+    renameSync(src, dest);
+  } catch (err) {
+    throw new Error(
+      `Failed to move task "${slug}" from "${fromSubdir}" to "${toSubdir}": ` +
+      `${err instanceof Error ? err.message : String(err)}`,
+    );
+  }
   return dest;
 }
 
@@ -130,138 +133,162 @@ export function createPipeline(options: PipelineOptions): Pipeline {
   const runtimeDir = config.pipeline.runtimeDir;
   const activeRuns = new Map<string, RunState>();
 
-  async function processStage(slug: string, taskDir: string): Promise<void> {
-    const state = readRunState(taskDir);
-    const stage = state.currentStage;
-    const taskLogger = createTaskLogger(join(runtimeDir, "logs"), slug);
+  async function processStage(slug: string, initialTaskDir: string): Promise<void> {
+    let currentTaskDir = initialTaskDir;
 
-    if (!registry.canStartAgent(stage)) {
-      return; // queued — will be picked up later
-    }
+    // Iterative loop replaces recursion to avoid stack depth issues with long pipelines
+    while (true) {
+      const state = readRunState(currentTaskDir);
+      const stage = state.currentStage;
+      const taskLogger = createTaskLogger(join(runtimeDir, "logs"), slug);
 
-    const abortController = new AbortController();
-    const agentName = config.agents.names[stage] ?? stage;
-    const agentId = registry.register(slug, stage, agentName, abortController);
-
-    // Collect previous outputs from artifacts/
-    const artifactsDir = join(taskDir, "artifacts");
-    let previousOutput = "";
-    if (existsSync(artifactsDir)) {
-      const files = readdirSync(artifactsDir).filter(f => f.endsWith(".md")).sort();
-      for (const file of files) {
-        previousOutput += readFileSync(join(artifactsDir, file), "utf-8") + "\n";
+      if (!registry.canStartAgent(stage)) {
+        // Task stays in pending/ — crash recovery will resume it on next startup.
+        logger.warn(
+          `[pipeline] Capacity reached — task "${slug}" stage "${stage}" deferred (remains in pending/)`,
+        );
+        return;
       }
-    }
 
-    // Read task content
-    const taskContent = readFileSync(join(taskDir, "task.task"), "utf-8");
+      const abortController = new AbortController();
+      const agentName = config.agents.names[stage] ?? stage;
+      const agentId = registry.register(slug, stage, agentName, abortController);
 
-    const outputPath = join(artifactsDir, `${stage}-output.md`);
+      // Collect previous outputs from artifacts/
+      const artifactsDir = join(currentTaskDir, "artifacts");
+      let previousOutput = "";
+      if (existsSync(artifactsDir)) {
+        const files = readdirSync(artifactsDir).filter(f => f.endsWith(".md")).sort();
+        for (const file of files) {
+          previousOutput += readFileSync(join(artifactsDir, file), "utf-8") + "\n";
+        }
+      }
 
-    const runOptions: AgentRunOptions = {
-      stage,
-      slug,
-      taskContent,
-      previousOutput: previousOutput.trim(),
-      outputPath,
-      cwd: taskDir,
-      config,
-      templateDir: join(runtimeDir, "templates"),
-      abortController,
-      logger: taskLogger,
-    };
+      // Read task content
+      const taskContent = readFileSync(join(currentTaskDir, "task.task"), "utf-8");
 
-    let result;
-    try {
-      result = await runner(runOptions);
-    } catch (err) {
+      const outputPath = join(artifactsDir, `${stage}-output.md`);
+
+      const runOptions: AgentRunOptions = {
+        stage,
+        slug,
+        taskContent,
+        previousOutput: previousOutput.trim(),
+        outputPath,
+        cwd: currentTaskDir,
+        config,
+        templateDir: join(runtimeDir, "templates"),
+        abortController,
+        logger: taskLogger,
+      };
+
+      let result;
+      try {
+        result = await runner(runOptions);
+      } catch (err) {
+        registry.unregister(agentId);
+        state.status = "failed";
+        state.error = err instanceof Error ? err.message : String(err);
+        writeRunState(currentTaskDir, state);
+        try {
+          moveTaskDir(
+            runtimeDir, slug,
+            join(STAGE_DIR_MAP[stage], "pending"),
+            "11-failed",
+          );
+        } catch (moveErr) {
+          logger.error(
+            `[pipeline] Failed to move task "${slug}" to 11-failed: ` +
+            `${moveErr instanceof Error ? moveErr.message : String(moveErr)}. ` +
+            `Original error: ${state.error}`,
+          );
+        }
+        activeRuns.delete(slug);
+        return;
+      }
+
       registry.unregister(agentId);
-      state.status = "failed";
-      state.error = (err as Error).message;
-      writeRunState(taskDir, state);
-      const failedDir = moveTaskDir(
+
+      if (!result.success) {
+        state.status = "failed";
+        state.error = result.error ?? "Agent failed";
+        writeRunState(currentTaskDir, state);
+        try {
+          moveTaskDir(
+            runtimeDir, slug,
+            join(STAGE_DIR_MAP[stage], "pending"),
+            "11-failed",
+          );
+        } catch (moveErr) {
+          logger.error(
+            `[pipeline] Failed to move task "${slug}" to 11-failed: ` +
+            `${moveErr instanceof Error ? moveErr.message : String(moveErr)}. ` +
+            `Original error: ${state.error}`,
+          );
+        }
+        activeRuns.delete(slug);
+        return;
+      }
+
+      // If agent didn't write outputPath file, create it from result.output
+      if (!existsSync(outputPath)) {
+        mkdirSync(dirname(outputPath), { recursive: true });
+        writeFileSync(outputPath, result.output, "utf-8");
+      }
+
+      // Add completed stage
+      state.completedStages.push({
+        stage,
+        completedAt: new Date().toISOString(),
+        outputFile: `${stage}-output.md`,
+        costUsd: result.costUsd,
+        turns: result.turns,
+      });
+
+      // Move from pending to done
+      const doneDir = moveTaskDir(
         runtimeDir, slug,
         join(STAGE_DIR_MAP[stage], "pending"),
-        "11-failed",
+        join(STAGE_DIR_MAP[stage], "done"),
       );
-      activeRuns.delete(slug);
-      return;
-    }
 
-    registry.unregister(agentId);
+      // Check review gate
+      if (isReviewGate(stage, state.reviewAfter)) {
+        state.status = "hold";
+        writeRunState(doneDir, state);
+        moveTaskDir(
+          runtimeDir, slug,
+          join(STAGE_DIR_MAP[stage], "done"),
+          "12-hold",
+        );
+        activeRuns.set(slug, readRunState(join(runtimeDir, "12-hold", slug)));
+        return;
+      }
 
-    if (!result.success) {
-      state.status = "failed";
-      state.error = result.error ?? "Agent failed";
-      writeRunState(taskDir, state);
-      moveTaskDir(
-        runtimeDir, slug,
-        join(STAGE_DIR_MAP[stage], "pending"),
-        "11-failed",
-      );
-      activeRuns.delete(slug);
-      return;
-    }
+      // Check next stage
+      const nextStage = getNextStage(stage, state.stages);
+      if (nextStage === null) {
+        state.status = "complete";
+        writeRunState(doneDir, state);
+        moveTaskDir(
+          runtimeDir, slug,
+          join(STAGE_DIR_MAP[stage], "done"),
+          "10-complete",
+        );
+        activeRuns.set(slug, readRunState(join(runtimeDir, "10-complete", slug)));
+        return;
+      }
 
-    // If agent didn't write outputPath file, create it from result.output
-    if (!existsSync(outputPath)) {
-      mkdirSync(dirname(outputPath), { recursive: true });
-      writeFileSync(outputPath, result.output, "utf-8");
-    }
-
-    // Add completed stage
-    state.completedStages.push({
-      stage,
-      completedAt: new Date().toISOString(),
-      outputFile: `${stage}-output.md`,
-      costUsd: result.costUsd,
-      turns: result.turns,
-    });
-
-    // Move from pending to done
-    const doneDir = moveTaskDir(
-      runtimeDir, slug,
-      join(STAGE_DIR_MAP[stage], "pending"),
-      join(STAGE_DIR_MAP[stage], "done"),
-    );
-
-    // Check review gate
-    if (isReviewGate(stage, state.reviewAfter)) {
-      state.status = "hold";
+      // Continue to next stage (iterative — no recursion)
+      state.currentStage = nextStage;
+      state.status = "running";
       writeRunState(doneDir, state);
-      moveTaskDir(
+      currentTaskDir = moveTaskDir(
         runtimeDir, slug,
         join(STAGE_DIR_MAP[stage], "done"),
-        "12-hold",
+        join(STAGE_DIR_MAP[nextStage], "pending"),
       );
-      activeRuns.set(slug, readRunState(join(runtimeDir, "12-hold", slug)));
-      return;
     }
-
-    // Check next stage
-    const nextStage = getNextStage(stage, state.stages);
-    if (nextStage === null) {
-      state.status = "complete";
-      writeRunState(doneDir, state);
-      moveTaskDir(
-        runtimeDir, slug,
-        join(STAGE_DIR_MAP[stage], "done"),
-        "10-complete",
-      );
-      activeRuns.set(slug, readRunState(join(runtimeDir, "10-complete", slug)));
-      return;
-    }
-
-    // Continue to next stage
-    state.currentStage = nextStage;
-    state.status = "running";
-    writeRunState(doneDir, state);
-    const nextTaskDir = moveTaskDir(
-      runtimeDir, slug,
-      join(STAGE_DIR_MAP[stage], "done"),
-      join(STAGE_DIR_MAP[nextStage], "pending"),
-    );
-    await processStage(slug, nextTaskDir);
   }
 
   return {

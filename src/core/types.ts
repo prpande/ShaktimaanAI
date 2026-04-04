@@ -1,3 +1,5 @@
+import type { ResolvedConfig } from "../config/loader.js";
+
 export type PipelineStage =
   | "questions" | "research" | "design" | "structure" | "plan"
   | "impl" | "validate" | "review" | "pr";
@@ -32,7 +34,7 @@ export interface AgentRunOptions {
   previousOutput: string;
   outputPath: string;
   cwd: string;
-  config: import("../config/loader.js").ResolvedConfig;
+  config: ResolvedConfig;
   templateDir: string;
   abortController?: AbortController;
   logger: { info(msg: string): void; warn(msg: string): void; error(msg: string): void };

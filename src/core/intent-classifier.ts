@@ -1,3 +1,4 @@
+import { z } from "zod";
 import type { AgentRunOptions, AgentRunResult, AgentRunnerFn } from "./types.js";
 import type { ResolvedConfig } from "../config/loader.js";
 
@@ -128,14 +129,17 @@ export async function classifyByLLM(
   let json = result.output.trim();
   json = json.replace(/^```(?:json)?\s*/i, "").replace(/\s*```$/, "").trim();
 
+  const classifySchema = z.object({
+    intent: z.enum(["create_task", "approve", "status", "cancel", "unknown"]).catch("unknown"),
+    confidence: z.number().min(0).max(1).catch(0),
+    extractedSlug: z.string().nullable().catch(null),
+    extractedContent: z.string().nullable().catch(null),
+  });
+
   try {
-    const parsed = JSON.parse(json) as Partial<ClassifyResult>;
-    return {
-      intent: parsed.intent ?? "unknown",
-      confidence: parsed.confidence ?? 0,
-      extractedSlug: parsed.extractedSlug ?? null,
-      extractedContent: parsed.extractedContent ?? null,
-    };
+    const raw = JSON.parse(json);
+    const parsed = classifySchema.parse(raw);
+    return parsed;
   } catch (err) {
     logger.warn(`[intent-classifier] Failed to parse LLM JSON: ${(err as Error).message}`);
     return { ...UNKNOWN_RESULT };

@@ -14,13 +14,25 @@ export function getConfigValue(configPath: string, dotPath: string): unknown {
 }
 
 export function setConfigValue(configPath: string, dotPath: string, value: unknown): void {
-  const raw = JSON.parse(readFileSync(configPath, "utf-8"));
+  if (!dotPath || dotPath.trim() === "") {
+    throw new Error("Config path must not be empty");
+  }
   const keys = dotPath.split(".");
+  if (keys.some((k) => k === "")) {
+    throw new Error(`Invalid config path: "${dotPath}" — contains empty segments`);
+  }
+
+  const raw = JSON.parse(readFileSync(configPath, "utf-8"));
   let current: Record<string, unknown> = raw;
   for (let i = 0; i < keys.length - 1; i++) {
     const key = keys[i];
-    if (!(key in current) || typeof current[key] !== "object" || current[key] === null) {
+    if (!(key in current)) {
       current[key] = {};
+    } else if (typeof current[key] !== "object" || current[key] === null) {
+      throw new Error(
+        `Cannot set "${dotPath}": intermediate key "${keys.slice(0, i + 1).join(".")}" ` +
+        `is a ${typeof current[key]}, not an object`,
+      );
     }
     current = current[key] as Record<string, unknown>;
   }

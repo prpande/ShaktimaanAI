@@ -10,7 +10,7 @@ export function registerStopCommand(program: Command): void {
   program
     .command("stop")
     .description("Stop the ShaktimaanAI pipeline watcher")
-    .action(() => {
+    .action(async () => {
       // 1. Resolve config
       const configPath = resolveConfigPath();
       const config = loadConfig(configPath);
@@ -33,8 +33,27 @@ export function registerStopCommand(program: Command): void {
         }
 
         process.kill(pid, "SIGTERM");
+
+        // Wait briefly and verify the process has stopped
+        const deadline = Date.now() + 3_000;
+        let alive = true;
+        while (Date.now() < deadline) {
+          try {
+            process.kill(pid, 0); // signal 0 = check if alive
+            await new Promise((r) => setTimeout(r, 250));
+          } catch {
+            alive = false;
+            break;
+          }
+        }
+
         unlinkSync(pidFile);
-        console.log(`Sent stop signal to ShaktimaanAI (PID ${pid}).`);
+
+        if (alive) {
+          console.warn(`Warning: ShaktimaanAI (PID ${pid}) may still be running after SIGTERM.`);
+        } else {
+          console.log(`ShaktimaanAI (PID ${pid}) stopped.`);
+        }
       } catch (err) {
         const message = err instanceof Error ? err.message : String(err);
         console.error(`Failed to stop ShaktimaanAI: ${message}`);

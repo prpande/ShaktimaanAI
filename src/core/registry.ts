@@ -58,12 +58,8 @@ export function createAgentRegistry(maxConcurrentTotal: number, maxConcurrentVal
 
     canStartAgent(stage) {
       if (agents.size >= maxConcurrentTotal) return false;
-      if (stage === "validate") {
-        let validateCount = 0;
-        for (const entry of agents.values()) {
-          if (entry.stage === "validate") validateCount++;
-        }
-        if (validateCount >= maxConcurrentValidate) return false;
+      if (stage === "validate" && this.getActiveValidateCount() >= maxConcurrentValidate) {
+        return false;
       }
       return true;
     },

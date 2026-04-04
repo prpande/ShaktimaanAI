@@ -1,5 +1,5 @@
-import { writeFileSync } from "node:fs";
-import { join } from "node:path";
+import { writeFileSync, mkdirSync } from "node:fs";
+import { join, dirname } from "node:path";
 import { type ResolvedConfig } from "../config/loader.js";
 
 // ─── types ───────────────────────────────────────────────────────────────────
@@ -117,6 +117,7 @@ export function createTask(
   const slug = generateSlug(title);
   const content = buildTaskFileContent(input, config);
   const filePath = join(runtimeDir, "00-inbox", `${slug}.task`);
+  mkdirSync(dirname(filePath), { recursive: true });
   writeFileSync(filePath, content, "utf-8");
   return slug;
 }

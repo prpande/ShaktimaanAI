@@ -16,10 +16,6 @@ import { runRecovery } from "../core/recovery.js";
 
 let activeWatcher: Watcher | null = null;
 
-export function getActiveWatcher(): Watcher | null {
-  return activeWatcher;
-}
-
 // ─── registerStartCommand ────────────────────────────────────────────────────
 
 export function registerStartCommand(program: Command): void {
@@ -88,6 +84,18 @@ export function registerStartCommand(program: Command): void {
       const shutdown = async (signal: string): Promise<void> => {
         logger.info(`Received ${signal} — shutting down`);
         registry.abortAll();
+
+        // Grace period: wait up to 5 seconds for agents to finish
+        const graceMs = 5_000;
+        const pollMs = 250;
+        const deadline = Date.now() + graceMs;
+        while (registry.getActiveCount() > 0 && Date.now() < deadline) {
+          await new Promise((r) => setTimeout(r, pollMs));
+        }
+        if (registry.getActiveCount() > 0) {
+          logger.warn(`[shutdown] ${registry.getActiveCount()} agent(s) still running after grace period — forcing exit`);
+        }
+
         if (activeWatcher) {
           await activeWatcher.stop();
           activeWatcher = null;
