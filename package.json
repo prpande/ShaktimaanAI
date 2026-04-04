@@ -10,7 +10,7 @@
     "dist"
   ],
   "scripts": {
-    "build": "tsup && cp -r agents dist/agents",
+    "build": "tsup && cp -r agents/ dist/agents",
     "dev": "tsup --watch",
     "test": "vitest run",
     "test:watch": "vitest"

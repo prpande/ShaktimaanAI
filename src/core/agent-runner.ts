@@ -1,4 +1,5 @@
 import { join, dirname } from "node:path";
+import { existsSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { loadAgentPrompt } from "./agent-config.js";
 import { gatherRepoContext } from "./repo-context.js";
@@ -12,8 +13,13 @@ import type { ResolvedConfig } from "../config/loader.js";
 function findShippedAgentsDir(): string {
   try {
     const thisDir = dirname(fileURLToPath(import.meta.url));
-    const projectRoot = join(thisDir, "..", "..");
-    return join(projectRoot, "agents");
+    // When running from dist/cli.js: agents are at dist/agents/ (peer dir)
+    const peerAgents = join(thisDir, "agents");
+    if (existsSync(peerAgents)) return peerAgents;
+    // Dev / project root: agents/ is at the package root
+    const rootAgents = join(thisDir, "..", "..", "agents");
+    if (existsSync(rootAgents)) return rootAgents;
+    return peerAgents;
   } catch {
     return join(process.cwd(), "agents");
   }
