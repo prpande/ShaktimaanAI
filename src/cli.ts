@@ -1,6 +1,4 @@
 #!/usr/bin/env node
-import { existsSync } from "node:fs";
-import { join } from "node:path";
 import { Command } from "commander";
 import { runInitWizard } from "./commands/init.js";
 import { registerStartCommand } from "./commands/start.js";
@@ -11,6 +9,7 @@ import { registerStatusCommand } from "./commands/status.js";
 import { registerLogsCommand } from "./commands/logs.js";
 import { registerHistoryCommand } from "./commands/history.js";
 import { getConfigValue, setConfigValue } from "./commands/config.js";
+import { resolveConfigPath } from "./config/resolve-path.js";
 
 const program = new Command();
 
@@ -69,20 +68,3 @@ registerLogsCommand(program);
 registerHistoryCommand(program);
 
 program.parse();
-
-function resolveConfigPath(): string {
-  // 1. SHKMN_CONFIG env var
-  if (process.env.SHKMN_CONFIG && existsSync(process.env.SHKMN_CONFIG)) {
-    return process.env.SHKMN_CONFIG;
-  }
-  // 2. Current directory
-  const cwd = join(process.cwd(), "shkmn.config.json");
-  if (existsSync(cwd)) return cwd;
-  // 3. Home directory .shkmn/runtime
-  const home = process.env.HOME ?? process.env.USERPROFILE ?? "";
-  const homeConfig = join(home, ".shkmn", "runtime", "shkmn.config.json");
-  if (existsSync(homeConfig)) return homeConfig;
-
-  console.error("Config not found. Run 'shkmn init' first, or set SHKMN_CONFIG env var.");
-  process.exit(1);
-}
