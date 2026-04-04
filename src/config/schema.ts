@@ -37,6 +37,8 @@ export const configSchema = z.object({
     timeoutsMinutes: z.record(z.string(), z.number()).optional(),
     heartbeatTimeoutMinutes: z.number().optional(),
     retryCount: z.number().optional(),
+    maxValidateRetries: z.number().optional(),
+    maxReviewRecurrence: z.number().optional(),
   }).optional().default({}),
   schedule: z.object({
     rollupTime: z.string().optional(),
@@ -44,6 +46,13 @@ export const configSchema = z.object({
     notionPushTime: z.string().optional(),
     monthlyReportDay: z.number().optional(),
     monthlyReportTime: z.string().optional(),
+  }).optional().default({}),
+  worktree: z.object({
+    retentionDays: z.number().optional().default(7),
+    cleanupOnStartup: z.boolean().optional().default(true),
+  }).optional().default({}),
+  review: z.object({
+    enforceSuggestions: z.boolean().optional().default(true),
   }).optional().default({}),
 });
 

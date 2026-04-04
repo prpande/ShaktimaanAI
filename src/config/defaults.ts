@@ -49,6 +49,8 @@ export interface ShkmnConfig {
     timeoutsMinutes: Record<string, number>;
     heartbeatTimeoutMinutes: number;
     retryCount: number;
+    maxValidateRetries: number;
+    maxReviewRecurrence: number;
   };
   schedule: {
     rollupTime: string;
@@ -56,6 +58,13 @@ export interface ShkmnConfig {
     notionPushTime: string;
     monthlyReportDay: number;
     monthlyReportTime: string;
+  };
+  worktree: {
+    retentionDays: number;
+    cleanupOnStartup: boolean;
+  };
+  review: {
+    enforceSuggestions: boolean;
   };
 }
 
@@ -114,6 +123,8 @@ export const DEFAULT_CONFIG: ShkmnConfig = {
     },
     heartbeatTimeoutMinutes: 10,
     retryCount: 1,
+    maxValidateRetries: 2,
+    maxReviewRecurrence: 3,
   },
   schedule: {
     rollupTime: "23:55",
@@ -121,5 +132,12 @@ export const DEFAULT_CONFIG: ShkmnConfig = {
     notionPushTime: "18:00",
     monthlyReportDay: 1,
     monthlyReportTime: "08:00",
+  },
+  worktree: {
+    retentionDays: 7,
+    cleanupOnStartup: true,
+  },
+  review: {
+    enforceSuggestions: true,
   },
 };

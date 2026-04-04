@@ -34,6 +34,8 @@ export interface ResolvedConfig {
     timeoutsMinutes: Record<string, number>;
     heartbeatTimeoutMinutes: number;
     retryCount: number;
+    maxValidateRetries: number;
+    maxReviewRecurrence: number;
   };
   schedule: {
     rollupTime: string;
@@ -41,6 +43,13 @@ export interface ResolvedConfig {
     notionPushTime: string;
     monthlyReportDay: number;
     monthlyReportTime: string;
+  };
+  worktree: {
+    retentionDays: number;
+    cleanupOnStartup: boolean;
+  };
+  review: {
+    enforceSuggestions: boolean;
   };
 }
 
@@ -113,6 +122,8 @@ export function resolveConfig(parsed: ConfigParsed): ResolvedConfig {
       timeoutsMinutes: { ...da.timeoutsMinutes, ...parsed.agents?.timeoutsMinutes },
       heartbeatTimeoutMinutes: parsed.agents?.heartbeatTimeoutMinutes ?? da.heartbeatTimeoutMinutes,
       retryCount: parsed.agents?.retryCount ?? da.retryCount,
+      maxValidateRetries: parsed.agents?.maxValidateRetries ?? da.maxValidateRetries,
+      maxReviewRecurrence: parsed.agents?.maxReviewRecurrence ?? da.maxReviewRecurrence,
     },
     schedule: {
       rollupTime: parsed.schedule?.rollupTime ?? d.schedule.rollupTime,
@@ -120,6 +131,13 @@ export function resolveConfig(parsed: ConfigParsed): ResolvedConfig {
       notionPushTime: parsed.schedule?.notionPushTime ?? d.schedule.notionPushTime,
       monthlyReportDay: parsed.schedule?.monthlyReportDay ?? d.schedule.monthlyReportDay,
       monthlyReportTime: parsed.schedule?.monthlyReportTime ?? d.schedule.monthlyReportTime,
+    },
+    worktree: {
+      retentionDays: parsed.worktree?.retentionDays ?? d.worktree.retentionDays,
+      cleanupOnStartup: parsed.worktree?.cleanupOnStartup ?? d.worktree.cleanupOnStartup,
+    },
+    review: {
+      enforceSuggestions: parsed.review?.enforceSuggestions ?? d.review.enforceSuggestions,
     },
   };
 }
