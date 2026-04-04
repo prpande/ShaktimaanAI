@@ -428,17 +428,6 @@ shaktimaanai/
 ├── bin/
 │   └── shkmn.ts                 ← CLI entry point
 ├── src/
-│   ├── agents/
-│   │   ├── narada.ts            ← Questions agent
-│   │   ├── chitragupta.ts       ← Research agent
-│   │   ├── vishwakarma.ts       ← Design agent
-│   │   ├── vastu.ts             ← Structure agent
-│   │   ├── chanakya.ts          ← Plan agent
-│   │   ├── hanuman.ts           ← Work tree organizer
-│   │   ├── karigar.ts           ← Impl agent
-│   │   ├── dharma.ts            ← Validate agent
-│   │   ├── drona.ts             ← Review agent
-│   │   └── garuda.ts            ← PR agent
 │   ├── core/
 │   │   ├── heimdall.ts          ← File watcher
 │   │   ├── brahma.ts            ← Task creator
@@ -454,16 +443,19 @@ shaktimaanai/
 │   │   ├── slack.ts             ← Slack input/output
 │   │   ├── dashboard.ts         ← Dashboard data push
 │   │   └── cli.ts               ← CLI commands
-│   └── templates/
-│       ├── prompt-questions.md
-│       ├── prompt-research.md
-│       ├── prompt-design.md
-│       ├── prompt-structure.md
-│       ├── prompt-plan.md
-│       ├── prompt-impl.md
-│       ├── prompt-validate.md
-│       ├── prompt-review.md
-│       └── prompt-classify.md
+│   └── utils/
+├── agents/                      ← Pure prompt instructions (no frontmatter)
+│   ├── questions.md
+│   ├── research.md
+│   ├── design.md
+│   ├── structure.md
+│   ├── plan.md
+│   ├── impl.md
+│   ├── validate.md
+│   ├── review.md
+│   ├── pr.md
+│   ├── classify.md
+│   └── agent-template.md
 ├── dashboard-template/           ← GitHub template repo contents
 │   ├── .github/workflows/
 │   │   └── build-deploy.yml
@@ -561,64 +553,62 @@ Five specs, in implementation order. Each spec gets its own document.
 
 ## 17. Per-Stage Agent Templates
 
-Each pipeline stage directory in the npm package includes a template file that defines:
-- What the agent for that stage does
-- What inputs it receives
-- What output it must produce
-- Tool permissions (Agent SDK scoping)
-- Max turns and timeout defaults
+Each pipeline stage has a corresponding markdown file in `agents/` that contains the full behavioral prompt for that stage's agent. These files are pure markdown — no YAML frontmatter, no `{{VARIABLE}}` placeholders.
 
-These templates serve two purposes:
-1. **Runtime prompt injection** — loaded and hydrated with task-specific variables when the agent is spawned
-2. **Extensibility documentation** — users or contributors who want to add a new agent (e.g., a security audit stage, a docs generation stage) can copy an existing template as a starting point
+Operational metadata (tool permissions, max turns, timeouts) lives in `src/config/defaults.ts` (`DEFAULT_STAGE_TOOLS`, `DEFAULT_CONFIG.agents.maxTurns`, `DEFAULT_CONFIG.agents.timeoutsMinutes`). `buildSystemPrompt` in `src/core/agent-runner.ts` composes the final prompt from sections using `STAGE_CONTEXT_RULES`, injecting pipeline context, task content, repo context, and prior stage outputs as structured sections — no placeholder substitution.
 
-### Template location
+These files serve two purposes:
+1. **Runtime prompt** — loaded directly when the agent is spawned; `buildSystemPrompt` wraps with context sections
+2. **Extensibility documentation** — users or contributors who want to add a new agent (e.g., a security audit stage, a docs generation stage) can copy `agent-template.md` as a starting point
+
+### Agent file location
 
 ```
-src/templates/
-├── prompt-questions.md      ← Narada: generates technical questions
-├── prompt-research.md       ← Chitragupta: factual codebase investigation
-├── prompt-design.md         ← Vishwakarma: architectural design decisions
-├── prompt-structure.md      ← Vastu: vertical slice decomposition
-├── prompt-plan.md           ← Chanakya: tactical implementation plan
-├── prompt-impl.md           ← Karigar: TDD code implementation
-├── prompt-validate.md       ← Dharma: discover and run build/test commands
-├── prompt-review.md         ← Drona: code quality review
-├── prompt-classify.md       ← Sutradhaar: intent classification
-└── agent-template.md        ← Blank template for creating new agents
+agents/
+├── questions.md         ← Questions agent: generates targeted technical questions
+├── research.md          ← Research agent: factual codebase investigation
+├── design.md            ← Design agent: architectural design decisions
+├── structure.md         ← Structure agent: vertical slice decomposition
+├── plan.md              ← Plan agent: tactical implementation plan
+├── impl.md              ← Impl agent: TDD code implementation
+├── validate.md          ← Validate agent: discover and run build/test commands
+├── review.md            ← Review agent: code quality review
+├── pr.md                ← PR agent: push branch and create pull request
+├── classify.md          ← Intent classifier: classify freeform input
+└── agent-template.md    ← Blank template for creating new agents
 ```
 
-### Template format
+### Agent file format
 
-Each prompt template uses `{{VARIABLE}}` placeholders that the pipeline engine hydrates at runtime:
+Each file contains pure markdown prompt instructions with no frontmatter or template variables:
 
 ```markdown
-{{PIPELINE_CONTEXT}}
+# Identity
 
-You are {{AGENT_NAME}}, the {{AGENT_ROLE}} agent in the ShaktimaanAI pipeline.
+You are the [role] agent in the ShaktimaanAI pipeline.
 
-═══ TASK ═══
-{{TASK_CONTENT}}
+# Instructions
 
-═══ PREVIOUS STAGE OUTPUT ═══
-{{PREVIOUS_OUTPUT}}
+[Stage-specific behavioral instructions, investigation strategies,
+output format specifications, and self-validation checklists.]
 
-═══ YOUR JOB ═══
-[stage-specific instructions]
+# Output
 
-═══ OUTPUT ═══
-Write your output to EXACTLY this path: {{OUTPUT_PATH}}
-[stage-specific output format]
+Write your output to the path provided in the pipeline context.
+[Stage-specific output format requirements.]
 ```
+
+`buildSystemPrompt` prepends pipeline context (task, stage, prior outputs, repo context) as structured sections before these instructions, controlled by `STAGE_CONTEXT_RULES` in `src/config/defaults.ts`.
 
 ### Adding a new agent
 
 To add a custom stage (e.g., "security-audit" between review and PR):
 
-1. Create `src/templates/prompt-security-audit.md` using `agent-template.md` as a starting point
-2. Create `src/agents/security-audit.ts` implementing the agent runner
-3. Register the stage in the pipeline engine's stage map
-4. Add the stage name to the valid stages list in the config schema
-5. Users include "security-audit" in their task's `stages:` field to activate it
+1. Create `agents/security-audit.md` with the behavioral instructions, using `agent-template.md` as a starting point
+2. Add tool permissions to `DEFAULT_STAGE_TOOLS` in `src/config/defaults.ts`
+3. Add context injection rules to `STAGE_CONTEXT_RULES` in `src/config/defaults.ts`
+4. Add `maxTurns` and `timeoutsMinutes` entries for the new stage in `DEFAULT_CONFIG` in `src/config/defaults.ts`
+5. Register the stage in the pipeline engine's stage map in `src/core/pipeline.ts`
+6. Users include "security-audit" in their task's `stages:` field to activate it
 
 This is implemented in **Spec 2: Pipeline Engine & Agents**.

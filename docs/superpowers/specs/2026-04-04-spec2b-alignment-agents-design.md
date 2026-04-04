@@ -1,5 +1,7 @@
 # Spec 2b: Alignment Agents — Design Document
 
+> **Note (Spec 2d):** The agent config via markdown frontmatter system described in this document has been superseded by Spec 2d (Agent Prompt Simplification). Agent MD files are now pure prompt instructions with no YAML frontmatter. Operational metadata (tool permissions, max turns, timeouts) lives in `src/config/defaults.ts`. Template variables (`{{VARIABLE}}` placeholders) have been replaced by code-composed prompts in `buildSystemPrompt`. See `docs/superpowers/specs/2026-04-04-spec2d-agent-prompt-simplification-design.md` for the current design.
+
 **Goal:** Replace the 5 stub alignment agent prompts with production-quality prompts, introduce agent configuration via markdown files, add repo context gathering, and update tool permissions — making the Questions → Research → Design → Structure → Plan pipeline functional for real coding tasks.
 
 **Depends on:** Spec 2a (Pipeline Infrastructure) — completed.

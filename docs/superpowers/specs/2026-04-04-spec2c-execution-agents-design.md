@@ -1,5 +1,7 @@
 # Spec 2c: Execution Agents — Design Document
 
+> **Note (Spec 2d):** References to agent MD file frontmatter and `{{VARIABLE}}` template patterns in this document have been superseded by Spec 2d (Agent Prompt Simplification). Agent MD files are now pure prompt instructions. See `docs/superpowers/specs/2026-04-04-spec2d-agent-prompt-simplification-design.md` for the current design.
+
 **Goal:** Replace the 4 stub execution agent prompts with production-quality prompts, add git worktree management, implement validate→impl and review→impl retry loops with issue tracking, and wire everything into the pipeline engine — making the Impl → Validate → Review → PR pipeline functional for real coding tasks.
 
 **Depends on:** Spec 2a (Pipeline Infrastructure) and Spec 2b (Alignment Agents) — both completed.
