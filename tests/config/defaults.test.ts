@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { DEFAULT_CONFIG, DEFAULT_AGENT_NAMES } from "../../src/config/defaults.js";
+import { DEFAULT_CONFIG, DEFAULT_AGENT_NAMES, DEFAULT_STAGE_TOOLS, STAGE_CONTEXT_RULES } from "../../src/config/defaults.js";
 
 describe("DEFAULT_AGENT_NAMES", () => {
   it("has all 14 agent name entries", () => {
@@ -57,5 +57,86 @@ describe("DEFAULT_CONFIG", () => {
       "impl", "validate", "review", "pr",
     ]);
     expect(DEFAULT_CONFIG.agents.defaultReviewAfter).toBe("design");
+  });
+});
+
+describe("DEFAULT_STAGE_TOOLS", () => {
+  const ALL_STAGES = ["questions", "research", "design", "structure", "plan", "impl", "validate", "review", "pr", "classify"];
+
+  it("has entries for all 10 stages", () => {
+    for (const stage of ALL_STAGES) {
+      expect(DEFAULT_STAGE_TOOLS).toHaveProperty(stage);
+    }
+    expect(Object.keys(DEFAULT_STAGE_TOOLS)).toHaveLength(10);
+  });
+
+  it("impl has full write access", () => {
+    const { allowed, disallowed } = DEFAULT_STAGE_TOOLS.impl;
+    expect(allowed).toContain("Write");
+    expect(allowed).toContain("Edit");
+    expect(allowed).toContain("Bash");
+    expect(disallowed).toHaveLength(0);
+  });
+
+  it("classify has no allowed tools", () => {
+    expect(DEFAULT_STAGE_TOOLS.classify.allowed).toHaveLength(0);
+  });
+
+  it("research has MCP tool patterns", () => {
+    const { allowed } = DEFAULT_STAGE_TOOLS.research;
+    expect(allowed).toContain("mcp__claude_ai_Slack__*");
+    expect(allowed).toContain("mcp__plugin_notion_notion__*");
+  });
+
+  it("review is read-only", () => {
+    const { disallowed } = DEFAULT_STAGE_TOOLS.review;
+    expect(disallowed).toContain("Write");
+    expect(disallowed).toContain("Edit");
+    expect(disallowed).toContain("Bash");
+  });
+});
+
+describe("STAGE_CONTEXT_RULES", () => {
+  const ALL_STAGES = ["questions", "research", "design", "structure", "plan", "impl", "validate", "review", "pr", "classify"];
+
+  it("has entries for all 10 stages", () => {
+    for (const stage of ALL_STAGES) {
+      expect(STAGE_CONTEXT_RULES).toHaveProperty(stage);
+    }
+    expect(Object.keys(STAGE_CONTEXT_RULES)).toHaveLength(10);
+  });
+
+  it("research does NOT include task content (QRSPI blind)", () => {
+    expect(STAGE_CONTEXT_RULES.research.includeTaskContent).toBe(false);
+  });
+
+  it("research labels previous output as 'Questions to Investigate'", () => {
+    expect(STAGE_CONTEXT_RULES.research.previousOutputLabel).toBe("Questions to Investigate");
+  });
+
+  it("questions has no previous output label (first stage)", () => {
+    expect(STAGE_CONTEXT_RULES.questions.previousOutputLabel).toBeNull();
+  });
+
+  it("classify has no previous output and no repo context", () => {
+    expect(STAGE_CONTEXT_RULES.classify.previousOutputLabel).toBeNull();
+    expect(STAGE_CONTEXT_RULES.classify.includeRepoContext).toBe(false);
+  });
+
+  it("impl includes task content, previous output as 'Implementation Plan', and repo context", () => {
+    const rule = STAGE_CONTEXT_RULES.impl;
+    expect(rule.includeTaskContent).toBe(true);
+    expect(rule.previousOutputLabel).toBe("Implementation Plan");
+    expect(rule.includeRepoContext).toBe(true);
+  });
+
+  it("structure excludes task content and repo context", () => {
+    const rule = STAGE_CONTEXT_RULES.structure;
+    expect(rule.includeTaskContent).toBe(false);
+    expect(rule.includeRepoContext).toBe(false);
+  });
+
+  it("pr excludes repo context", () => {
+    expect(STAGE_CONTEXT_RULES.pr.includeRepoContext).toBe(false);
   });
 });

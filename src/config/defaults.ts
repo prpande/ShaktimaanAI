@@ -1,4 +1,4 @@
-export const DEFAULT_AGENT_NAMES: Record<string, string> = {
+export const DEFAULT_AGENT_NAMES = {
   questions: "Narada",
   research: "Chitragupta",
   design: "Vishwakarma",
@@ -13,9 +13,39 @@ export const DEFAULT_AGENT_NAMES: Record<string, string> = {
   taskCreator: "Brahma",
   approvalHandler: "Indra",
   intentClassifier: "Sutradhaar",
-};
+} as const satisfies Record<string, string>;
 
 export type AgentRole = keyof typeof DEFAULT_AGENT_NAMES;
+
+export const DEFAULT_STAGE_TOOLS: Record<string, { allowed: string[]; disallowed: string[] }> = {
+  questions:  { allowed: ["Read","Glob","Grep","Bash","WebSearch","WebFetch"], disallowed: ["Write","Edit"] },
+  research:   { allowed: ["Read","Glob","Grep","Bash","WebSearch","WebFetch","mcp__claude_ai_Slack__*","mcp__plugin_notion_notion__*"], disallowed: ["Write","Edit"] },
+  design:     { allowed: ["Read","Glob","Grep","Bash"], disallowed: ["Write","Edit"] },
+  structure:  { allowed: ["Read","Glob","Grep"], disallowed: ["Write","Edit","Bash"] },
+  plan:       { allowed: ["Read","Glob","Grep"], disallowed: ["Write","Edit","Bash"] },
+  impl:       { allowed: ["Read","Write","Edit","Bash","Glob","Grep"], disallowed: [] },
+  validate:   { allowed: ["Read","Bash","Glob","Grep"], disallowed: ["Write","Edit"] },
+  review:     { allowed: ["Read","Glob","Grep"], disallowed: ["Write","Edit","Bash"] },
+  pr:         { allowed: ["Bash"], disallowed: ["Write","Edit","Read","Glob","Grep"] },
+  classify:   { allowed: [], disallowed: ["Read","Write","Edit","Bash","Glob","Grep"] },
+};
+
+export const STAGE_CONTEXT_RULES: Record<string, {
+  includeTaskContent: boolean;
+  previousOutputLabel: string | null;
+  includeRepoContext: boolean;
+}> = {
+  questions: { includeTaskContent: true,  previousOutputLabel: null,                      includeRepoContext: true },
+  research:  { includeTaskContent: false, previousOutputLabel: "Questions to Investigate", includeRepoContext: true },
+  design:    { includeTaskContent: true,  previousOutputLabel: "Research Findings",        includeRepoContext: true },
+  structure: { includeTaskContent: false, previousOutputLabel: "Design Document",          includeRepoContext: false },
+  plan:      { includeTaskContent: false, previousOutputLabel: "Implementation Slices",    includeRepoContext: true },
+  impl:      { includeTaskContent: true,  previousOutputLabel: "Implementation Plan",      includeRepoContext: true },
+  validate:  { includeTaskContent: false, previousOutputLabel: "Implementation Output",    includeRepoContext: true },
+  review:    { includeTaskContent: true,  previousOutputLabel: "Validation Report",        includeRepoContext: true },
+  pr:        { includeTaskContent: true,  previousOutputLabel: "Review Output",            includeRepoContext: false },
+  classify:  { includeTaskContent: true,  previousOutputLabel: null,                      includeRepoContext: false },
+};
 
 export interface ShkmnConfig {
   pipeline: {
@@ -51,6 +81,7 @@ export interface ShkmnConfig {
     retryCount: number;
     maxValidateRetries: number;
     maxReviewRecurrence: number;
+    tools: Record<string, { allowed?: string[]; disallowed?: string[] }>;
   };
   schedule: {
     rollupTime: string;
@@ -125,6 +156,7 @@ export const DEFAULT_CONFIG: ShkmnConfig = {
     retryCount: 1,
     maxValidateRetries: 2,
     maxReviewRecurrence: 3,
+    tools: {},
   },
   schedule: {
     rollupTime: "23:55",
