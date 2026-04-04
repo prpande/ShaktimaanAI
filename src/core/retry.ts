@@ -99,3 +99,168 @@ export function parseReviewFindings(output: string): ReviewIssue[] {
 
   return findings;
 }
+
+// ─── decideAfterValidate ─────────────────────────────────────────────────────
+
+/**
+ * Decides what to do after the validate stage completes.
+ *
+ * - READY_FOR_REVIEW → continue
+ * - NEEDS_FIXES, retryCount < maxRetries → retry impl with feedback
+ * - NEEDS_FIXES, retryCount >= maxRetries → fail
+ * - unknown verdict → fail (agent did not produce parseable output)
+ */
+export function decideAfterValidate(
+  outcome: StageOutcome,
+  retryCount: number,
+  maxRetries: number,
+): RetryDecision {
+  if (outcome.verdict === "READY_FOR_REVIEW") {
+    return { action: "continue", reason: "Validation passed" };
+  }
+
+  if (outcome.verdict === "NEEDS_FIXES") {
+    if (retryCount < maxRetries) {
+      return {
+        action: "retry",
+        retryTarget: "impl",
+        feedbackContent: buildValidateFeedback(outcome.output, retryCount + 1),
+        reason: `Validation failed — retry ${retryCount + 1}/${maxRetries}`,
+      };
+    }
+    return {
+      action: "fail",
+      reason: `Validation failed and max retries (${maxRetries}) exhausted`,
+    };
+  }
+
+  return {
+    action: "fail",
+    reason: `Unknown validate verdict "${outcome.verdict}" — cannot proceed`,
+  };
+}
+
+function buildValidateFeedback(output: string, attempt: number): string {
+  return [
+    `# Validate Feedback — Retry Attempt ${attempt}`,
+    "",
+    "The validation stage reported failures. Address ALL of the following before re-submitting.",
+    "",
+    "## Failure Output",
+    "",
+    output.trim(),
+  ].join("\n");
+}
+
+// ─── decideAfterReview ────────────────────────────────────────────────────────
+
+/**
+ * Decides what to do after the review stage completes.
+ *
+ * Rules:
+ * - APPROVED → continue
+ * - APPROVED_WITH_SUGGESTIONS + enforceSuggestions=false → continue
+ * - APPROVED_WITH_SUGGESTIONS + enforceSuggestions=true → retry (suggestions are actionable)
+ * - CHANGES_REQUIRED with any recurring issue persisted >= maxRecurrence → fail
+ * - CHANGES_REQUIRED with new issues → retry (progress being made)
+ * - CHANGES_REQUIRED with only recurring issues below maxRecurrence → retry
+ * - unknown verdict → fail
+ */
+export function decideAfterReview(
+  outcome: StageOutcome,
+  previousIssues: ReviewIssue[],
+  currentIteration: number,
+  maxRecurrence: number,
+  enforceSuggestions: boolean,
+): RetryDecision {
+  if (outcome.verdict === "APPROVED") {
+    return { action: "continue", reason: "Review approved" };
+  }
+
+  if (outcome.verdict === "APPROVED_WITH_SUGGESTIONS") {
+    if (!enforceSuggestions) {
+      return { action: "continue", reason: "Review approved with suggestions (not enforced)" };
+    }
+    const currentFindings = parseReviewFindings(outcome.output).map(f => ({
+      ...f,
+      firstSeen: currentIteration,
+      lastSeen: currentIteration,
+    }));
+    return {
+      action: "retry",
+      retryTarget: "impl",
+      feedbackContent: buildReviewFeedback(currentFindings, currentIteration),
+      reason: "Review has suggestions — enforcing address before continue",
+    };
+  }
+
+  if (outcome.verdict === "CHANGES_REQUIRED") {
+    const currentFindings = parseReviewFindings(outcome.output);
+
+    // Categorize findings
+    const recurring: ReviewIssue[] = [];
+    const newIssues: ReviewIssue[] = [];
+
+    for (const finding of currentFindings) {
+      const prev = previousIssues.find(p => p.id === finding.id);
+      if (prev) {
+        recurring.push({ ...prev, lastSeen: currentIteration });
+      } else {
+        newIssues.push({ ...finding, firstSeen: currentIteration, lastSeen: currentIteration });
+      }
+    }
+
+    // Check if any recurring issue has exceeded maxRecurrence
+    const exhaustedIssues = recurring.filter(
+      r => (currentIteration - r.firstSeen + 1) >= maxRecurrence,
+    );
+
+    if (exhaustedIssues.length > 0) {
+      return {
+        action: "fail",
+        reason: `Review failed: ${exhaustedIssues.length} issue(s) exceeded max recurrence (${maxRecurrence}) without resolution`,
+      };
+    }
+
+    // New issues or recurring below threshold → retry
+    const allCurrentIssues = [
+      ...recurring,
+      ...newIssues,
+    ];
+    const hasNewIssues = newIssues.length > 0;
+
+    return {
+      action: "retry",
+      retryTarget: "impl",
+      feedbackContent: buildReviewFeedback(allCurrentIssues, currentIteration),
+      reason: hasNewIssues
+        ? `Review found ${newIssues.length} new issue(s) — retrying impl`
+        : `Review found ${recurring.length} recurring issue(s) below max recurrence — retrying impl`,
+    };
+  }
+
+  return {
+    action: "fail",
+    reason: `Unknown review verdict "${outcome.verdict}" — cannot proceed`,
+  };
+}
+
+function buildReviewFeedback(issues: ReviewIssue[], iteration: number): string {
+  const lines = [
+    `# Review Feedback — Iteration ${iteration}`,
+    "",
+    "The review stage identified the following issues. Address ALL MUST_FIX items. Address SHOULD_FIX items unless there is a clear justification.",
+    "",
+    "## Findings",
+    "",
+  ];
+
+  for (const issue of issues) {
+    const recurrence = issue.firstSeen < iteration
+      ? ` *(recurring since iteration ${issue.firstSeen})*`
+      : "";
+    lines.push(`- **${issue.severity}**${recurrence}: ${issue.description}`);
+  }
+
+  return lines.join("\n");
+}
