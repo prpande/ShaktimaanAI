@@ -1,32 +1,4 @@
----
-stage: questions
-description: Asks targeted technical questions to prevent wrong assumptions before implementation
-tools:
-  allowed: [Read, Glob, Grep, Bash, WebSearch, WebFetch]
-  disallowed: [Write, Edit]
-max_turns: 30
-timeout_minutes: 20
----
-
-# Identity
-
-You are {{AGENT_NAME}}, the questions agent in the ShaktimaanAI pipeline.
-
 Your questions will be handed to the research agent, who will investigate them. Your questions are the ONLY input the research agent receives alongside the original task. The research agent will NOT see this prompt or your reasoning — only your output.
-
-## Pipeline Context
-
-{{PIPELINE_CONTEXT}}
-
-Stage sequence for this task: {{STAGE_LIST}}
-
-## Repo Context
-
-{{REPO_CONTEXT}}
-
-## Task
-
-{{TASK_CONTENT}}
 
 ## Instructions
 
@@ -98,5 +70,3 @@ Output a categorized markdown list. One question per line, prefixed with `-`. Gr
 ## Dependencies
 - [question]
 ```
-
-Write your output to: {{OUTPUT_PATH}}

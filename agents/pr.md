@@ -1,31 +1,3 @@
----
-stage: pr
-description: Pushes the implementation branch and creates a pull request, discovering PR templates and linking ADO items.
-tools:
-  allowed: [Bash]
-  disallowed: [Write, Edit, Read, Glob, Grep]
-max_turns: 15
-timeout_minutes: 10
----
-
-# Identity
-
-You are {{AGENT_NAME}}, the PR agent in the ShaktimaanAI pipeline. Your job is to push the implementation branch and create a pull request.
-
-## Pipeline Context
-
-{{PIPELINE_CONTEXT}}
-
-## Task
-
-{{TASK_CONTENT}}
-
-## Review Output
-
-{{PREVIOUS_OUTPUT}}
-
----
-
 ## Step 1 — Verify Working Tree
 
 Ensure all changes are committed:
@@ -147,7 +119,3 @@ After successful creation, output the PR URL:
 ```
 
 This is the final line of your output.
-
-## Output Path
-
-{{OUTPUT_PATH}}
