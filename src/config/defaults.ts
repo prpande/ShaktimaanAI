@@ -1,4 +1,4 @@
-export const DEFAULT_AGENT_NAMES = {
+export const DEFAULT_AGENT_NAMES: Record<string, string> = {
   questions: "Narada",
   research: "Chitragupta",
   design: "Vishwakarma",
@@ -13,19 +13,62 @@ export const DEFAULT_AGENT_NAMES = {
   taskCreator: "Brahma",
   approvalHandler: "Indra",
   intentClassifier: "Sutradhaar",
-} as const;
+};
 
 export type AgentRole = keyof typeof DEFAULT_AGENT_NAMES;
 
-export const DEFAULT_CONFIG = {
+export interface ShkmnConfig {
+  pipeline: {
+    runtimeDir: string;
+    agentsDir: string;
+    dashboardRepoLocal: string;
+    dashboardRepoUrl: string;
+  };
+  repos: {
+    root: string;
+    aliases: Record<string, { path: string; sequentialBuild?: boolean }>;
+  };
+  ado: {
+    org: string;
+    project: string;
+    defaultArea: string;
+  };
+  slack: {
+    enabled: boolean;
+    channel: string;
+    channelId: string;
+    pollIntervalSeconds: number;
+  };
+  agents: {
+    names: Record<string, string>;
+    defaultStages: string[];
+    defaultReviewAfter: string;
+    maxConcurrentTotal: number;
+    maxConcurrentValidate: number;
+    maxTurns: Record<string, number>;
+    timeoutsMinutes: Record<string, number>;
+    heartbeatTimeoutMinutes: number;
+    retryCount: number;
+  };
+  schedule: {
+    rollupTime: string;
+    notionPushDay: string;
+    notionPushTime: string;
+    monthlyReportDay: number;
+    monthlyReportTime: string;
+  };
+}
+
+export const DEFAULT_CONFIG: ShkmnConfig = {
   pipeline: {
     runtimeDir: "",
+    agentsDir: "",
     dashboardRepoLocal: "",
     dashboardRepoUrl: "",
   },
   repos: {
     root: "",
-    aliases: {} as Record<string, { path: string; sequentialBuild?: boolean }>,
+    aliases: {},
   },
   ado: {
     org: "",
@@ -39,11 +82,11 @@ export const DEFAULT_CONFIG = {
     pollIntervalSeconds: 30,
   },
   agents: {
-    names: { ...DEFAULT_AGENT_NAMES } as Record<string, string>,
+    names: { ...DEFAULT_AGENT_NAMES },
     defaultStages: [
       "questions", "research", "design", "structure", "plan",
       "impl", "validate", "review", "pr",
-    ] as string[],
+    ],
     defaultReviewAfter: "design",
     maxConcurrentTotal: 3,
     maxConcurrentValidate: 1,
@@ -57,7 +100,7 @@ export const DEFAULT_CONFIG = {
       validate: 10,
       review: 30,
       classify: 5,
-    } as Record<string, number>,
+    },
     timeoutsMinutes: {
       questions: 15,
       research: 45,
@@ -68,7 +111,7 @@ export const DEFAULT_CONFIG = {
       validate: 15,
       review: 45,
       classify: 2,
-    } as Record<string, number>,
+    },
     heartbeatTimeoutMinutes: 10,
     retryCount: 1,
   },
@@ -79,6 +122,4 @@ export const DEFAULT_CONFIG = {
     monthlyReportDay: 1,
     monthlyReportTime: "08:00",
   },
-} as const;
-
-export type ShkmnConfig = typeof DEFAULT_CONFIG;
+};

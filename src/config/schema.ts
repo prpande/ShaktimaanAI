@@ -8,6 +8,7 @@ const repoAliasSchema = z.object({
 export const configSchema = z.object({
   pipeline: z.object({
     runtimeDir: z.string().min(1, "pipeline.runtimeDir is required"),
+    agentsDir: z.string().optional().default(""),
     dashboardRepoLocal: z.string().optional().default(""),
     dashboardRepoUrl: z.string().optional().default(""),
   }),

@@ -47,6 +47,10 @@ describe("DEFAULT_CONFIG", () => {
     expect(DEFAULT_CONFIG.pipeline.dashboardRepoUrl).toBe("");
   });
 
+  it("DEFAULT_CONFIG includes pipeline.agentsDir as empty string", () => {
+    expect(DEFAULT_CONFIG.pipeline.agentsDir).toBe("");
+  });
+
   it("has default stages for coding tasks", () => {
     expect(DEFAULT_CONFIG.agents.defaultStages).toEqual([
       "questions", "research", "design", "structure", "plan",

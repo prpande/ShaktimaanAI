@@ -5,6 +5,7 @@ import { DEFAULT_CONFIG, DEFAULT_AGENT_NAMES } from "./defaults.js";
 export interface ResolvedConfig {
   pipeline: {
     runtimeDir: string;
+    agentsDir: string;
     dashboardRepoLocal: string;
     dashboardRepoUrl: string;
   };
@@ -83,12 +84,13 @@ export function resolveConfig(parsed: ConfigParsed): ResolvedConfig {
   return {
     pipeline: {
       runtimeDir: parsed.pipeline.runtimeDir,
+      agentsDir: parsed.pipeline.agentsDir ?? d.pipeline.agentsDir,
       dashboardRepoLocal: parsed.pipeline.dashboardRepoLocal ?? d.pipeline.dashboardRepoLocal,
       dashboardRepoUrl: parsed.pipeline.dashboardRepoUrl ?? d.pipeline.dashboardRepoUrl,
     },
     repos: {
       root: parsed.repos?.root ?? d.repos.root,
-      aliases: (parsed.repos?.aliases ?? d.repos.aliases) as Record<string, { path: string; sequentialBuild?: boolean }>,
+      aliases: parsed.repos?.aliases ?? d.repos.aliases,
     },
     ado: {
       org: parsed.ado?.org ?? d.ado.org,
@@ -144,7 +146,15 @@ export function loadEnvFile(envPath: string): void {
     if (eqIdx === -1) continue;
 
     const key = trimmed.slice(0, eqIdx).trim();
-    const value = trimmed.slice(eqIdx + 1).trim();
+    let value = trimmed.slice(eqIdx + 1).trim();
+
+    // Strip surrounding quotes (single or double)
+    if (
+      (value.startsWith('"') && value.endsWith('"')) ||
+      (value.startsWith("'") && value.endsWith("'"))
+    ) {
+      value = value.slice(1, -1);
+    }
 
     if (key && !(key in process.env)) {
       process.env[key] = value;
