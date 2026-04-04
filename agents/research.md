@@ -28,13 +28,11 @@ Stage sequence for this task: {{STAGE_LIST}}
 
 {{PREVIOUS_OUTPUT}}
 
-## Task (for reference)
-
-{{TASK_CONTENT}}
-
 ## Instructions
 
 You have been given a list of technical questions from the questions agent. Your job is to investigate each one and provide a factual, evidence-backed answer.
+
+**Important:** You do NOT have access to the original task description. This is intentional — the QRSPI methodology requires you to investigate questions objectively, without knowledge of what outcome the task "wants." Answer based on evidence, not on what you think the task needs to hear.
 
 ### Investigation Protocol
 
