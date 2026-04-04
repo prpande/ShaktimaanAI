@@ -333,12 +333,41 @@ Two layers:
 
 | File | Location | Contents | Committed? |
 |---|---|---|---|
-| `shkmn.config.json` | Runtime directory | All non-secret settings (paths, repos, schedules, concurrency) | No (local) |
+| `shkmn.config.json` | Runtime directory | All non-secret settings (paths, repos, schedules, concurrency, agent names) | No (local) |
 | `.env` | Runtime directory | Secrets (PATs, tokens, API keys) | No (local) |
 
 Setup wizard (`shkmn init`) creates both files with guided prompts.
 
 Per-repo config (optional): `.shkmn.json` in repo root for repo-specific overrides (e.g., `sequential_build: true`).
+
+### 12.1 Configurable Agent Names
+
+All agent names are configurable via `shkmn.config.json`. Defaults are the mythology-inspired names. Users can override any or all:
+
+```json
+{
+  "agents": {
+    "names": {
+      "questions": "Narada",
+      "research": "Chitragupta",
+      "design": "Vishwakarma",
+      "structure": "Vastu",
+      "plan": "Chanakya",
+      "workTree": "Hanuman",
+      "impl": "Karigar",
+      "validate": "Dharma",
+      "review": "Drona",
+      "pr": "Garuda",
+      "watcher": "Heimdall",
+      "taskCreator": "Brahma",
+      "approvalHandler": "Indra",
+      "intentClassifier": "Sutradhaar"
+    }
+  }
+}
+```
+
+Names appear in logs, Slack notifications, dashboard status cards, and CLI output. Omitted names fall back to defaults.
 
 ---
 
