@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach } from "vitest";
-import { mkdirSync, rmSync, readFileSync, writeFileSync, existsSync } from "node:fs";
+import { mkdirSync, rmSync, readFileSync, writeFileSync, existsSync, readdirSync } from "node:fs";
 import { join, dirname } from "node:path";
 import { tmpdir } from "node:os";
 import { randomUUID } from "node:crypto";
@@ -617,5 +617,237 @@ describe("createPipeline", () => {
     const activeRuns = pipeline.getActiveRuns();
     expect(activeRuns).toHaveLength(1);
     expect(activeRuns[0].status).toBe("hold");
+  });
+});
+
+// ─── retry integration ───────────────────────────────────────────────────────
+
+describe("pipeline retry integration", () => {
+  function makeRetryTask(): string {
+    return makeSimpleTask("impl, validate, review, pr");
+  }
+
+  it("retries impl when validate returns NEEDS_FIXES (within maxRetries)", async () => {
+    createRuntimeDirs(TEST_DIR);
+    const templatesDir = join(TEST_DIR, "templates");
+    mkdirSync(templatesDir, { recursive: true });
+    for (const s of ["impl", "validate", "review", "pr"]) {
+      writeFileSync(join(templatesDir, `prompt-${s}.md`), "template", "utf-8");
+    }
+
+    const taskContent = makeRetryTask();
+    const inboxPath = join(TEST_DIR, "00-inbox", "retry-validate-task.task");
+    writeFileSync(inboxPath, taskContent, "utf-8");
+
+    let validateCallCount = 0;
+    let implCallCount = 0;
+
+    const retryRunner = async (options: AgentRunOptions): Promise<AgentRunResult> => {
+      if (options.outputPath) {
+        mkdirSync(dirname(options.outputPath), { recursive: true });
+      }
+
+      if (options.stage === "impl") {
+        implCallCount++;
+        if (options.outputPath) writeFileSync(options.outputPath, "impl output");
+        return { success: true, output: "impl done", costUsd: 0, turns: 1, durationMs: 10 };
+      }
+
+      if (options.stage === "validate") {
+        validateCallCount++;
+        // Fail first time, pass second time
+        const verdict = validateCallCount === 1 ? "NEEDS_FIXES" : "READY_FOR_REVIEW";
+        const output = `Build output.\n\n**Verdict:** ${verdict}`;
+        if (options.outputPath) writeFileSync(options.outputPath, output);
+        return { success: true, output, costUsd: 0, turns: 1, durationMs: 10 };
+      }
+
+      if (options.stage === "review") {
+        const output = "Looks good.\n\n**Verdict:** APPROVED";
+        if (options.outputPath) writeFileSync(options.outputPath, output);
+        return { success: true, output, costUsd: 0, turns: 1, durationMs: 10 };
+      }
+
+      if (options.outputPath) writeFileSync(options.outputPath, "pr done");
+      return { success: true, output: "pr done", costUsd: 0, turns: 1, durationMs: 10 };
+    };
+
+    const config = makeConfig();
+    const registry = createAgentRegistry(3, 1);
+    const invCwd = join(TEST_DIR, "inv-cwd-retry");
+    mkdirSync(invCwd, { recursive: true });
+    const pipeline = createPipeline({
+      config, registry, runner: retryRunner,
+      logger: { info() {}, warn() {}, error() {} },
+    });
+
+    await pipeline.startRun(inboxPath, invCwd);
+
+    expect(implCallCount).toBe(2);    // impl ran twice
+    expect(validateCallCount).toBe(2); // validate ran twice
+
+    const completeDir = join(TEST_DIR, "10-complete", "retry-validate-task");
+    expect(existsSync(completeDir)).toBe(true);
+    const state = readRunState(completeDir);
+    expect(state.status).toBe("complete");
+    expect(state.validateRetryCount).toBe(1);
+  });
+
+  it("fails task when validate NEEDS_FIXES exceeds maxRetries", async () => {
+    createRuntimeDirs(TEST_DIR);
+    const templatesDir = join(TEST_DIR, "templates");
+    mkdirSync(templatesDir, { recursive: true });
+    for (const s of ["impl", "validate"]) {
+      writeFileSync(join(templatesDir, `prompt-${s}.md`), "template", "utf-8");
+    }
+
+    const taskContent = makeSimpleTask("impl, validate");
+    const inboxPath = join(TEST_DIR, "00-inbox", "exhaust-validate-task.task");
+    writeFileSync(inboxPath, taskContent, "utf-8");
+
+    const alwaysFailRunner = async (options: AgentRunOptions): Promise<AgentRunResult> => {
+      if (options.outputPath) {
+        mkdirSync(dirname(options.outputPath), { recursive: true });
+        writeFileSync(options.outputPath, "**Verdict:** NEEDS_FIXES");
+      }
+      return {
+        success: true,
+        output: "Build failed.\n\n**Verdict:** NEEDS_FIXES",
+        costUsd: 0, turns: 1, durationMs: 10,
+      };
+    };
+
+    // maxValidateRetries=1 means 1 retry allowed (2 total validate runs)
+    const config = makeConfig({ agents: { maxValidateRetries: 1 } });
+    const registry = createAgentRegistry(3, 1);
+    const invCwd = join(TEST_DIR, "inv-cwd-exhaust");
+    mkdirSync(invCwd, { recursive: true });
+    const pipeline = createPipeline({
+      config, registry, runner: alwaysFailRunner,
+      logger: { info() {}, warn() {}, error() {} },
+    });
+
+    await pipeline.startRun(inboxPath, invCwd);
+
+    const failedDir = join(TEST_DIR, "11-failed", "exhaust-validate-task");
+    expect(existsSync(failedDir)).toBe(true);
+    const state = readRunState(failedDir);
+    expect(state.status).toBe("failed");
+    expect(state.error).toContain("max");
+  });
+
+  it("writes retry-feedback artifact before sending task back to impl", async () => {
+    createRuntimeDirs(TEST_DIR);
+    const templatesDir = join(TEST_DIR, "templates");
+    mkdirSync(templatesDir, { recursive: true });
+    for (const s of ["impl", "validate"]) {
+      writeFileSync(join(templatesDir, `prompt-${s}.md`), "template", "utf-8");
+    }
+
+    const taskContent = makeSimpleTask("impl, validate");
+    const inboxPath = join(TEST_DIR, "00-inbox", "feedback-task.task");
+    writeFileSync(inboxPath, taskContent, "utf-8");
+
+    let validateRunCount = 0;
+
+    const feedbackRunner = async (options: AgentRunOptions): Promise<AgentRunResult> => {
+      if (options.outputPath) {
+        mkdirSync(dirname(options.outputPath), { recursive: true });
+      }
+      if (options.stage === "impl") {
+        if (options.outputPath) writeFileSync(options.outputPath, "impl done");
+        return { success: true, output: "impl done", costUsd: 0, turns: 1, durationMs: 10 };
+      }
+      validateRunCount++;
+      if (validateRunCount === 1) {
+        const out = "TypeScript error TS2345\n\n**Verdict:** NEEDS_FIXES";
+        if (options.outputPath) writeFileSync(options.outputPath, out);
+        return { success: true, output: out, costUsd: 0, turns: 1, durationMs: 10 };
+      }
+      // Second validate passes
+      const out = "All clear.\n\n**Verdict:** READY_FOR_REVIEW";
+      if (options.outputPath) writeFileSync(options.outputPath, out);
+      return { success: true, output: out, costUsd: 0, turns: 1, durationMs: 10 };
+    };
+
+    const config = makeConfig();
+    const registry = createAgentRegistry(3, 1);
+    const invCwd = join(TEST_DIR, "inv-cwd-feedback");
+    mkdirSync(invCwd, { recursive: true });
+    const pipeline = createPipeline({
+      config, registry, runner: feedbackRunner,
+      logger: { info() {}, warn() {}, error() {} },
+    });
+
+    await pipeline.startRun(inboxPath, invCwd);
+
+    // After completion the artifacts dir should contain a retry feedback file
+    const completeDir = join(TEST_DIR, "10-complete", "feedback-task");
+    const artifactsDir = join(completeDir, "artifacts");
+    const feedbackFiles = existsSync(artifactsDir)
+      ? readdirSync(artifactsDir).filter(f => f.startsWith("retry-feedback-validate"))
+      : [];
+    expect(feedbackFiles.length).toBeGreaterThan(0);
+  });
+
+  it("retries impl when review returns CHANGES_REQUIRED with new issues", async () => {
+    createRuntimeDirs(TEST_DIR);
+    const templatesDir = join(TEST_DIR, "templates");
+    mkdirSync(templatesDir, { recursive: true });
+    for (const s of ["impl", "validate", "review", "pr"]) {
+      writeFileSync(join(templatesDir, `prompt-${s}.md`), "template", "utf-8");
+    }
+
+    const taskContent = makeRetryTask();
+    const inboxPath = join(TEST_DIR, "00-inbox", "review-retry-task.task");
+    writeFileSync(inboxPath, taskContent, "utf-8");
+
+    let reviewCallCount = 0;
+
+    const reviewRetryRunner = async (options: AgentRunOptions): Promise<AgentRunResult> => {
+      if (options.outputPath) {
+        mkdirSync(dirname(options.outputPath), { recursive: true });
+      }
+      if (options.stage === "impl") {
+        if (options.outputPath) writeFileSync(options.outputPath, "impl done");
+        return { success: true, output: "impl done", costUsd: 0, turns: 1, durationMs: 10 };
+      }
+      if (options.stage === "validate") {
+        const out = "Tests pass.\n\n**Verdict:** READY_FOR_REVIEW";
+        if (options.outputPath) writeFileSync(options.outputPath, out);
+        return { success: true, output: out, costUsd: 0, turns: 1, durationMs: 10 };
+      }
+      if (options.stage === "review") {
+        reviewCallCount++;
+        if (reviewCallCount === 1) {
+          const out = "[R1] MUST_FIX: Missing error handling in fetchData\n\n**Verdict:** CHANGES_REQUIRED";
+          if (options.outputPath) writeFileSync(options.outputPath, out);
+          return { success: true, output: out, costUsd: 0, turns: 1, durationMs: 10 };
+        }
+        const out = "All issues resolved.\n\n**Verdict:** APPROVED";
+        if (options.outputPath) writeFileSync(options.outputPath, out);
+        return { success: true, output: out, costUsd: 0, turns: 1, durationMs: 10 };
+      }
+      if (options.outputPath) writeFileSync(options.outputPath, "pr done");
+      return { success: true, output: "pr done", costUsd: 0, turns: 1, durationMs: 10 };
+    };
+
+    const config = makeConfig();
+    const registry = createAgentRegistry(3, 1);
+    const invCwd = join(TEST_DIR, "inv-cwd-review-retry");
+    mkdirSync(invCwd, { recursive: true });
+    const pipeline = createPipeline({
+      config, registry, runner: reviewRetryRunner,
+      logger: { info() {}, warn() {}, error() {} },
+    });
+
+    await pipeline.startRun(inboxPath, invCwd);
+
+    expect(reviewCallCount).toBe(2);
+
+    const completeDir = join(TEST_DIR, "10-complete", "review-retry-task");
+    expect(existsSync(completeDir)).toBe(true);
+    const state = readRunState(completeDir);
+    expect(state.reviewRetryCount).toBe(1);
   });
 });

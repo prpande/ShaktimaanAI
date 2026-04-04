@@ -3,10 +3,12 @@ import { join, basename, dirname } from "node:path";
 
 import { parseTaskFile, type TaskMeta } from "../task/parser.js";
 import { type ResolvedConfig } from "../config/loader.js";
-import { type AgentRunnerFn, type AgentRunOptions, type RunState, type CompletedStage } from "./types.js";
+import { type AgentRunnerFn, type AgentRunOptions, type RunState, type CompletedStage, type ReviewIssue } from "./types.js";
 import { type AgentRegistry } from "./registry.js";
 import { type TaskLogger, createTaskLogger } from "./logger.js";
 import { STAGE_DIR_MAP, DIR_STAGE_MAP } from "./stage-map.js";
+import { parseAgentVerdict, parseReviewFindings, decideAfterValidate, decideAfterReview } from "./retry.js";
+import { recordWorktreeCompletion } from "./worktree.js";
 
 // Re-export for backwards compatibility
 export { STAGE_DIR_MAP, DIR_STAGE_MAP };
@@ -138,6 +140,38 @@ export function createPipeline(options: PipelineOptions): Pipeline {
 
   const EXECUTION_STAGES = new Set(["impl", "validate", "review", "pr"]);
 
+  function mergeReviewIssues(
+    existing: ReviewIssue[],
+    current: ReviewIssue[],
+    iteration: number,
+  ): ReviewIssue[] {
+    const merged = [...existing];
+    for (const finding of current) {
+      const idx = merged.findIndex(e => e.id === finding.id);
+      if (idx !== -1) {
+        merged[idx] = { ...merged[idx], lastSeen: iteration };
+      } else {
+        merged.push({ ...finding, firstSeen: iteration, lastSeen: iteration });
+      }
+    }
+    return merged;
+  }
+
+  function recordCompletionIfWorktree(state: RunState): void {
+    if (!state.worktreePath) return;
+    const manifestPath = join(runtimeDir, "worktree-manifest.json");
+    try {
+      recordWorktreeCompletion(manifestPath, {
+        slug: state.slug,
+        repoPath: state.worktreePath,
+        worktreePath: state.worktreePath,
+        completedAt: new Date().toISOString(),
+      });
+    } catch {
+      // log but don't fail
+    }
+  }
+
   function resolveWorkDir(state: RunState): string {
     // Resolution chain:
     // 1. workDir already set (retry or resume) → reuse
@@ -223,6 +257,7 @@ export function createPipeline(options: PipelineOptions): Pipeline {
         state.status = "failed";
         state.error = err instanceof Error ? err.message : String(err);
         writeRunState(currentTaskDir, state);
+        recordCompletionIfWorktree(state);
         try {
           moveTaskDir(
             runtimeDir, slug,
@@ -246,6 +281,7 @@ export function createPipeline(options: PipelineOptions): Pipeline {
         state.status = "failed";
         state.error = result.error ?? "Agent failed";
         writeRunState(currentTaskDir, state);
+        recordCompletionIfWorktree(state);
         try {
           moveTaskDir(
             runtimeDir, slug,
@@ -267,6 +303,96 @@ export function createPipeline(options: PipelineOptions): Pipeline {
       if (!existsSync(outputPath)) {
         mkdirSync(dirname(outputPath), { recursive: true });
         writeFileSync(outputPath, result.output, "utf-8");
+      }
+
+      // ─── Verdict checking and retry logic ─────────────────────────────────
+      //
+      // For validate and review: parse the verdict from the agent output and
+      // decide whether to continue, retry (go back to impl), or fail.
+      // Non-verdict stages (impl, questions, etc.) fall through immediately.
+
+      if (stage === "validate" || stage === "review") {
+        const verdict = parseAgentVerdict(result.output, stage);
+        const outcome = { stage, success: true, verdict, output: result.output };
+
+        let decision;
+        if (stage === "validate") {
+          decision = decideAfterValidate(
+            outcome,
+            state.validateRetryCount,
+            config.agents.maxValidateRetries,
+          );
+        } else {
+          decision = decideAfterReview(
+            outcome,
+            state.reviewIssues,
+            state.reviewRetryCount + 1,
+            config.agents.maxReviewRecurrence,
+            config.review.enforceSuggestions,
+          );
+        }
+
+        logger.info(
+          `[pipeline] ${stage} verdict="${verdict}" for "${slug}" → action="${decision.action}" reason="${decision.reason}"`,
+        );
+
+        if (decision.action === "fail") {
+          state.status = "failed";
+          state.error = decision.reason;
+          writeRunState(currentTaskDir, state);
+          recordCompletionIfWorktree(state);
+          moveTaskDir(
+            runtimeDir, slug,
+            join(STAGE_DIR_MAP[stage], "pending"),
+            "11-failed",
+          );
+          activeRuns.delete(slug);
+          return;
+        }
+
+        if (decision.action === "retry") {
+          // Write feedback artifact for impl to read
+          const retryCount = stage === "validate"
+            ? state.validateRetryCount + 1
+            : state.reviewRetryCount + 1;
+          const feedbackFile = `retry-feedback-${stage}-${retryCount}.md`;
+
+          if (decision.feedbackContent) {
+            writeFileSync(
+              join(currentTaskDir, "artifacts", feedbackFile),
+              decision.feedbackContent,
+              "utf-8",
+            );
+          }
+
+          // Update retry counters and issue tracking
+          if (stage === "validate") {
+            state.validateRetryCount += 1;
+          } else {
+            state.reviewRetryCount += 1;
+            // Merge current findings into reviewIssues
+            const currentFindings = parseReviewFindings(result.output);
+            state.reviewIssues = mergeReviewIssues(
+              state.reviewIssues,
+              currentFindings,
+              state.reviewRetryCount,
+            );
+          }
+
+          // Move back to impl/pending
+          state.currentStage = "impl";
+          state.status = "running";
+          writeRunState(currentTaskDir, state);
+          currentTaskDir = moveTaskDir(
+            runtimeDir, slug,
+            join(STAGE_DIR_MAP[stage], "pending"),
+            join(STAGE_DIR_MAP["impl"], "pending"),
+          );
+          // Continue the while loop — will re-run impl
+          continue;
+        }
+
+        // decision.action === "continue" — fall through to normal stage completion
       }
 
       // Add completed stage
@@ -303,6 +429,7 @@ export function createPipeline(options: PipelineOptions): Pipeline {
       if (nextStage === null) {
         state.status = "complete";
         writeRunState(doneDir, state);
+        recordCompletionIfWorktree(state);
         moveTaskDir(
           runtimeDir, slug,
           join(STAGE_DIR_MAP[stage], "done"),
