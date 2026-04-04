@@ -458,6 +458,139 @@ describe("createPipeline", () => {
     await expect(pipeline.approveAndResume("nonexistent")).rejects.toThrow(/not found in hold/);
   });
 
+  // ─── workDir resolution ──────────────────────────────────────────────────────
+
+  it("uses invocationCwd when no repo and no repos.root configured", async () => {
+    createRuntimeDirs(TEST_DIR);
+    const templatesDir = join(TEST_DIR, "templates");
+    mkdirSync(templatesDir, { recursive: true });
+    writeFileSync(join(templatesDir, "prompt-impl.md"), "template", "utf-8");
+    writeFileSync(join(templatesDir, "prompt-validate.md"), "template", "utf-8");
+
+    const taskContent = makeSimpleTask("impl, validate");
+    const inboxPath = join(TEST_DIR, "00-inbox", "work-dir-task.task");
+    writeFileSync(inboxPath, taskContent, "utf-8");
+
+    let capturedCwd: string | undefined;
+    const trackingRunner = async (options: AgentRunOptions): Promise<AgentRunResult> => {
+      if (options.stage === "impl") {
+        capturedCwd = options.cwd;
+      }
+      if (options.outputPath) {
+        mkdirSync(dirname(options.outputPath), { recursive: true });
+        writeFileSync(options.outputPath, `Output for ${options.stage} — **Verdict:** READY_FOR_REVIEW`);
+      }
+      return {
+        success: true,
+        output: options.stage === "validate"
+          ? "All pass.\n\n**Verdict:** READY_FOR_REVIEW"
+          : `Output for ${options.stage}`,
+        costUsd: 0,
+        turns: 1,
+        durationMs: 10,
+      };
+    };
+
+    const config = makeConfig();
+    const registry = createAgentRegistry(3, 1);
+    const invocationCwd = join(TEST_DIR, "invocation-dir");
+    mkdirSync(invocationCwd, { recursive: true });
+
+    const pipeline = createPipeline({
+      config,
+      registry,
+      runner: trackingRunner,
+      logger: { info() {}, warn() {}, error() {} },
+    });
+
+    await pipeline.startRun(inboxPath, invocationCwd);
+
+    // impl stage should have used invocationCwd as its cwd
+    expect(capturedCwd).toBe(invocationCwd);
+  });
+
+  it("uses repos.root/{slug} when repos.root is configured and no task repo", async () => {
+    const reposRoot = join(TEST_DIR, "repos");
+    mkdirSync(reposRoot, { recursive: true });
+    createRuntimeDirs(TEST_DIR);
+    const templatesDir = join(TEST_DIR, "templates");
+    mkdirSync(templatesDir, { recursive: true });
+    writeFileSync(join(templatesDir, "prompt-impl.md"), "template", "utf-8");
+    writeFileSync(join(templatesDir, "prompt-validate.md"), "template", "utf-8");
+
+    const taskContent = makeSimpleTask("impl, validate");
+    const inboxPath = join(TEST_DIR, "00-inbox", "repos-root-task.task");
+    writeFileSync(inboxPath, taskContent, "utf-8");
+
+    let capturedCwd: string | undefined;
+    const trackingRunner = async (options: AgentRunOptions): Promise<AgentRunResult> => {
+      if (options.stage === "impl") capturedCwd = options.cwd;
+      if (options.outputPath) {
+        mkdirSync(dirname(options.outputPath), { recursive: true });
+        writeFileSync(options.outputPath, `Output — **Verdict:** READY_FOR_REVIEW`);
+      }
+      return {
+        success: true,
+        output: options.stage === "validate"
+          ? "**Verdict:** READY_FOR_REVIEW"
+          : "done",
+        costUsd: 0, turns: 1, durationMs: 10,
+      };
+    };
+
+    const config = makeConfig({ repos: { root: reposRoot, aliases: {} } });
+    const registry = createAgentRegistry(3, 1);
+    const pipeline = createPipeline({
+      config, registry, runner: trackingRunner,
+      logger: { info() {}, warn() {}, error() {} },
+    });
+
+    await pipeline.startRun(inboxPath);
+
+    expect(capturedCwd).toBe(join(reposRoot, "repos-root-task"));
+    expect(existsSync(join(reposRoot, "repos-root-task"))).toBe(true);
+  });
+
+  it("stores workDir in run state after impl stage", async () => {
+    createRuntimeDirs(TEST_DIR);
+    const templatesDir = join(TEST_DIR, "templates");
+    mkdirSync(templatesDir, { recursive: true });
+    writeFileSync(join(templatesDir, "prompt-impl.md"), "template", "utf-8");
+    writeFileSync(join(templatesDir, "prompt-validate.md"), "template", "utf-8");
+
+    const taskContent = makeSimpleTask("impl, validate");
+    const inboxPath = join(TEST_DIR, "00-inbox", "state-work-dir-task.task");
+    writeFileSync(inboxPath, taskContent, "utf-8");
+
+    const stubRunner = async (options: AgentRunOptions): Promise<AgentRunResult> => {
+      if (options.outputPath) {
+        mkdirSync(dirname(options.outputPath), { recursive: true });
+        writeFileSync(options.outputPath, `Output — **Verdict:** READY_FOR_REVIEW`);
+      }
+      return {
+        success: true,
+        output: "**Verdict:** READY_FOR_REVIEW",
+        costUsd: 0, turns: 1, durationMs: 10,
+      };
+    };
+
+    const invocationCwd = join(TEST_DIR, "inv-cwd");
+    mkdirSync(invocationCwd, { recursive: true });
+
+    const config = makeConfig();
+    const registry = createAgentRegistry(3, 1);
+    const pipeline = createPipeline({
+      config, registry, runner: stubRunner,
+      logger: { info() {}, warn() {}, error() {} },
+    });
+
+    await pipeline.startRun(inboxPath, invocationCwd);
+
+    const completeDir = join(TEST_DIR, "10-complete", "state-work-dir-task");
+    const finalState = readRunState(completeDir);
+    expect(finalState.workDir).toBe(invocationCwd);
+  });
+
   it("reports active runs", async () => {
     createRuntimeDirs(TEST_DIR);
     const templatesDir = join(TEST_DIR, "templates");

@@ -123,7 +123,7 @@ export interface PipelineOptions {
 }
 
 export interface Pipeline {
-  startRun(taskFilePath: string): Promise<void>;
+  startRun(taskFilePath: string, invocationCwd?: string): Promise<void>;
   resumeRun(slug: string, stageSubdir: string): Promise<void>;
   approveAndResume(slug: string, feedback?: string): Promise<void>;
   getActiveRuns(): RunState[];
@@ -136,6 +136,24 @@ export function createPipeline(options: PipelineOptions): Pipeline {
   const runtimeDir = config.pipeline.runtimeDir;
   const activeRuns = new Map<string, RunState>();
 
+  const EXECUTION_STAGES = new Set(["impl", "validate", "review", "pr"]);
+
+  function resolveWorkDir(state: RunState): string {
+    // Resolution chain:
+    // 1. workDir already set (retry or resume) → reuse
+    if (state.workDir) return state.workDir;
+
+    // 2. No repo path on task — check repos.root
+    if (config.repos.root) {
+      const dir = join(config.repos.root, state.slug);
+      mkdirSync(dir, { recursive: true });
+      return dir;
+    }
+
+    // 3. Fall back to invocation cwd
+    return state.invocationCwd ?? runtimeDir;
+  }
+
   async function processStage(slug: string, initialTaskDir: string): Promise<void> {
     let currentTaskDir = initialTaskDir;
 
@@ -144,6 +162,12 @@ export function createPipeline(options: PipelineOptions): Pipeline {
       const state = readRunState(currentTaskDir);
       const stage = state.currentStage;
       const taskLogger = createTaskLogger(join(runtimeDir, "logs"), slug);
+
+      // Resolve workDir when entering impl for the first time
+      if (stage === "impl" && !state.workDir) {
+        state.workDir = resolveWorkDir(state);
+        writeRunState(currentTaskDir, state);
+      }
 
       if (!registry.canStartAgent(stage)) {
         // Task stays in pending/ — crash recovery will resume it on next startup.
@@ -172,13 +196,19 @@ export function createPipeline(options: PipelineOptions): Pipeline {
 
       const outputPath = join(artifactsDir, `${stage}-output.md`);
 
+      // Execution stages (impl, validate, review, pr) work in the resolved workDir.
+      // Alignment stages work in the task directory as before.
+      const stageCwd = EXECUTION_STAGES.has(stage) && state.workDir
+        ? state.workDir
+        : currentTaskDir;
+
       const runOptions: AgentRunOptions = {
         stage,
         slug,
         taskContent,
         previousOutput: previousOutput.trim(),
         outputPath,
-        cwd: currentTaskDir,
+        cwd: stageCwd,
         config,
         templateDir: join(runtimeDir, "templates"),
         abortController,
@@ -295,7 +325,7 @@ export function createPipeline(options: PipelineOptions): Pipeline {
   }
 
   return {
-    async startRun(taskFilePath: string): Promise<void> {
+    async startRun(taskFilePath: string, invocationCwd?: string): Promise<void> {
       const slug = basename(taskFilePath, ".task");
       const taskContent = readFileSync(taskFilePath, "utf-8");
       const taskMeta = parseTaskFile(taskContent);
@@ -303,6 +333,10 @@ export function createPipeline(options: PipelineOptions): Pipeline {
 
       const firstStage = state.stages[0];
       state.currentStage = firstStage;
+
+      if (invocationCwd) {
+        state.invocationCwd = invocationCwd;
+      }
 
       const stageDir = STAGE_DIR_MAP[firstStage];
       const taskDir = initTaskDir(runtimeDir, slug, stageDir, taskFilePath);
