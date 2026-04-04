@@ -503,6 +503,7 @@ Five specs, in implementation order. Each spec gets its own document.
 - Concurrency management and agent registry
 - Crash recovery (startup scan)
 - Git worktree management for Karigar
+- Per-stage agent template files (see section 17)
 
 ### Spec 3: Input Surfaces
 - Slack integration (inbound parsing → Brahma, outbound notifications, thread-based approvals → Indra)
@@ -555,3 +556,69 @@ Five specs, in implementation order. Each spec gets its own document.
 - Intent classifier confidence threshold — below 0.7 asks for clarification instead of guessing
 - Per-agent max turns to prevent runaway loops
 - Per-agent timeout to kill stalled agents
+
+---
+
+## 17. Per-Stage Agent Templates
+
+Each pipeline stage directory in the npm package includes a template file that defines:
+- What the agent for that stage does
+- What inputs it receives
+- What output it must produce
+- Tool permissions (Agent SDK scoping)
+- Max turns and timeout defaults
+
+These templates serve two purposes:
+1. **Runtime prompt injection** — loaded and hydrated with task-specific variables when the agent is spawned
+2. **Extensibility documentation** — users or contributors who want to add a new agent (e.g., a security audit stage, a docs generation stage) can copy an existing template as a starting point
+
+### Template location
+
+```
+src/templates/
+├── prompt-questions.md      ← Narada: generates technical questions
+├── prompt-research.md       ← Chitragupta: factual codebase investigation
+├── prompt-design.md         ← Vishwakarma: architectural design decisions
+├── prompt-structure.md      ← Vastu: vertical slice decomposition
+├── prompt-plan.md           ← Chanakya: tactical implementation plan
+├── prompt-impl.md           ← Karigar: TDD code implementation
+├── prompt-validate.md       ← Dharma: discover and run build/test commands
+├── prompt-review.md         ← Drona: code quality review
+├── prompt-classify.md       ← Sutradhaar: intent classification
+└── agent-template.md        ← Blank template for creating new agents
+```
+
+### Template format
+
+Each prompt template uses `{{VARIABLE}}` placeholders that the pipeline engine hydrates at runtime:
+
+```markdown
+{{PIPELINE_CONTEXT}}
+
+You are {{AGENT_NAME}}, the {{AGENT_ROLE}} agent in the ShaktimaanAI pipeline.
+
+═══ TASK ═══
+{{TASK_CONTENT}}
+
+═══ PREVIOUS STAGE OUTPUT ═══
+{{PREVIOUS_OUTPUT}}
+
+═══ YOUR JOB ═══
+[stage-specific instructions]
+
+═══ OUTPUT ═══
+Write your output to EXACTLY this path: {{OUTPUT_PATH}}
+[stage-specific output format]
+```
+
+### Adding a new agent
+
+To add a custom stage (e.g., "security-audit" between review and PR):
+
+1. Create `src/templates/prompt-security-audit.md` using `agent-template.md` as a starting point
+2. Create `src/agents/security-audit.ts` implementing the agent runner
+3. Register the stage in the pipeline engine's stage map
+4. Add the stage name to the valid stages list in the config schema
+5. Users include "security-audit" in their task's `stages:` field to activate it
+
+This is implemented in **Spec 2: Pipeline Engine & Agents**.
