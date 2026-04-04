@@ -20,5 +20,5 @@ Thumbs.db
 # Test
 coverage/
 
-# Runtime (never commit pipeline runtime data)
-runtime/
+# Runtime (never commit pipeline runtime data — root-level only)
+/runtime/
