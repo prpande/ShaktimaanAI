@@ -1,5 +1,3 @@
-import type { TaskMeta } from "../task/parser.js";
-
 export type PipelineStage =
   | "questions" | "research" | "design" | "structure" | "plan"
   | "impl" | "validate" | "review" | "pr";
@@ -37,7 +35,7 @@ export interface AgentRunOptions {
   config: import("../config/loader.js").ResolvedConfig;
   templateDir: string;
   abortController?: AbortController;
-  logger: import("./logger.js").TaskLogger;
+  logger: { info(msg: string): void; warn(msg: string): void; error(msg: string): void };
 }
 
 export interface AgentRunResult {

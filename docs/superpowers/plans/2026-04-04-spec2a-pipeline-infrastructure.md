@@ -23,10 +23,10 @@ src/
 │   ├── agent-runner.ts        ← Claude Agent SDK wrapper
 │   ├── registry.ts            ← Agent concurrency registry
 │   ├── pipeline.ts            ← Stage machine, transitions, run orchestration
-│   ├── brahma.ts              ← Canonical task creator
-│   ├── sutradhaar.ts          ← Intent classifier (keywords + LLM fallback)
-│   ├── indra.ts               ← Approval handler
-│   ├── heimdall.ts            ← Chokidar file watcher on inbox
+│   ├── task-creator.ts         ← Canonical task creator (Brahma)
+│   ├── intent-classifier.ts   ← Intent classifier — keywords + LLM fallback (Sutradhaar)
+│   ├── approval-handler.ts    ← Approval handler (Indra)
+│   ├── watcher.ts             ← Chokidar file watcher on inbox (Heimdall)
 │   └── recovery.ts            ← Crash recovery (startup dir scan)
 ├── config/
 │   └── resolve-path.ts        ← Extract resolveConfigPath from cli.ts (shared)
@@ -51,10 +51,10 @@ tests/
 │   ├── agent-runner.test.ts
 │   ├── registry.test.ts
 │   ├── pipeline.test.ts
-│   ├── brahma.test.ts
-│   ├── sutradhaar.test.ts
-│   ├── indra.test.ts
-│   ├── heimdall.test.ts
+│   ├── task-creator.test.ts
+│   ├── intent-classifier.test.ts
+│   ├── approval-handler.test.ts
+│   ├── watcher.test.ts
 │   └── recovery.test.ts
 ├── config/
 │   └── resolve-path.test.ts
@@ -2062,12 +2062,12 @@ EOF
 ### Task 8: Brahma (Task Creator)
 
 **Files:**
-- Create: `src/core/brahma.ts`
-- Create: `tests/core/brahma.test.ts`
+- Create: `src/core/task-creator.ts`
+- Create: `tests/core/task-creator.test.ts`
 
 - [ ] **Step 1: Write tests**
 
-Create `tests/core/brahma.test.ts`:
+Create `tests/core/task-creator.test.ts`:
 
 ```typescript
 import { describe, it, expect, beforeEach, afterEach } from "vitest";
@@ -2081,7 +2081,7 @@ import {
   extractTitle,
   buildTaskFileContent,
   createTask,
-} from "../../src/core/brahma.js";
+} from "../../src/core/task-creator.js";
 
 const TEST_DIR = join(tmpdir(), "shkmn-test-brahma-" + Date.now());
 
@@ -2205,14 +2205,14 @@ describe("createTask", () => {
 - [ ] **Step 2: Run tests, verify they fail**
 
 ```bash
-npx vitest run tests/core/brahma.test.ts --reporter=verbose
+npx vitest run tests/core/task-creator.test.ts --reporter=verbose
 ```
 
 Expected: FAIL
 
 - [ ] **Step 3: Write implementation**
 
-Create `src/core/brahma.ts`:
+Create `src/core/task-creator.ts`:
 
 ```typescript
 import { writeFileSync } from "node:fs";
@@ -2285,7 +2285,7 @@ export function createTask(
 - [ ] **Step 4: Run tests, verify they pass**
 
 ```bash
-npx vitest run tests/core/brahma.test.ts --reporter=verbose
+npx vitest run tests/core/task-creator.test.ts --reporter=verbose
 ```
 
 Expected: All PASS
@@ -2293,7 +2293,7 @@ Expected: All PASS
 - [ ] **Step 5: Commit**
 
 ```bash
-git add src/core/brahma.ts tests/core/brahma.test.ts
+git add src/core/task-creator.ts tests/core/task-creator.test.ts
 git commit -m "$(cat <<'EOF'
 feat: add Brahma task creator — slug generation, .task file builder, inbox writer
 EOF
@@ -2305,16 +2305,16 @@ EOF
 ### Task 9: Sutradhaar (Intent Classifier)
 
 **Files:**
-- Create: `src/core/sutradhaar.ts`
-- Create: `tests/core/sutradhaar.test.ts`
+- Create: `src/core/intent-classifier.ts`
+- Create: `tests/core/intent-classifier.test.ts`
 
 - [ ] **Step 1: Write tests**
 
-Create `tests/core/sutradhaar.test.ts`:
+Create `tests/core/intent-classifier.test.ts`:
 
 ```typescript
 import { describe, it, expect } from "vitest";
-import { classifyByKeywords, classifyIntent } from "../../src/core/sutradhaar.js";
+import { classifyByKeywords, classifyIntent } from "../../src/core/intent-classifier.js";
 import type { AgentRunResult, AgentRunOptions } from "../../src/core/types.js";
 
 describe("classifyByKeywords", () => {
@@ -2430,14 +2430,14 @@ describe("classifyIntent", () => {
 - [ ] **Step 2: Run tests, verify they fail**
 
 ```bash
-npx vitest run tests/core/sutradhaar.test.ts --reporter=verbose
+npx vitest run tests/core/intent-classifier.test.ts --reporter=verbose
 ```
 
 Expected: FAIL
 
 - [ ] **Step 3: Write implementation**
 
-Create `src/core/sutradhaar.ts`:
+Create `src/core/intent-classifier.ts`:
 
 ```typescript
 import type { AgentRunnerFn, AgentRunOptions, AgentRunResult } from "./types.js";
@@ -2540,7 +2540,7 @@ export async function classifyIntent(
 - [ ] **Step 4: Run tests, verify they pass**
 
 ```bash
-npx vitest run tests/core/sutradhaar.test.ts --reporter=verbose
+npx vitest run tests/core/intent-classifier.test.ts --reporter=verbose
 ```
 
 Expected: All PASS
@@ -2548,7 +2548,7 @@ Expected: All PASS
 - [ ] **Step 5: Commit**
 
 ```bash
-git add src/core/sutradhaar.ts tests/core/sutradhaar.test.ts
+git add src/core/intent-classifier.ts tests/core/intent-classifier.test.ts
 git commit -m "$(cat <<'EOF'
 feat: add Sutradhaar intent classifier with keyword matching and LLM fallback
 EOF
@@ -2560,19 +2560,19 @@ EOF
 ### Task 10: Indra (Approval Handler)
 
 **Files:**
-- Create: `src/core/indra.ts`
-- Create: `tests/core/indra.test.ts`
+- Create: `src/core/approval-handler.ts`
+- Create: `tests/core/approval-handler.test.ts`
 
 - [ ] **Step 1: Write tests**
 
-Create `tests/core/indra.test.ts`:
+Create `tests/core/approval-handler.test.ts`:
 
 ```typescript
 import { describe, it, expect, beforeEach, afterEach } from "vitest";
 import { mkdirSync, rmSync, writeFileSync, existsSync } from "node:fs";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
-import { findHeldTask, listHeldTasks } from "../../src/core/indra.js";
+import { findHeldTask, listHeldTasks } from "../../src/core/approval-handler.js";
 
 const TEST_DIR = join(tmpdir(), "shkmn-test-indra-" + Date.now());
 
@@ -2625,14 +2625,14 @@ describe("listHeldTasks", () => {
 - [ ] **Step 2: Run tests, verify they fail**
 
 ```bash
-npx vitest run tests/core/indra.test.ts --reporter=verbose
+npx vitest run tests/core/approval-handler.test.ts --reporter=verbose
 ```
 
 Expected: FAIL
 
 - [ ] **Step 3: Write implementation**
 
-Create `src/core/indra.ts`:
+Create `src/core/approval-handler.ts`:
 
 ```typescript
 import { existsSync, readdirSync } from "node:fs";
@@ -2678,7 +2678,7 @@ export async function approveTask(
 - [ ] **Step 4: Run tests, verify they pass**
 
 ```bash
-npx vitest run tests/core/indra.test.ts --reporter=verbose
+npx vitest run tests/core/approval-handler.test.ts --reporter=verbose
 ```
 
 Expected: All PASS
@@ -2686,7 +2686,7 @@ Expected: All PASS
 - [ ] **Step 5: Commit**
 
 ```bash
-git add src/core/indra.ts tests/core/indra.test.ts
+git add src/core/approval-handler.ts tests/core/approval-handler.test.ts
 git commit -m "$(cat <<'EOF'
 feat: add Indra approval handler — find/list held tasks and approve to resume pipeline
 EOF
@@ -2698,8 +2698,8 @@ EOF
 ### Task 11: Heimdall (File Watcher) & Crash Recovery
 
 **Files:**
-- Create: `src/core/heimdall.ts`
-- Create: `tests/core/heimdall.test.ts`
+- Create: `src/core/watcher.ts`
+- Create: `tests/core/watcher.test.ts`
 - Create: `src/core/recovery.ts`
 - Create: `tests/core/recovery.test.ts`
 
@@ -2860,14 +2860,14 @@ Expected: All PASS
 
 - [ ] **Step 5: Write Heimdall tests**
 
-Create `tests/core/heimdall.test.ts`:
+Create `tests/core/watcher.test.ts`:
 
 ```typescript
 import { describe, it, expect, beforeEach, afterEach } from "vitest";
 import { mkdirSync, rmSync, writeFileSync, existsSync } from "node:fs";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
-import { createHeimdall } from "../../src/core/heimdall.js";
+import { createWatcher } from "../../src/core/watcher.js";
 import type { Pipeline } from "../../src/core/pipeline.js";
 
 const TEST_DIR = join(tmpdir(), "shkmn-test-heimdall-" + Date.now());
@@ -2879,7 +2879,7 @@ function noopLogger() {
   return { info() {}, warn() {}, error() {} };
 }
 
-describe("createHeimdall", () => {
+describe("createWatcher", () => {
   it("starts and stops without error", async () => {
     const mockPipeline: Pipeline = {
       async startRun() {},
@@ -2888,19 +2888,19 @@ describe("createHeimdall", () => {
       getActiveRuns() { return []; },
     };
 
-    const heimdall = createHeimdall({
+    const watcher = createWatcher({
       runtimeDir: TEST_DIR,
       pipeline: mockPipeline,
       logger: noopLogger(),
     });
 
-    expect(heimdall.isRunning()).toBe(false);
+    expect(watcher.isRunning()).toBe(false);
 
-    heimdall.start();
-    expect(heimdall.isRunning()).toBe(true);
+    watcher.start();
+    expect(watcher.isRunning()).toBe(true);
 
-    await heimdall.stop();
-    expect(heimdall.isRunning()).toBe(false);
+    await watcher.stop();
+    expect(watcher.isRunning()).toBe(false);
   });
 
   it("does not start twice", () => {
@@ -2911,15 +2911,15 @@ describe("createHeimdall", () => {
       getActiveRuns() { return []; },
     };
 
-    const heimdall = createHeimdall({
+    const watcher = createWatcher({
       runtimeDir: TEST_DIR,
       pipeline: mockPipeline,
       logger: noopLogger(),
     });
 
-    heimdall.start();
-    heimdall.start(); // second call should be no-op
-    expect(heimdall.isRunning()).toBe(true);
+    watcher.start();
+    watcher.start(); // second call should be no-op
+    expect(watcher.isRunning()).toBe(true);
   });
 
   it("calls pipeline.startRun when a .task file appears in inbox", async () => {
@@ -2931,13 +2931,13 @@ describe("createHeimdall", () => {
       getActiveRuns() { return []; },
     };
 
-    const heimdall = createHeimdall({
+    const watcher = createWatcher({
       runtimeDir: TEST_DIR,
       pipeline: mockPipeline,
       logger: noopLogger(),
     });
 
-    heimdall.start();
+    watcher.start();
 
     // Wait for watcher to be ready, then drop a task file
     await new Promise((r) => setTimeout(r, 1000));
@@ -2946,7 +2946,7 @@ describe("createHeimdall", () => {
     // Wait for chokidar to detect the file (awaitWriteFinish: 500ms + buffer)
     await new Promise((r) => setTimeout(r, 2000));
 
-    await heimdall.stop();
+    await watcher.stop();
 
     expect(startedFiles.length).toBe(1);
     expect(startedFiles[0]).toContain("test-task.task");
@@ -2961,19 +2961,19 @@ describe("createHeimdall", () => {
       getActiveRuns() { return []; },
     };
 
-    const heimdall = createHeimdall({
+    const watcher = createWatcher({
       runtimeDir: TEST_DIR,
       pipeline: mockPipeline,
       logger: noopLogger(),
     });
 
-    heimdall.start();
+    watcher.start();
     await new Promise((r) => setTimeout(r, 1000));
 
     writeFileSync(join(TEST_DIR, "00-inbox", "readme.md"), "# Not a task\n");
     await new Promise((r) => setTimeout(r, 2000));
 
-    await heimdall.stop();
+    await watcher.stop();
     expect(startedFiles).toHaveLength(0);
   });
 });
@@ -2982,14 +2982,14 @@ describe("createHeimdall", () => {
 - [ ] **Step 6: Run Heimdall tests, verify they fail**
 
 ```bash
-npx vitest run tests/core/heimdall.test.ts --reporter=verbose
+npx vitest run tests/core/watcher.test.ts --reporter=verbose
 ```
 
 Expected: FAIL
 
 - [ ] **Step 7: Write Heimdall implementation**
 
-Create `src/core/heimdall.ts`:
+Create `src/core/watcher.ts`:
 
 ```typescript
 import chokidar, { type FSWatcher } from "chokidar";
@@ -2997,19 +2997,19 @@ import { join } from "node:path";
 import type { Pipeline } from "./pipeline.js";
 import type { TaskLogger } from "./logger.js";
 
-export interface Heimdall {
+export interface Watcher {
   start(): void;
   stop(): Promise<void>;
   isRunning(): boolean;
 }
 
-export interface HeimdallOptions {
+export interface WatcherOptions {
   runtimeDir: string;
   pipeline: Pipeline;
   logger: TaskLogger;
 }
 
-export function createHeimdall(options: HeimdallOptions): Heimdall {
+export function createWatcher(options: WatcherOptions): Heimdall {
   const { runtimeDir, pipeline, logger } = options;
   const inboxDir = join(runtimeDir, "00-inbox");
   let watcher: FSWatcher | null = null;
@@ -3068,7 +3068,7 @@ export function createHeimdall(options: HeimdallOptions): Heimdall {
 - [ ] **Step 8: Run Heimdall tests, verify they pass**
 
 ```bash
-npx vitest run tests/core/heimdall.test.ts --reporter=verbose
+npx vitest run tests/core/watcher.test.ts --reporter=verbose
 ```
 
 Expected: All PASS (the file-detection test may need the timeouts — chokidar + awaitWriteFinish)
@@ -3076,7 +3076,7 @@ Expected: All PASS (the file-detection test may need the timeouts — chokidar +
 - [ ] **Step 9: Commit**
 
 ```bash
-git add src/core/heimdall.ts tests/core/heimdall.test.ts src/core/recovery.ts tests/core/recovery.test.ts
+git add src/core/watcher.ts tests/core/watcher.test.ts src/core/recovery.ts tests/core/recovery.test.ts
 git commit -m "$(cat <<'EOF'
 feat: add Heimdall file watcher and crash recovery scan
 EOF
@@ -3159,13 +3159,13 @@ import { createSystemLogger } from "../core/logger.js";
 import { createAgentRegistry } from "../core/registry.js";
 import { createPipeline } from "../core/pipeline.js";
 import { runAgent } from "../core/agent-runner.js";
-import { createHeimdall, type Heimdall } from "../core/heimdall.js";
+import { createWatcher, type Watcher } from "../core/heimdall.js";
 import { runRecovery } from "../core/recovery.js";
 
-let activeHeimdall: Heimdall | null = null;
+let activeWatcher: Heimdall | null = null;
 
-export function getActiveHeimdall(): Heimdall | null {
-  return activeHeimdall;
+export function getActiveWatcher(): Heimdall | null {
+  return activeWatcher;
 }
 
 export function registerStartCommand(program: Command): void {
@@ -3216,16 +3216,16 @@ export function registerStartCommand(program: Command): void {
       }
 
       // Start Heimdall
-      const heimdall = createHeimdall({
+      const watcher = createWatcher({
         runtimeDir: config.pipeline.runtimeDir,
         pipeline,
         logger: systemLogger,
       });
-      heimdall.start();
-      activeHeimdall = heimdall;
+      watcher.start();
+      activeWatcher = heimdall;
 
       // Write PID file for stop command
-      const pidFile = join(config.pipeline.runtimeDir, "heimdall.pid");
+      const pidFile = join(config.pipeline.runtimeDir, "shkmn.pid");
       writeFileSync(pidFile, process.pid.toString());
 
       console.log("ShaktimaanAI pipeline started. Watching for tasks...");
@@ -3235,7 +3235,7 @@ export function registerStartCommand(program: Command): void {
       const shutdown = async () => {
         console.log("\nStopping ShaktimaanAI...");
         registry.abortAll();
-        await heimdall.stop();
+        await watcher.stop();
         try {
           const { unlinkSync } = await import("node:fs");
           unlinkSync(pidFile);
@@ -3269,7 +3269,7 @@ export function registerStopCommand(program: Command): void {
       const configPath = resolveConfigPath();
       const config = loadConfig(configPath);
 
-      const pidFile = join(config.pipeline.runtimeDir, "heimdall.pid");
+      const pidFile = join(config.pipeline.runtimeDir, "shkmn.pid");
       if (!existsSync(pidFile)) {
         console.error("ShaktimaanAI is not running (no PID file found).");
         process.exit(1);
