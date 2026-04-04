@@ -1,69 +1,101 @@
-import { readFileSync } from "node:fs";
-import { join } from "node:path";
+import { join, dirname } from "node:path";
+import { fileURLToPath } from "node:url";
 import { hydrateTemplate } from "./template.js";
+import { loadAgentConfig } from "./agent-config.js";
+import { gatherRepoContext } from "./repo-context.js";
+import { parseTaskFile } from "../task/parser.js";
 import type { AgentRunOptions, AgentRunResult } from "./types.js";
+import type { ResolvedConfig } from "../config/loader.js";
 
-/** Loads a prompt-{name}.md file from templateDir. Kept local until Task 5 rewires to agent-config. */
-function loadTemplate(templateDir: string, templateName: string): string {
-  const filePath = join(templateDir, `prompt-${templateName}.md`);
+// ─── findShippedAgentsDir ────────────────────────────────────────────────────
+
+function findShippedAgentsDir(): string {
   try {
-    return readFileSync(filePath, "utf-8");
-  } catch (err) {
-    throw new Error(
-      `Template not found for stage "${templateName}" at "${filePath}". ` +
-      `Ensure templates are bundled in dist/ during build. ` +
-      `(${err instanceof Error ? err.message : String(err)})`,
-    );
+    const thisDir = dirname(fileURLToPath(import.meta.url));
+    const projectRoot = join(thisDir, "..", "..");
+    return join(projectRoot, "agents");
+  } catch {
+    return join(process.cwd(), "agents");
   }
 }
 
-// ─── Tool permission tables ──────────────────────────────────────────────────
+// ─── Tool permission resolver ────────────────────────────────────────────────
 
-const READ_ONLY_TOOLS = ["Read", "Glob", "Grep"];
-const ALL_TOOLS = ["Read", "Write", "Edit", "Bash", "Glob", "Grep"];
-
-interface StageToolPermissions {
-  allowed: string[];
-  disallowed: string[];
-}
-
-const STAGE_TOOL_MAP: Record<string, StageToolPermissions> = {
-  questions:  { allowed: ["Read", "Glob", "Grep"],             disallowed: ["Write", "Edit", "Bash"] },
-  research:   { allowed: ["Read", "Glob", "Grep", "Bash"],     disallowed: ["Write", "Edit"] },
-  design:     { allowed: ["Read", "Glob", "Grep"],             disallowed: ["Write", "Edit", "Bash"] },
-  structure:  { allowed: ["Read", "Glob", "Grep"],             disallowed: ["Write", "Edit", "Bash"] },
-  plan:       { allowed: ["Read", "Glob", "Grep"],             disallowed: ["Write", "Edit", "Bash"] },
-  impl:       { allowed: [...ALL_TOOLS],                        disallowed: [] },
-  validate:   { allowed: ["Read", "Bash", "Glob", "Grep"],     disallowed: ["Write", "Edit"] },
-  review:     { allowed: ["Read", "Glob", "Grep"],             disallowed: ["Write", "Edit", "Bash"] },
-  pr:         { allowed: ["Bash"],                              disallowed: ["Write", "Edit"] },
-  classify:   { allowed: [],                                    disallowed: [...ALL_TOOLS] },
-};
-
-const DEFAULT_PERMISSIONS: StageToolPermissions = {
-  allowed: [...READ_ONLY_TOOLS],
-  disallowed: [],
-};
+const DEFAULT_READ_ONLY_TOOLS = ["Read", "Glob", "Grep"];
 
 /**
- * Returns the allowed and disallowed tool lists for the given pipeline stage.
- * Unknown stages get the safe read-only default.
+ * Resolves tool permissions for a pipeline stage.
+ * If agentTools.allowed is non-empty, use it. Otherwise default to read-only tools.
  */
-export function getStageTools(stage: string): StageToolPermissions {
-  return STAGE_TOOL_MAP[stage] ?? { ...DEFAULT_PERMISSIONS };
+export function resolveToolPermissions(
+  _stage: string,
+  agentTools: { allowed: string[]; disallowed: string[] },
+  _config: ResolvedConfig,
+): { allowed: string[]; disallowed: string[] } {
+  if (agentTools.allowed.length > 0) {
+    return { allowed: agentTools.allowed, disallowed: agentTools.disallowed };
+  }
+  return { allowed: [...DEFAULT_READ_ONLY_TOOLS], disallowed: [] };
+}
+
+// ─── Max turns resolver ───────────────────────────────────────────────────────
+
+const DEFAULT_MAX_TURNS = 30;
+
+/**
+ * Resolves the max turns for a pipeline stage.
+ * Priority: config.agents.maxTurns[stage] ?? agentMaxTurns ?? 30
+ */
+export function resolveMaxTurns(
+  stage: string,
+  agentMaxTurns: number | undefined,
+  config: ResolvedConfig,
+): number {
+  return config.agents.maxTurns[stage] ?? agentMaxTurns ?? DEFAULT_MAX_TURNS;
+}
+
+// ─── Timeout resolver ─────────────────────────────────────────────────────────
+
+const DEFAULT_TIMEOUT_MINUTES = 30;
+
+/**
+ * Resolves the timeout in minutes for a pipeline stage.
+ * Priority: config.agents.timeoutsMinutes[stage] ?? agentTimeout ?? 30
+ */
+export function resolveTimeoutMinutes(
+  stage: string,
+  agentTimeout: number | undefined,
+  config: ResolvedConfig,
+): number {
+  return config.agents.timeoutsMinutes[stage] ?? agentTimeout ?? DEFAULT_TIMEOUT_MINUTES;
 }
 
 // ─── System prompt builder ───────────────────────────────────────────────────
 
 /**
- * Loads the stage prompt template and hydrates it with all pipeline variables.
+ * Loads the stage prompt template from agent config and hydrates it with all
+ * pipeline variables including repo context and stage list.
  */
 export function buildSystemPrompt(options: AgentRunOptions): string {
-  const { stage, slug, taskContent, previousOutput, outputPath, config, templateDir } = options;
+  const { stage, slug, taskContent, previousOutput, outputPath, config } = options;
 
-  const template = loadTemplate(templateDir, stage);
+  // Determine agents directory: config override or shipped agents
+  const agentsDir = config.pipeline.agentsDir || findShippedAgentsDir();
 
+  // Load agent config from markdown file
+  const agentConfig = loadAgentConfig(agentsDir, stage);
+
+  // Parse task content to extract repo path and stages
+  const taskMeta = parseTaskFile(taskContent);
+
+  // Gather repo context
+  const repoContext = gatherRepoContext(taskMeta.repo);
+
+  // Resolve agent name from config (falls back to stage name)
   const agentName = config.agents.names[stage] ?? stage;
+
+  // Build stage list from task meta or config defaults
+  const stageList = (taskMeta.stages.length > 0 ? taskMeta.stages : config.agents.defaultStages).join(", ");
 
   const vars: Record<string, string> = {
     AGENT_NAME: agentName,
@@ -72,20 +104,20 @@ export function buildSystemPrompt(options: AgentRunOptions): string {
     PREVIOUS_OUTPUT: previousOutput || "(none)",
     OUTPUT_PATH: outputPath,
     PIPELINE_CONTEXT: `Pipeline: ShaktimaanAI | Task: ${slug} | Stage: ${stage}`,
+    REPO_CONTEXT: repoContext,
+    REPO_PATH: taskMeta.repo || "(none)",
+    STAGE_LIST: stageList,
   };
 
-  return hydrateTemplate(template, vars);
+  return hydrateTemplate(agentConfig.promptTemplate, vars);
 }
 
 // ─── Agent runner ────────────────────────────────────────────────────────────
 
-const DEFAULT_MAX_TURNS = 30;
-const DEFAULT_TIMEOUT_MINUTES = 30;
-
 /**
  * Runs the Claude agent SDK for the given stage and options.
- * Uses per-stage tool permissions, a hydrated system prompt, and enforces a
- * configurable timeout via AbortController.
+ * Uses per-stage tool permissions from agent config, a hydrated system prompt,
+ * and enforces a configurable timeout via AbortController.
  */
 export async function runAgent(options: AgentRunOptions): Promise<AgentRunResult> {
   const { stage, cwd, config, logger, abortController: externalAbort } = options;
@@ -93,11 +125,19 @@ export async function runAgent(options: AgentRunOptions): Promise<AgentRunResult
   const startMs = Date.now();
   const { query } = await import("@anthropic-ai/claude-agent-sdk");
 
-  const { allowed: allowedTools, disallowed: disallowedTools } = getStageTools(stage);
+  // Load agent config for tool permissions and timing
+  const agentsDir = config.pipeline.agentsDir || findShippedAgentsDir();
+  const agentConfig = loadAgentConfig(agentsDir, stage);
+
+  const { allowed: allowedTools, disallowed: disallowedTools } = resolveToolPermissions(
+    stage,
+    agentConfig.tools,
+    config,
+  );
   const systemPrompt = buildSystemPrompt(options);
 
-  const maxTurns = config.agents.maxTurns[stage] ?? DEFAULT_MAX_TURNS;
-  const timeoutMinutes = config.agents.timeoutsMinutes[stage] ?? DEFAULT_TIMEOUT_MINUTES;
+  const maxTurns = resolveMaxTurns(stage, agentConfig.maxTurns, config);
+  const timeoutMinutes = resolveTimeoutMinutes(stage, agentConfig.timeoutMinutes, config);
   const timeoutMs = timeoutMinutes * 60 * 1000;
 
   // Use provided abortController or create our own

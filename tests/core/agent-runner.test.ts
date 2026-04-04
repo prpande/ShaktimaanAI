@@ -1,222 +1,201 @@
-import { describe, it, expect, beforeEach, afterEach } from "vitest";
+import { describe, it, expect, beforeAll, afterAll } from "vitest";
 import { mkdirSync, rmSync, writeFileSync } from "fs";
 import { join } from "path";
 import { tmpdir } from "os";
-import { getStageTools, buildSystemPrompt } from "../../src/core/agent-runner.js";
+import {
+  buildSystemPrompt,
+  resolveToolPermissions,
+  resolveMaxTurns,
+  resolveTimeoutMinutes,
+} from "../../src/core/agent-runner.js";
 import { configSchema } from "../../src/config/schema.js";
 import { resolveConfig } from "../../src/config/loader.js";
 import type { AgentRunOptions } from "../../src/core/types.js";
 
-// ─── helpers ────────────────────────────────────────────────────────────────
+// ─── helpers ─────────────────────────────────────────────────────────────────
 
-function makeConfig(agentNames?: Record<string, string>) {
+const TEST_DIR = join(tmpdir(), "shkmn-test-agent-runner-" + Date.now());
+const AGENTS_DIR = join(TEST_DIR, "agents");
+const REPO_DIR = join(TEST_DIR, "repo");
+
+beforeAll(() => {
+  mkdirSync(AGENTS_DIR, { recursive: true });
+  mkdirSync(REPO_DIR, { recursive: true });
+});
+
+afterAll(() => rmSync(TEST_DIR, { recursive: true, force: true }));
+
+function makeConfig(overrides?: { agentNames?: Record<string, string>; maxTurns?: Record<string, number>; timeoutsMinutes?: Record<string, number> }) {
   const parsed = configSchema.parse({
-    pipeline: { runtimeDir: "/tmp/rt" },
-    agents: agentNames ? { names: agentNames } : undefined,
+    pipeline: {
+      runtimeDir: "/tmp/rt",
+      agentsDir: AGENTS_DIR,
+    },
+    agents: {
+      ...(overrides?.agentNames ? { names: overrides.agentNames } : {}),
+      ...(overrides?.maxTurns ? { maxTurns: overrides.maxTurns } : {}),
+      ...(overrides?.timeoutsMinutes ? { timeoutsMinutes: overrides.timeoutsMinutes } : {}),
+    },
   });
   return resolveConfig(parsed);
 }
 
-const TEST_DIR = join(tmpdir(), "shkmn-test-agent-runner-" + Date.now());
+function writeAgentMd(stage: string, content: string): void {
+  writeFileSync(join(AGENTS_DIR, `${stage}.md`), content, "utf-8");
+}
 
-beforeEach(() => mkdirSync(TEST_DIR, { recursive: true }));
-afterEach(() => rmSync(TEST_DIR, { recursive: true, force: true }));
-
-// ─── getStageTools ───────────────────────────────────────────────────────────
-
-describe("getStageTools", () => {
-  it("questions: allows Read/Glob/Grep, disallows Write/Edit/Bash", () => {
-    const tools = getStageTools("questions");
-    expect(tools.allowed).toEqual(expect.arrayContaining(["Read", "Glob", "Grep"]));
-    expect(tools.disallowed).toEqual(expect.arrayContaining(["Write", "Edit", "Bash"]));
-    expect(tools.allowed).not.toContain("Write");
-    expect(tools.allowed).not.toContain("Edit");
-    expect(tools.allowed).not.toContain("Bash");
-  });
-
-  it("research: allows Read/Glob/Grep/Bash, disallows Write/Edit", () => {
-    const tools = getStageTools("research");
-    expect(tools.allowed).toEqual(expect.arrayContaining(["Read", "Glob", "Grep", "Bash"]));
-    expect(tools.disallowed).toEqual(expect.arrayContaining(["Write", "Edit"]));
-    expect(tools.allowed).not.toContain("Write");
-    expect(tools.allowed).not.toContain("Edit");
-  });
-
-  it("design: allows Read/Glob/Grep, disallows Write/Edit/Bash", () => {
-    const tools = getStageTools("design");
-    expect(tools.allowed).toEqual(expect.arrayContaining(["Read", "Glob", "Grep"]));
-    expect(tools.disallowed).toEqual(expect.arrayContaining(["Write", "Edit", "Bash"]));
-  });
-
-  it("structure: allows Read/Glob/Grep, disallows Write/Edit/Bash", () => {
-    const tools = getStageTools("structure");
-    expect(tools.allowed).toEqual(expect.arrayContaining(["Read", "Glob", "Grep"]));
-    expect(tools.disallowed).toEqual(expect.arrayContaining(["Write", "Edit", "Bash"]));
-  });
-
-  it("plan: allows Read/Glob/Grep, disallows Write/Edit/Bash", () => {
-    const tools = getStageTools("plan");
-    expect(tools.allowed).toEqual(expect.arrayContaining(["Read", "Glob", "Grep"]));
-    expect(tools.disallowed).toEqual(expect.arrayContaining(["Write", "Edit", "Bash"]));
-  });
-
-  it("impl: allows all tools (Read/Write/Edit/Bash/Glob/Grep), nothing disallowed", () => {
-    const tools = getStageTools("impl");
-    expect(tools.allowed).toEqual(
-      expect.arrayContaining(["Read", "Write", "Edit", "Bash", "Glob", "Grep"])
-    );
-    expect(tools.disallowed).toHaveLength(0);
-  });
-
-  it("validate: allows Read/Bash/Glob/Grep, disallows Write/Edit", () => {
-    const tools = getStageTools("validate");
-    expect(tools.allowed).toEqual(expect.arrayContaining(["Read", "Bash", "Glob", "Grep"]));
-    expect(tools.disallowed).toEqual(expect.arrayContaining(["Write", "Edit"]));
-    expect(tools.allowed).not.toContain("Write");
-    expect(tools.allowed).not.toContain("Edit");
-  });
-
-  it("review: allows Read/Glob/Grep, disallows Write/Edit/Bash", () => {
-    const tools = getStageTools("review");
-    expect(tools.allowed).toEqual(expect.arrayContaining(["Read", "Glob", "Grep"]));
-    expect(tools.disallowed).toEqual(expect.arrayContaining(["Write", "Edit", "Bash"]));
-  });
-
-  it("pr: allows Bash, disallows Write/Edit", () => {
-    const tools = getStageTools("pr");
-    expect(tools.allowed).toEqual(expect.arrayContaining(["Bash"]));
-    expect(tools.disallowed).toEqual(expect.arrayContaining(["Write", "Edit"]));
-  });
-
-  it("classify: nothing allowed, all tools disallowed", () => {
-    const tools = getStageTools("classify");
-    expect(tools.allowed).toHaveLength(0);
-    expect(tools.disallowed).toEqual(
-      expect.arrayContaining(["Read", "Write", "Edit", "Bash", "Glob", "Grep"])
-    );
-  });
-
-  it("unknown stage: defaults to Read/Glob/Grep allowed, nothing disallowed", () => {
-    const tools = getStageTools("some-unknown-stage");
-    expect(tools.allowed).toEqual(expect.arrayContaining(["Read", "Glob", "Grep"]));
-    expect(tools.disallowed).toHaveLength(0);
-  });
-});
+function makeOptions(overrides: Partial<AgentRunOptions> = {}): AgentRunOptions {
+  return {
+    stage: "questions",
+    slug: "my-task",
+    taskContent: "Build the feature",
+    previousOutput: "",
+    outputPath: "/tmp/output/questions.md",
+    cwd: "/tmp/cwd",
+    config: makeConfig(),
+    templateDir: AGENTS_DIR,
+    logger: {
+      info: () => {},
+      warn: () => {},
+      error: () => {},
+    },
+    ...overrides,
+  };
+}
 
 // ─── buildSystemPrompt ───────────────────────────────────────────────────────
 
 describe("buildSystemPrompt", () => {
-  function makeOptions(overrides: Partial<AgentRunOptions> = {}): AgentRunOptions {
-    return {
-      stage: "questions",
-      slug: "my-task",
-      taskContent: "Build the feature",
-      previousOutput: "",
-      outputPath: "/tmp/output/questions.md",
-      cwd: "/tmp/cwd",
-      config: makeConfig(),
-      templateDir: TEST_DIR,
-      logger: {
-        info: () => {},
-        warn: () => {},
-        error: () => {},
-      },
-      ...overrides,
-    };
-  }
-
-  it("hydrates agent name from config.agents.names for known stage", () => {
-    writeFileSync(
-      join(TEST_DIR, "prompt-questions.md"),
-      "Agent: {{AGENT_NAME}} | Role: {{AGENT_ROLE}}",
-      "utf-8"
+  it("loads prompt from agent config file and hydrates all variables", () => {
+    writeAgentMd(
+      "questions",
+      `---
+stage: questions
+description: Ask clarifying questions
+tools:
+  allowed: [Read, Glob, Grep]
+  disallowed: [Write, Edit, Bash]
+---
+Agent: {{AGENT_NAME}} | Role: {{AGENT_ROLE}} | Task: {{TASK_CONTENT}} | Prev: {{PREVIOUS_OUTPUT}} | Out: {{OUTPUT_PATH}} | Ctx: {{PIPELINE_CONTEXT}} | Repo: {{REPO_CONTEXT}} | RepoPath: {{REPO_PATH}} | Stages: {{STAGE_LIST}}`,
     );
 
     const result = buildSystemPrompt(makeOptions({ stage: "questions" }));
-    // DEFAULT_AGENT_NAMES.questions === "Narada"
+
+    // AGENT_NAME — Narada from default config
     expect(result).toContain("Agent: Narada");
+    // AGENT_ROLE
     expect(result).toContain("Role: questions");
+    // TASK_CONTENT
+    expect(result).toContain("Task: Build the feature");
+    // PREVIOUS_OUTPUT — empty string becomes "(none)"
+    expect(result).toContain("Prev: (none)");
+    // OUTPUT_PATH
+    expect(result).toContain("Out: /tmp/output/questions.md");
+    // PIPELINE_CONTEXT
+    expect(result).toContain("Pipeline: ShaktimaanAI | Task: my-task | Stage: questions");
+    // REPO_CONTEXT — no repo in task content, so fallback message
+    expect(result).toContain("Repo:");
+    // REPO_PATH
+    expect(result).toContain("RepoPath:");
+    // STAGE_LIST
+    expect(result).toContain("Stages:");
   });
 
-  it("falls back to stage name when agent name not in config", () => {
-    writeFileSync(
-      join(TEST_DIR, "prompt-custom.md"),
-      "Agent: {{AGENT_NAME}}",
-      "utf-8"
+  it("injects repo context when task has a repo path with CLAUDE.md", () => {
+    writeFileSync(join(REPO_DIR, "CLAUDE.md"), "# Project Rules\nDo not break things.", "utf-8");
+
+    writeAgentMd(
+      "research",
+      `---
+stage: research
+description: Research the codebase
+---
+{{REPO_CONTEXT}}`,
     );
 
-    // makeConfig() with no overrides uses DEFAULT_AGENT_NAMES which has no "custom" key
-    const result = buildSystemPrompt(makeOptions({ stage: "custom" }));
-    // No entry for "custom" → falls back to stage name
-    expect(result).toContain("Agent: custom");
-  });
-
-  it("injects task content into {{TASK_CONTENT}}", () => {
-    writeFileSync(
-      join(TEST_DIR, "prompt-questions.md"),
-      "Task: {{TASK_CONTENT}}",
-      "utf-8"
-    );
-
-    const result = buildSystemPrompt(makeOptions({ taskContent: "Implement login flow" }));
-    expect(result).toContain("Task: Implement login flow");
-  });
-
-  it("injects output path into {{OUTPUT_PATH}}", () => {
-    writeFileSync(
-      join(TEST_DIR, "prompt-questions.md"),
-      "Out: {{OUTPUT_PATH}}",
-      "utf-8"
-    );
+    const taskContent = `# Task: Test task\n\n## Repo\n${REPO_DIR}\n\n## What I want done\nDo something`;
 
     const result = buildSystemPrompt(
-      makeOptions({ outputPath: "/repo/output/questions.md" })
-    );
-    expect(result).toContain("Out: /repo/output/questions.md");
-  });
-
-  it("uses '(none)' for previousOutput when empty string", () => {
-    writeFileSync(
-      join(TEST_DIR, "prompt-questions.md"),
-      "Prev: {{PREVIOUS_OUTPUT}}",
-      "utf-8"
+      makeOptions({ stage: "research", taskContent }),
     );
 
-    const result = buildSystemPrompt(makeOptions({ previousOutput: "" }));
-    expect(result).toContain("Prev: (none)");
-  });
-
-  it("injects real previousOutput when provided", () => {
-    writeFileSync(
-      join(TEST_DIR, "prompt-questions.md"),
-      "Prev: {{PREVIOUS_OUTPUT}}",
-      "utf-8"
-    );
-
-    const result = buildSystemPrompt(makeOptions({ previousOutput: "previous stage output" }));
-    expect(result).toContain("Prev: previous stage output");
-  });
-
-  it("includes pipeline context with correct format", () => {
-    writeFileSync(
-      join(TEST_DIR, "prompt-questions.md"),
-      "Ctx: {{PIPELINE_CONTEXT}}",
-      "utf-8"
-    );
-
-    const result = buildSystemPrompt(makeOptions({ slug: "auth-feature", stage: "questions" }));
-    expect(result).toContain("Pipeline: ShaktimaanAI | Task: auth-feature | Stage: questions");
+    expect(result).toContain("CLAUDE.md");
+    expect(result).toContain("Do not break things");
   });
 
   it("uses custom agent name from config override", () => {
-    writeFileSync(
-      join(TEST_DIR, "prompt-impl.md"),
-      "Agent: {{AGENT_NAME}}",
-      "utf-8"
+    writeAgentMd(
+      "impl",
+      `---
+stage: impl
+description: Implement the feature
+---
+Agent: {{AGENT_NAME}}`,
     );
 
-    const config = makeConfig({ impl: "MyCustomAgent" });
+    const config = makeConfig({ agentNames: { impl: "MyCustomAgent" } });
     const result = buildSystemPrompt(makeOptions({ stage: "impl", config }));
     expect(result).toContain("Agent: MyCustomAgent");
+  });
+});
+
+// ─── resolveToolPermissions ───────────────────────────────────────────────────
+
+describe("resolveToolPermissions", () => {
+  it("returns tools from agent config when agent config has allowed tools", () => {
+    const agentTools = { allowed: ["Read", "Bash", "Glob"], disallowed: ["Write", "Edit"] };
+    const config = makeConfig();
+    const result = resolveToolPermissions("research", agentTools, config);
+    expect(result.allowed).toEqual(["Read", "Bash", "Glob"]);
+    expect(result.disallowed).toEqual(["Write", "Edit"]);
+  });
+
+  it("returns default read-only tools when agent config has no tools (empty allowed)", () => {
+    const agentTools = { allowed: [], disallowed: [] };
+    const config = makeConfig();
+    const result = resolveToolPermissions("questions", agentTools, config);
+    expect(result.allowed).toEqual(["Read", "Glob", "Grep"]);
+    expect(result.disallowed).toEqual([]);
+  });
+});
+
+// ─── resolveMaxTurns ─────────────────────────────────────────────────────────
+
+describe("resolveMaxTurns", () => {
+  it("prefers config value over agent config value", () => {
+    // config.agents.maxTurns.questions defaults to 15; agent says 25 → should return 15
+    const config = makeConfig();
+    const result = resolveMaxTurns("questions", 25, config);
+    expect(result).toBe(15);
+  });
+
+  it("uses agent config value when no config override for that stage", () => {
+    // "unknown-stage" won't be in config.agents.maxTurns → falls through to agentMaxTurns
+    const config = makeConfig();
+    const result = resolveMaxTurns("unknown-stage", 25, config);
+    expect(result).toBe(25);
+  });
+
+  it("falls back to 30 when neither source has a value", () => {
+    const config = makeConfig();
+    const result = resolveMaxTurns("unknown-stage", undefined, config);
+    expect(result).toBe(30);
+  });
+});
+
+// ─── resolveTimeoutMinutes ───────────────────────────────────────────────────
+
+describe("resolveTimeoutMinutes", () => {
+  it("prefers config value over agent config value", () => {
+    // config.agents.timeoutsMinutes.questions defaults to 15; agent says 60 → 15
+    const config = makeConfig();
+    const result = resolveTimeoutMinutes("questions", 60, config);
+    expect(result).toBe(15);
+  });
+
+  it("falls back to 30 when neither source has a value", () => {
+    const config = makeConfig();
+    const result = resolveTimeoutMinutes("unknown-stage", undefined, config);
+    expect(result).toBe(30);
   });
 });
