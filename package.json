@@ -10,7 +10,7 @@
     "dist"
   ],
   "scripts": {
-    "build": "tsup",
+    "build": "tsup && cp -r src/templates dist/templates",
     "dev": "tsup --watch",
     "test": "vitest run",
     "test:watch": "vitest"
