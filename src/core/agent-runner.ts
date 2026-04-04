@@ -1,5 +1,21 @@
-import { loadTemplate, hydrateTemplate } from "./template.js";
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
+import { hydrateTemplate } from "./template.js";
 import type { AgentRunOptions, AgentRunResult } from "./types.js";
+
+/** Loads a prompt-{name}.md file from templateDir. Kept local until Task 5 rewires to agent-config. */
+function loadTemplate(templateDir: string, templateName: string): string {
+  const filePath = join(templateDir, `prompt-${templateName}.md`);
+  try {
+    return readFileSync(filePath, "utf-8");
+  } catch (err) {
+    throw new Error(
+      `Template not found for stage "${templateName}" at "${filePath}". ` +
+      `Ensure templates are bundled in dist/ during build. ` +
+      `(${err instanceof Error ? err.message : String(err)})`,
+    );
+  }
+}
 
 // ─── Tool permission tables ──────────────────────────────────────────────────
 
@@ -97,6 +113,7 @@ export async function runAgent(options: AgentRunOptions): Promise<AgentRunResult
     let output = "";
     let costUsd = 0;
     let turns = 0;
+    let receivedResult = false;
 
     const messages = query({
       prompt: systemPrompt,
@@ -105,19 +122,26 @@ export async function runAgent(options: AgentRunOptions): Promise<AgentRunResult
       maxTurns,
       cwd,
       abortController,
+      // The Agent SDK requires bypassPermissions for non-interactive (headless)
+      // agent runs. Per-stage tool restrictions are enforced via allowedTools /
+      // disallowedTools above — the SDK's own permission UI is designed for
+      // interactive CLI use and cannot be used in a pipeline context.
       permissionMode: "bypassPermissions" as const,
       allowDangerouslySkipPermissions: true,
     });
 
     for await (const message of messages) {
       if (message.type === "result") {
+        receivedResult = true;
         if (message.subtype === "success") {
-          output = (message as unknown as { result: string }).result ?? "";
-          costUsd = (message as unknown as { total_cost_usd?: number }).total_cost_usd ?? 0;
-          turns = (message as unknown as { num_turns?: number }).num_turns ?? 0;
+          const msg = message as Record<string, unknown>;
+          output = typeof msg.result === "string" ? msg.result : "";
+          costUsd = typeof msg.total_cost_usd === "number" ? msg.total_cost_usd : 0;
+          turns = typeof msg.num_turns === "number" ? msg.num_turns : 0;
         } else {
           // error subtype
-          const errors = (message as unknown as { errors?: string[] }).errors ?? [];
+          const msg = message as Record<string, unknown>;
+          const errors = Array.isArray(msg.errors) ? (msg.errors as string[]) : [];
           return {
             success: false,
             output: "",
@@ -128,6 +152,17 @@ export async function runAgent(options: AgentRunOptions): Promise<AgentRunResult
           };
         }
       }
+    }
+
+    if (!receivedResult) {
+      return {
+        success: false,
+        output: "",
+        costUsd: 0,
+        turns: 0,
+        durationMs: Date.now() - startMs,
+        error: "No result message received from agent — stream completed without a result",
+      };
     }
 
     return {
