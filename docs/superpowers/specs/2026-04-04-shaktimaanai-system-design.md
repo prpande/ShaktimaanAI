@@ -55,7 +55,7 @@ ShaktimaanAI is an agentic development pipeline that automates the software deve
                                      │
                          ┌───────────▼───────────┐
                          │  HEIMDALL (Watcher)    │
-                         │  chokidar on inbox     │
+                         │  watches inbox dir     │
                          └───────────┬───────────┘
                                      │
                     ┌────────────────▼────────────────────────┐
