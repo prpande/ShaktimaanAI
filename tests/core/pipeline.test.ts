@@ -156,6 +156,16 @@ describe("createRunState", () => {
     expect(state.reviewAfter).toBe("design");
   });
 
+  it("initializes validateRetryCount, reviewRetryCount, and reviewIssues", () => {
+    const config = makeConfig();
+    const taskMeta = parseTaskFile(SAMPLE_TASK);
+    const state = createRunState("add-logging", taskMeta, config);
+
+    expect(state.validateRetryCount).toBe(0);
+    expect(state.reviewRetryCount).toBe(0);
+    expect(state.reviewIssues).toEqual([]);
+  });
+
   it("sets startedAt and updatedAt as ISO strings", () => {
     const config = makeConfig();
     const taskMeta = parseTaskFile(SAMPLE_TASK);

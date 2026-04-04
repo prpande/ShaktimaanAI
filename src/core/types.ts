@@ -14,6 +14,14 @@ export interface CompletedStage {
   turns?: number;
 }
 
+export interface ReviewIssue {
+  id: string;
+  description: string;
+  severity: string;
+  firstSeen: number;
+  lastSeen: number;
+}
+
 export interface RunState {
   slug: string;
   taskFile: string;
@@ -25,6 +33,16 @@ export interface RunState {
   updatedAt: string;
   completedStages: CompletedStage[];
   error?: string;
+
+  // Execution working directory fields
+  workDir?: string;
+  worktreePath?: string;
+  invocationCwd?: string;
+
+  // Retry counters
+  validateRetryCount: number;
+  reviewRetryCount: number;
+  reviewIssues: ReviewIssue[];
 }
 
 export interface AgentRunOptions {

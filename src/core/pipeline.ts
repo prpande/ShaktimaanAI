@@ -50,6 +50,9 @@ export function createRunState(
     startedAt: now,
     updatedAt: now,
     completedStages: [],
+    validateRetryCount: 0,
+    reviewRetryCount: 0,
+    reviewIssues: [],
   };
 }
 
