@@ -1,12 +1,15 @@
 import { describe, it, expect, beforeEach, afterEach } from "vitest";
 import { mkdirSync, rmSync, readFileSync, writeFileSync, existsSync } from "node:fs";
-import { join } from "node:path";
+import { join, dirname } from "node:path";
 import { tmpdir } from "node:os";
 import { randomUUID } from "node:crypto";
 
 import { configSchema } from "../../src/config/schema.js";
 import { resolveConfig } from "../../src/config/loader.js";
 import { parseTaskFile } from "../../src/task/parser.js";
+import { createRuntimeDirs } from "../../src/runtime/dirs.js";
+import { createAgentRegistry } from "../../src/core/registry.js";
+import { type AgentRunOptions, type AgentRunResult } from "../../src/core/types.js";
 import {
   STAGE_DIR_MAP,
   DIR_STAGE_MAP,
@@ -253,10 +256,223 @@ describe("moveTaskDir", () => {
   });
 });
 
-// ─── createPipeline placeholder ─────────────────────────────────────────────
+// ─── createPipeline integration tests ──────────────────────────────────────
+
+function createStubRunner(behavior: "success" | "fail" = "success") {
+  return async (options: AgentRunOptions): Promise<AgentRunResult> => {
+    if (behavior === "success" && options.outputPath) {
+      mkdirSync(dirname(options.outputPath), { recursive: true });
+      writeFileSync(options.outputPath, `Stub output for ${options.stage}`);
+    }
+    return {
+      success: behavior === "success",
+      output: behavior === "success" ? `Output for ${options.stage}` : "",
+      costUsd: 0.001,
+      turns: 2,
+      durationMs: 50,
+      error: behavior === "fail" ? "Stub failure" : undefined,
+    };
+  };
+}
+
+function makeSimpleTask(stages: string, reviewAfter?: string): string {
+  let task = `# Task: Test task
+
+## What I want done
+Do the thing.
+
+## Pipeline Config
+stages: ${stages}
+`;
+  if (reviewAfter) {
+    task += `review_after: ${reviewAfter}\n`;
+  }
+  return task;
+}
 
 describe("createPipeline", () => {
-  it("throws 'Not implemented'", () => {
-    expect(() => createPipeline({} as never)).toThrow("Not implemented");
+  it("runs two stages to completion", async () => {
+    createRuntimeDirs(TEST_DIR);
+    // Create stub templates
+    const templatesDir = join(TEST_DIR, "templates");
+    mkdirSync(templatesDir, { recursive: true });
+    writeFileSync(join(templatesDir, "prompt-questions.md"), "template", "utf-8");
+    writeFileSync(join(templatesDir, "prompt-research.md"), "template", "utf-8");
+
+    const taskContent = makeSimpleTask("questions, research");
+    const inboxPath = join(TEST_DIR, "00-inbox", "test-task.task");
+    writeFileSync(inboxPath, taskContent, "utf-8");
+
+    const config = makeConfig();
+    const registry = createAgentRegistry(3, 1);
+    const pipeline = createPipeline({
+      config,
+      registry,
+      runner: createStubRunner("success"),
+      logger: { info() {}, warn() {}, error() {} },
+    });
+
+    await pipeline.startRun(inboxPath);
+
+    // inbox file should be gone
+    expect(existsSync(inboxPath)).toBe(false);
+
+    // task should be in 10-complete
+    const completeDir = join(TEST_DIR, "10-complete", "test-task");
+    expect(existsSync(completeDir)).toBe(true);
+
+    const finalState = readRunState(completeDir);
+    expect(finalState.status).toBe("complete");
+    expect(finalState.completedStages).toHaveLength(2);
+
+    // registry should be empty
+    expect(registry.getActiveCount()).toBe(0);
+  });
+
+  it("pauses at review gate", async () => {
+    createRuntimeDirs(TEST_DIR);
+    const templatesDir = join(TEST_DIR, "templates");
+    mkdirSync(templatesDir, { recursive: true });
+    writeFileSync(join(templatesDir, "prompt-questions.md"), "template", "utf-8");
+    writeFileSync(join(templatesDir, "prompt-design.md"), "template", "utf-8");
+    writeFileSync(join(templatesDir, "prompt-impl.md"), "template", "utf-8");
+
+    const taskContent = makeSimpleTask("questions, design, impl", "design");
+    const inboxPath = join(TEST_DIR, "00-inbox", "gate-task.task");
+    writeFileSync(inboxPath, taskContent, "utf-8");
+
+    const config = makeConfig();
+    const registry = createAgentRegistry(3, 1);
+    const pipeline = createPipeline({
+      config,
+      registry,
+      runner: createStubRunner("success"),
+      logger: { info() {}, warn() {}, error() {} },
+    });
+
+    await pipeline.startRun(inboxPath);
+
+    // task should be in 12-hold
+    const holdDir = join(TEST_DIR, "12-hold", "gate-task");
+    expect(existsSync(holdDir)).toBe(true);
+
+    const state = readRunState(holdDir);
+    expect(state.status).toBe("hold");
+    expect(state.completedStages).toHaveLength(2);
+  });
+
+  it("resumes from hold after approval", async () => {
+    createRuntimeDirs(TEST_DIR);
+    const templatesDir = join(TEST_DIR, "templates");
+    mkdirSync(templatesDir, { recursive: true });
+    writeFileSync(join(templatesDir, "prompt-questions.md"), "template", "utf-8");
+    writeFileSync(join(templatesDir, "prompt-design.md"), "template", "utf-8");
+    writeFileSync(join(templatesDir, "prompt-impl.md"), "template", "utf-8");
+
+    const taskContent = makeSimpleTask("questions, design, impl", "design");
+    const inboxPath = join(TEST_DIR, "00-inbox", "resume-task.task");
+    writeFileSync(inboxPath, taskContent, "utf-8");
+
+    const config = makeConfig();
+    const registry = createAgentRegistry(3, 1);
+    const pipeline = createPipeline({
+      config,
+      registry,
+      runner: createStubRunner("success"),
+      logger: { info() {}, warn() {}, error() {} },
+    });
+
+    await pipeline.startRun(inboxPath);
+
+    // Should be in hold
+    expect(existsSync(join(TEST_DIR, "12-hold", "resume-task"))).toBe(true);
+
+    await pipeline.approveAndResume("resume-task", "Looks good, proceed!");
+
+    // Should now be in 10-complete
+    const completeDir = join(TEST_DIR, "10-complete", "resume-task");
+    expect(existsSync(completeDir)).toBe(true);
+
+    const finalState = readRunState(completeDir);
+    expect(finalState.status).toBe("complete");
+    expect(finalState.completedStages).toHaveLength(3);
+
+    // review-feedback.md should exist
+    const feedbackFile = join(completeDir, "artifacts", "review-feedback.md");
+    expect(existsSync(feedbackFile)).toBe(true);
+    expect(readFileSync(feedbackFile, "utf-8")).toBe("Looks good, proceed!");
+  });
+
+  it("moves to failed on agent failure", async () => {
+    createRuntimeDirs(TEST_DIR);
+    const templatesDir = join(TEST_DIR, "templates");
+    mkdirSync(templatesDir, { recursive: true });
+    writeFileSync(join(templatesDir, "prompt-questions.md"), "template", "utf-8");
+
+    const taskContent = makeSimpleTask("questions, research");
+    const inboxPath = join(TEST_DIR, "00-inbox", "fail-task.task");
+    writeFileSync(inboxPath, taskContent, "utf-8");
+
+    const config = makeConfig();
+    const registry = createAgentRegistry(3, 1);
+    const pipeline = createPipeline({
+      config,
+      registry,
+      runner: createStubRunner("fail"),
+      logger: { info() {}, warn() {}, error() {} },
+    });
+
+    await pipeline.startRun(inboxPath);
+
+    // task should be in 11-failed
+    const failedDir = join(TEST_DIR, "11-failed", "fail-task");
+    expect(existsSync(failedDir)).toBe(true);
+
+    const state = readRunState(failedDir);
+    expect(state.status).toBe("failed");
+    expect(state.error).toBeDefined();
+  });
+
+  it("throws on approve of non-existent task", async () => {
+    createRuntimeDirs(TEST_DIR);
+
+    const config = makeConfig();
+    const registry = createAgentRegistry(3, 1);
+    const pipeline = createPipeline({
+      config,
+      registry,
+      runner: createStubRunner("success"),
+      logger: { info() {}, warn() {}, error() {} },
+    });
+
+    await expect(pipeline.approveAndResume("nonexistent")).rejects.toThrow(/not found in hold/);
+  });
+
+  it("reports active runs", async () => {
+    createRuntimeDirs(TEST_DIR);
+    const templatesDir = join(TEST_DIR, "templates");
+    mkdirSync(templatesDir, { recursive: true });
+    writeFileSync(join(templatesDir, "prompt-questions.md"), "template", "utf-8");
+    writeFileSync(join(templatesDir, "prompt-design.md"), "template", "utf-8");
+    writeFileSync(join(templatesDir, "prompt-impl.md"), "template", "utf-8");
+
+    const taskContent = makeSimpleTask("questions, design, impl", "design");
+    const inboxPath = join(TEST_DIR, "00-inbox", "active-task.task");
+    writeFileSync(inboxPath, taskContent, "utf-8");
+
+    const config = makeConfig();
+    const registry = createAgentRegistry(3, 1);
+    const pipeline = createPipeline({
+      config,
+      registry,
+      runner: createStubRunner("success"),
+      logger: { info() {}, warn() {}, error() {} },
+    });
+
+    await pipeline.startRun(inboxPath);
+
+    const activeRuns = pipeline.getActiveRuns();
+    expect(activeRuns).toHaveLength(1);
+    expect(activeRuns[0].status).toBe("hold");
   });
 });
