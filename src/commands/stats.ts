@@ -257,7 +257,7 @@ export function formatStatsTable(stats: StageStats[], summary: PipelineSummary):
     formatDuration(Math.round(summary.avgTotalDurationSeconds)).padStart(COL.time) +
     summary.avgTotalTurns.toFixed(1).padStart(COL.turns) +
     formatCost(summary.avgTotalCostUsd).padStart(COL.avgCost) +
-    "".padStart(COL.totalCost),
+    formatCost(stats.reduce((sum, s) => sum + s.totalCostUsd, 0)).padStart(COL.totalCost),
   );
 
   // Most expensive stage row

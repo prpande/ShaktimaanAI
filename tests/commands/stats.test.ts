@@ -253,10 +253,11 @@ describe("formatStatsTable", () => {
     expect(output).toContain("$0.042");
   });
 
-  it("includes TOTAL summary row", () => {
+  it("includes TOTAL summary row with grand total cost", () => {
     const output = formatStatsTable(sampleStats, sampleSummary);
     expect(output).toContain("TOTAL");
-    expect(output).toContain("$0.198");
+    expect(output).toContain("$0.198");  // avgTotalCostUsd
+    expect(output).toContain("$0.396");  // grand total (0.084 + 0.312)
   });
 
   it("includes most expensive stage", () => {
