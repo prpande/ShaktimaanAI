@@ -69,6 +69,7 @@ export interface AgentRunResult {
   turns: number;
   durationMs: number;
   error?: string;
+  streamLogPath?: string;
 }
 
 export type AgentRunnerFn = (options: AgentRunOptions) => Promise<AgentRunResult>;

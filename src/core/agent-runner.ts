@@ -5,6 +5,7 @@ import { loadAgentPrompt } from "./agent-config.js";
 import { gatherRepoContext } from "./repo-context.js";
 import { parseTaskFile } from "../task/parser.js";
 import { DEFAULT_STAGE_TOOLS, STAGE_CONTEXT_RULES } from "../config/defaults.js";
+import { createStreamLogger } from "./stream-logger.js";
 import type { AgentRunOptions, AgentRunResult } from "./types.js";
 import type { ResolvedConfig } from "../config/loader.js";
 
@@ -145,6 +146,8 @@ export async function runAgent(options: AgentRunOptions): Promise<AgentRunResult
 
   const { allowed: allowedTools, disallowed: disallowedTools } = resolveToolPermissions(stage, config);
   const systemPrompt = buildSystemPrompt(options);
+  const streamLogPath = options.outputPath.replace(/\.md$/, "-stream.jsonl");
+  const streamLogger = createStreamLogger(streamLogPath);
   const maxTurns = resolveMaxTurns(stage, config);
   const timeoutMinutes = resolveTimeoutMinutes(stage, config);
   const timeoutMs = timeoutMinutes * 60 * 1000;
@@ -180,6 +183,24 @@ export async function runAgent(options: AgentRunOptions): Promise<AgentRunResult
     });
 
     for await (const message of messages) {
+      // Capture all SDK messages to JSONL for observability
+      try {
+        if (message.type === "result") {
+          const msg = message as Record<string, unknown>;
+          streamLogger.log({
+            type: message.type,
+            subtype: msg.subtype,
+            costUsd: msg.total_cost_usd,
+            turns: msg.num_turns,
+          });
+        } else {
+          const { type, ...rest } = message as Record<string, unknown>;
+          streamLogger.log({ type, ...rest });
+        }
+      } catch {
+        // Stream logging must never interrupt the pipeline
+      }
+
       if (message.type === "result") {
         receivedResult = true;
         if (message.subtype === "success") {
@@ -220,6 +241,7 @@ export async function runAgent(options: AgentRunOptions): Promise<AgentRunResult
       costUsd,
       turns,
       durationMs: Date.now() - startMs,
+      streamLogPath,
     };
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
@@ -233,6 +255,7 @@ export async function runAgent(options: AgentRunOptions): Promise<AgentRunResult
       error: message,
     };
   } finally {
+    streamLogger.close();
     clearTimeout(timeoutHandle);
   }
 }
