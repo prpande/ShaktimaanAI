@@ -192,6 +192,52 @@ describe("resume", () => {
   });
 });
 
+// ─── restartStage / retry — unmapped stage guard ───────────────────────────
+
+describe("restartStage — unmapped stage guard", () => {
+  it("throws a descriptive error when the target stage has no directory mapping", async () => {
+    const slug = "restart-unmapped";
+    // Place task in 12-hold with currentStage = "quick" (no STAGE_DIR_MAP entry)
+    setupTaskInDir(slug, "12-hold", {
+      currentStage: "quick",
+      stages: ["quick"],
+      status: "hold",
+    });
+
+    const config = makeConfig();
+    const registry = createAgentRegistry(5, 2);
+    const pipeline = createPipeline({ config, registry, runner: noopRunner, logger: noopLogger });
+
+    await expect(pipeline.restartStage(slug)).rejects.toThrow(
+      /Cannot restartStage stage "quick" — no stage directory mapping exists/,
+    );
+  });
+});
+
+describe("retry — unmapped stage guard", () => {
+  it("throws a descriptive error when the current stage has no directory mapping", async () => {
+    const slug = "retry-unmapped";
+    // Place task in 12-hold with currentStage = "quick" (no STAGE_DIR_MAP entry)
+    const holdTaskDir = join(TEST_DIR, "12-hold", slug);
+    mkdirSync(join(holdTaskDir, "artifacts"), { recursive: true });
+    writeFileSync(join(holdTaskDir, "task.task"), "# Task: test\n\n## What I want done\nTest task.\n", "utf-8");
+    const state = makeRunState(slug, {
+      currentStage: "quick",
+      stages: ["quick"],
+      status: "hold",
+    });
+    writeRunState(holdTaskDir, state);
+
+    const config = makeConfig();
+    const registry = createAgentRegistry(5, 2);
+    const pipeline = createPipeline({ config, registry, runner: noopRunner, logger: noopLogger });
+
+    await expect(pipeline.retry(slug, "please fix the thing")).rejects.toThrow(
+      /Cannot retry stage "quick" — no stage directory mapping exists/,
+    );
+  });
+});
+
 // ─── addNotifier & event emissions ─────────────────────────────────────────
 
 describe("addNotifier", () => {

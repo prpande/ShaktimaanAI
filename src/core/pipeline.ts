@@ -630,10 +630,14 @@ export function createPipeline(options: PipelineOptions): Pipeline {
       const targetStage = stage ?? state.currentStage;
       const nextStage = getNextStage(targetStage, state.stages);
       if (!nextStage) throw new Error(`No stage after "${targetStage}" to skip to`);
+      const nextStageDir = STAGE_DIR_MAP[nextStage];
+      if (!nextStageDir) {
+        throw new Error(`Cannot skip to stage "${nextStage}" — no stage directory mapping exists`);
+      }
       state.currentStage = nextStage;
       state.status = "running";
       writeRunState(found.dir, state);
-      const nextDir = moveTaskDir(runtimeDir, slug, found.subdir, join(STAGE_DIR_MAP[nextStage], "pending"));
+      const nextDir = moveTaskDir(runtimeDir, slug, found.subdir, join(nextStageDir, "pending"));
       emitNotify({ type: "stage_skipped", slug, stage: targetStage, timestamp: new Date().toISOString() });
       await processStage(slug, nextDir);
     },
@@ -683,10 +687,14 @@ export function createPipeline(options: PipelineOptions): Pipeline {
       if (!found) throw new Error(`Task "${slug}" not found`);
       const state = readRunState(found.dir);
       const targetStage = stage ?? state.currentStage;
+      const stageDir = STAGE_DIR_MAP[targetStage];
+      if (!stageDir) {
+        throw new Error(`Cannot restartStage stage "${targetStage}" — no stage directory mapping exists`);
+      }
       state.currentStage = targetStage;
       state.status = "running";
       writeRunState(found.dir, state);
-      const nextDir = moveTaskDir(runtimeDir, slug, found.subdir, join(STAGE_DIR_MAP[targetStage], "pending"));
+      const nextDir = moveTaskDir(runtimeDir, slug, found.subdir, join(stageDir, "pending"));
       await processStage(slug, nextDir);
     },
 
@@ -696,6 +704,10 @@ export function createPipeline(options: PipelineOptions): Pipeline {
       const state = readRunState(holdDir);
       if (state.pausedAtStage) throw new Error(`Task "${slug}" was paused — use resume instead`);
       const retryStage = state.currentStage;
+      const stageDir = STAGE_DIR_MAP[retryStage];
+      if (!stageDir) {
+        throw new Error(`Cannot retry stage "${retryStage}" — no stage directory mapping exists`);
+      }
       state.retryAttempt = (state.retryAttempt ?? 0) + 1;
       state.status = "running";
 
@@ -704,7 +716,7 @@ export function createPipeline(options: PipelineOptions): Pipeline {
       writeFileSync(join(holdDir, "artifacts", feedbackFile), feedback, "utf-8");
 
       writeRunState(holdDir, state);
-      const nextDir = moveTaskDir(runtimeDir, slug, "12-hold", join(STAGE_DIR_MAP[retryStage], "pending"));
+      const nextDir = moveTaskDir(runtimeDir, slug, "12-hold", join(stageDir, "pending"));
       activeRuns.set(slug, state);
       emitNotify({ type: "stage_retried", slug, stage: retryStage, attempt: state.retryAttempt, feedback, timestamp: new Date().toISOString() });
       await processStage(slug, nextDir);
