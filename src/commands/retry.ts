@@ -4,7 +4,7 @@ import { writeControlFile } from "./write-control.js";
 export function registerRetryCommand(program: Command): void {
   program
     .command("retry")
-    .description("Retry a failed task with feedback")
+    .description("Retry a held task with feedback")
     .argument("<slug>", "Task slug to retry")
     .requiredOption("--feedback <feedback>", "Feedback for the retry")
     .action((slug: string, opts: { feedback: string }) => {

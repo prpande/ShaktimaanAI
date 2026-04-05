@@ -1,4 +1,5 @@
 import type { Notifier, NotifyEvent } from "./types.js";
+import { shouldNotify } from "./types.js";
 
 // ─── formatEvent ─────────────────────────────────────────────────────────────
 
@@ -56,6 +57,7 @@ function formatEvent(event: NotifyEvent): string {
 export function createConsoleNotifier(): Notifier {
   return {
     async notify(event: NotifyEvent): Promise<void> {
+      if (!shouldNotify("stages", event)) return;
       console.log(formatEvent(event));
     },
   };

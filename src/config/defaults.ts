@@ -13,6 +13,7 @@ export const DEFAULT_AGENT_NAMES = {
   taskCreator: "Brahma",
   approvalHandler: "Indra",
   intentClassifier: "Sutradhaar",
+  quick: "Astra",
 } as const satisfies Record<string, string>;
 
 export type AgentRole = keyof typeof DEFAULT_AGENT_NAMES;
@@ -157,6 +158,7 @@ export const DEFAULT_CONFIG: ShkmnConfig = {
       impl: 60,
       validate: 10,
       review: 30,
+      pr: 15,
       classify: 5,
       quick: 30,
     },
@@ -169,6 +171,7 @@ export const DEFAULT_CONFIG: ShkmnConfig = {
       impl: 90,
       validate: 15,
       review: 45,
+      pr: 15,
       classify: 2,
       quick: 30,
     },

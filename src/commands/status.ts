@@ -13,12 +13,12 @@ function formatElapsed(startedAt: string): string {
   return `${hours}h${minutes % 60}m`;
 }
 
-function readStartedAt(runStatePath: string): string | null {
+function readTimestamp(runStatePath: string, field: string): string | null {
   try {
     if (!existsSync(runStatePath)) return null;
     const raw = readFileSync(runStatePath, "utf-8");
     const parsed = JSON.parse(raw) as Record<string, unknown>;
-    if (typeof parsed.startedAt === "string") return parsed.startedAt;
+    if (typeof parsed[field] === "string") return parsed[field];
     return null;
   } catch {
     return null;
@@ -47,7 +47,7 @@ export function registerStatusCommand(program: Command): void {
         console.log("Active:");
         for (const task of active) {
           const runStatePath = join(config.pipeline.runtimeDir, task.dir, task.slug, "run-state.json");
-          const startedAt = readStartedAt(runStatePath);
+          const startedAt = readTimestamp(runStatePath, "startedAt");
           const duration = startedAt ? ` (${formatElapsed(startedAt)})` : "";
           console.log(`  ${task.slug.padEnd(40)}  → ${task.stage.padEnd(12)}${duration}`);
         }
@@ -58,8 +58,9 @@ export function registerStatusCommand(program: Command): void {
         console.log("Held (awaiting approval):");
         for (const task of held) {
           const runStatePath = join(config.pipeline.runtimeDir, "12-hold", task.slug, "run-state.json");
-          const startedAt = readStartedAt(runStatePath);
-          const duration = startedAt ? ` (held ${formatElapsed(startedAt)})` : "";
+          // Use updatedAt for held tasks — it reflects when the task entered hold
+          const heldSince = readTimestamp(runStatePath, "updatedAt");
+          const duration = heldSince ? ` (held ${formatElapsed(heldSince)})` : "";
           console.log(`  ${task.slug.padEnd(40)}  → ${task.stage.padEnd(12)}${duration}`);
         }
       }

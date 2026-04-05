@@ -36,10 +36,10 @@ New module: `src/core/worktree.ts`
 
 | Function | Signature | Purpose |
 |---|---|---|
-| `createWorktree` | `(repoPath: string, slug: string, baseBranch?: string) => string` | Creates a git worktree with branch `shkmn/{slug}`. Returns the worktree path. |
+| `createWorktree` | `(repoPath: string, slug: string, worktreesDir: string, baseBranch?: string) => string` | Creates a git worktree with branch `shkmn/{slug}`. Returns the worktree path. The `worktreesDir` param lets the caller specify where worktrees are stored (defaults to `{runtimeDir}/worktrees`). |
 | `removeWorktree` | `(worktreePath: string) => void` | Removes a worktree and deletes its branch. |
 | `listWorktrees` | `(repoPath: string) => WorktreeInfo[]` | Lists all ShaktimaanAI-managed worktrees (branches matching `shkmn/*`). |
-| `cleanupExpired` | `(repoPath: string, retentionDays: number) => string[]` | Removes worktrees older than retention period. Returns list of removed paths. |
+| `cleanupExpired` | `(manifestPath: string, retentionDays: number) => string[]` | Removes worktrees older than retention period. Takes the manifest path directly instead of repo path, since cleanup operates on the global worktree manifest rather than a single repo. Returns list of removed paths. |
 
 ### WorktreeInfo
 
@@ -48,9 +48,10 @@ interface WorktreeInfo {
   path: string;
   branch: string;
   slug: string;
-  createdAt: string;
 }
 ```
+
+> **Implementation note:** `createdAt` was removed because `git worktree list --porcelain` does not include creation timestamps, so there is no reliable way to populate this field from git itself.
 
 ### Working Directory Resolution
 

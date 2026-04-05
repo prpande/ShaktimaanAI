@@ -125,8 +125,8 @@ New module: `src/core/repo-context.ts`
 | Tier | Source | What it provides |
 |---|---|---|
 | **1: Explicit convention files** | `CLAUDE.md`, `AGENTS.md`, `CONTRIBUTING.md`, `CONVENTIONS.md`, `.editorconfig`, `.cursorrules`, `.github/copilot-instructions.md` | Direct statements of rules, patterns, stack info |
-| **2: Implicit convention signals** | `package.json` / `*.csproj` / `Cargo.toml` (deps & scripts), `tsconfig.json` / `Directory.Build.props` (compiler), `.eslintrc*` / `.prettierrc*` (style), `Dockerfile` / `docker-compose.yml` (runtime) | Stack, toolchain, linting rules, build commands |
-| **3: Repo scan fallback** | Directory tree (top 3 levels), recent commit messages (last 15), `README.md` | Inferred structure, naming conventions, project purpose |
+| **2: Implicit convention signals** | `package.json` / `*.csproj` / `Cargo.toml` (name, edition, dependencies) / `docker-compose.yml` (service names extraction), `tsconfig.json` / `Directory.Build.props` (compiler), `.eslintrc*` / `.prettierrc*` (style), `Dockerfile` (runtime) | Stack, toolchain, linting rules, build commands |
+| **3: Repo scan fallback** | Directory tree (top 3 levels), recent commit messages (last 15 via `git log --oneline -15`), `README.md` | Inferred structure, naming conventions, project purpose |
 
 **Behavior:**
 - Tiers 1 and 2 always run, accumulating findings.

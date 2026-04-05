@@ -4,6 +4,7 @@ import {
   readdirSync,
   statSync,
 } from "node:fs";
+import { execSync } from "node:child_process";
 import { join, basename, relative } from "node:path";
 
 // ─── Internal helpers ─────────────────────────────────────────────────────────
@@ -276,6 +277,55 @@ function extractLintingConfigs(repoPath: string): string {
   return ["#### Linting / Formatting", ...notes].join("\n");
 }
 
+function extractDockerCompose(repoPath: string): string {
+  const names = ["docker-compose.yml", "docker-compose.yaml", "compose.yml", "compose.yaml"];
+  for (const name of names) {
+    const content = readIfExists(join(repoPath, name));
+    if (!content) continue;
+
+    // Extract service names from top-level services: key
+    const serviceNames: string[] = [];
+    const lines = content.split("\n");
+    let inServices = false;
+    for (const line of lines) {
+      if (/^services:\s*$/.test(line)) { inServices = true; continue; }
+      if (inServices && /^\S/.test(line)) break; // next top-level key
+      if (inServices) {
+        const svcMatch = line.match(/^\s{2}(\w[\w-]*):\s*$/);
+        if (svcMatch) serviceNames.push(svcMatch[1]);
+      }
+    }
+
+    if (serviceNames.length === 0) return `#### ${name}\n- Present (no services parsed)`;
+    return [`#### ${name}`, `- **Services:** ${serviceNames.join(", ")}`].join("\n");
+  }
+  return "";
+}
+
+function extractCargoToml(repoPath: string): string {
+  const content = readIfExists(join(repoPath, "Cargo.toml"));
+  if (!content) return "";
+
+  const lines: string[] = ["#### Cargo.toml"];
+  const nameMatch = content.match(/^name\s*=\s*"([^"]+)"/m);
+  if (nameMatch) lines.push(`- **Name:** ${nameMatch[1]}`);
+  const editionMatch = content.match(/^edition\s*=\s*"([^"]+)"/m);
+  if (editionMatch) lines.push(`- **Edition:** ${editionMatch[1]}`);
+
+  // Extract dependency names from [dependencies] section
+  const depSection = content.match(/\[dependencies\]\n([\s\S]*?)(?=\n\[|$)/);
+  if (depSection) {
+    const deps = depSection[1]
+      .split("\n")
+      .map((l) => l.match(/^(\w[\w-]*)\s*=/)?.[1])
+      .filter(Boolean) as string[];
+    if (deps.length > 0) lines.push(`- **Dependencies:** ${deps.join(", ")}`);
+  }
+
+  if (lines.length === 1) return "";
+  return lines.join("\n");
+}
+
 function gatherTier2(repoPath: string): string {
   const sections: string[] = [];
 
@@ -288,8 +338,14 @@ function gatherTier2(repoPath: string): string {
   const csprojSection = extractCsproj(repoPath);
   if (csprojSection) sections.push(csprojSection);
 
+  const cargoSection = extractCargoToml(repoPath);
+  if (cargoSection) sections.push(cargoSection);
+
   const dockerSection = extractDockerfile(repoPath);
   if (dockerSection) sections.push(dockerSection);
+
+  const composeSection = extractDockerCompose(repoPath);
+  if (composeSection) sections.push(composeSection);
 
   const lintSection = extractLintingConfigs(repoPath);
   if (lintSection) sections.push(lintSection);
@@ -299,6 +355,21 @@ function gatherTier2(repoPath: string): string {
 }
 
 // ─── Tier 3: Repo scan fallback ───────────────────────────────────────────────
+
+function gatherRecentCommits(repoPath: string): string {
+  try {
+    const output = execSync("git log --oneline -15", {
+      cwd: repoPath,
+      encoding: "utf-8",
+      timeout: 5000,
+      stdio: ["pipe", "pipe", "pipe"],
+    }).trim();
+    if (!output) return "";
+    return `#### Recent Commits\n\`\`\`\n${output}\n\`\`\``;
+  } catch {
+    return "";
+  }
+}
 
 function gatherTier3(repoPath: string): string {
   const sections: string[] = [];
@@ -312,6 +383,11 @@ function gatherTier3(repoPath: string): string {
   if (readme) {
     const excerpt = readme.split("\n").slice(0, 30).join("\n");
     sections.push(`#### README.md (excerpt)\n${excerpt.trim()}`);
+  }
+
+  const commits = gatherRecentCommits(repoPath);
+  if (commits) {
+    sections.push(commits);
   }
 
   if (sections.length === 0) return "";

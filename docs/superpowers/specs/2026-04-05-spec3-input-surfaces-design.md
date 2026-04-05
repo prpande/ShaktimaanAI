@@ -130,7 +130,7 @@ All commands load config, resolve runtime dir, then delegate to canonical handle
 | `shkmn resume <slug>` | none | `pipeline.resume()` |
 | `shkmn modify-stages <slug>` | `--stages <comma-list>` | `pipeline.modifyStages()` |
 | `shkmn restart-stage <slug>` | `--stage <name>` (optional) | `pipeline.restartStage()` |
-| `shkmn retry <slug>` | `--feedback "<text>"` (required) | `pipeline.retry()` |
+| `shkmn retry <slug>` | `--feedback "<text>"` (required) | `pipeline.retry()` — operates on held tasks (not failed) |
 
 ### 4.1 Stage Hints via CLI
 
@@ -150,6 +150,8 @@ Active:
 Held (awaiting approval):
   build-landing-20260405090000  → design      (held 45m)
 ```
+
+> **Note:** Held task durations are computed from `updatedAt` (reflecting when the task entered hold), not from `startedAt`.
 
 ### 4.3 Logs Tail Mode
 
@@ -206,6 +208,8 @@ interface ClassifyResult {
 }
 ```
 
+> **Implementation note:** The classifier prompt instructs the LLM to return raw JSON without code fences. The `classifyByLLM` function defensively strips code fences as a fallback.
+
 ### 5.3 Thread Context
 
 When a message is a thread reply under a pipeline notification for a specific task, the task slug is inferred from the parent message. "approve" in a task's notification thread = approve that task. No need to mention the slug explicitly.
@@ -258,7 +262,7 @@ When a message is a thread reply under a pipeline notification for a specific ta
 
 ### 6.4 Console Notifier
 
-`ConsoleNotifier` prints a one-line format to stdout for `shkmn start` foreground mode. Same `NotifyLevel` filtering applies — always uses `stages` level since you're actively watching the terminal.
+`ConsoleNotifier` prints a one-line format to stdout for `shkmn start` foreground mode. It uses `shouldNotify("stages", event)` filtering — always at `stages` level since you're actively watching the terminal.
 
 ### 6.5 Graceful Degradation
 
@@ -278,7 +282,7 @@ When `slack.enabled: false`, the SlackNotifier is not registered. Only the Conso
 | `resume(slug)` | Held (via pause) | Resume from the stage it was paused at |
 | `modifyStages(slug, newStages)` | Active or held | Replace remaining stages in RunState. Validates no duplicate/invalid names |
 | `restartStage(slug, stage?)` | Active or held | Re-run current (or named) stage from scratch. No feedback injected |
-| `retry(slug, feedback)` | Held (at review gate) | Re-run held stage with feedback. New versioned artifact |
+| `retry(slug, feedback)` | Held (at review gate or manual pause) | Re-run held stage with feedback. New versioned artifact |
 
 ### 7.2 Distinction Between approve, resume, and retry
 
@@ -358,6 +362,8 @@ The user has provided the following instructions for this stage:
 
 Hints from both sources (`.task` file + RunState) are merged.
 
+> **Type note:** Entry-point types (`TaskMeta.stageHints`, `ClassifyResult.stageHints`) use `Record<string, string>` for single hints. `RunState.stageHints` uses `Record<string, string[]>` to accumulate multiple hints. The agent runner merges both at prompt-build time.
+
 ### 8.4 Extraction by Sutradhaar
 
 The LLM classification prompt is updated to extract stage hints from natural language. The keyword classifier does not attempt hint extraction — that's inherently an LLM task. If Sutradhaar can't determine which stage a hint targets, it applies the hint to all remaining stages.
@@ -396,7 +402,7 @@ If reviewing a quick task output, the user can reply "full pipeline" (or `shkmn 
 
 ### 9.4 Agent Prompt (`agents/quick.md`)
 
-Dedicated prompt for quick tasks:
+Dedicated prompt for quick tasks. The quick agent has a configurable display name via `DEFAULT_AGENT_NAMES` ("Astra").
 - Identity: general-purpose task executor
 - Instructions: complete the task directly, be concise, match the tone/format implied by the request
 - Output: write result to the provided output path
@@ -470,7 +476,7 @@ Format:
 
 ### 11.2 Global Daily Log
 
-`interactions/YYYY-MM-DD.json` in the dashboard repo. Comprehensive machine-readable log covering human interactions, agent runs, stage transitions, and control commands.
+`interactions/YYYY-MM-DD.json` in the runtime directory (the `interactions/` directory is created at runtime init by `createRuntimeDirs`). Comprehensive machine-readable log covering human interactions, agent runs, stage transitions, and control commands.
 
 **Entry types:**
 

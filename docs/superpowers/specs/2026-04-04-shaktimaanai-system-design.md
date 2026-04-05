@@ -248,25 +248,16 @@ Per slice artifact directory:
 
 The folder structure IS the state. No in-memory state is required for recovery.
 
-**On startup (`shkmn start`):**
+**On startup (`shkmn start`), recovery scans in this order:**
 
-| Directory scanned | State inferred | Action |
-|---|---|---|
-| `00-inbox/*.task` | New task | Start pipeline run |
-| `01-questions/pending/` | Mid-questions | Re-run Narada |
-| `02-research/pending/` | Mid-research | Re-run Chitragupta |
-| `03-design/pending/` | Mid-design | Re-run Vishwakarma |
-| `04-structure/pending/` | Mid-structure | Re-run Vastu |
-| `05-plan/pending/` | Mid-plan | Re-run Chanakya |
-| `06-impl/pending/` | Mid-impl | Clean stale worktree, re-run Karigar |
-| `06-impl/active/` | Mid-TDD slice | Resume from current slice phase |
-| `07-validate/pending/` | Mid-validate | Re-run Dharma |
-| `08-review/pending/` | Mid-review | Re-run Drona |
-| `09-pr/pending/` | Mid-PR | Re-run Garuda |
-| `{NN}-*/done/` (any stage) | Stage complete, not moved | Resume from next stage |
-| `12-hold/` | Awaiting approval | Re-register watch, wait |
-| `10-complete/` | Done | No action |
-| `11-failed/` | Failed | No action |
+| Scan | Directory | State inferred | Action |
+|---|---|---|---|
+| 1. In-progress stages | `{NN}-*/pending/` | Agent was running when process crashed | Resume by re-running the stage's agent |
+| 2. Completed-but-not-advanced | `{NN}-*/done/` | Stage finished but task wasn't moved to next stage | Advance to the next stage |
+| 3. Held tasks | `12-hold/` | Awaiting approval | Log as held, skip — they await human approval |
+| 4. Unprocessed inbox | `00-inbox/*.task` | New task not yet picked up | Start new pipeline run |
+| — | `10-complete/` | Done | No action |
+| — | `11-failed/` | Failed | No action |
 
 **Rule: move-then-act.** Task file moves to `pending/` before agent starts. If agent crashes, file stays in `pending/` and gets re-run on restart.
 
@@ -361,7 +352,8 @@ All agent names are configurable via `shkmn.config.json`. Defaults are the mytho
       "watcher": "Heimdall",
       "taskCreator": "Brahma",
       "approvalHandler": "Indra",
-      "intentClassifier": "Sutradhaar"
+      "intentClassifier": "Sutradhaar",
+      "quick": "Astra"
     }
   }
 }
