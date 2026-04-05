@@ -71,7 +71,7 @@ src/core/
 | `src/core/watcher.ts` | Adds Slack polling arm inside Heimdall |
 | `src/core/intent-classifier.ts` | New intents, complexity classification, stage hint extraction |
 | `src/core/types.ts` | RunState gains `stageHints`, retry versioning |
-| `src/core/agent-runner.ts` | `buildSystemPrompt` injects stage hints section |
+| `src/core/agent-runner.ts` | `buildSystemPrompt` injects stage hints section; capture all SDK stream messages to JSONL |
 | `src/core/registry.ts` | Add `abortBySlug(slug)` method |
 | `src/config/schema.ts` | New Slack + quickTask config fields |
 | `src/commands/*.ts` | Wire CLI commands to cli-surface |
@@ -478,8 +478,8 @@ Format:
 |---|---|---|
 | `interaction` | Human message from any surface | source, intent, message, action, stageHints |
 | `agent_started` | Agent spawned for a stage | stage, agentName, attempt |
-| `agent_completed` | Agent finished successfully | stage, agentName, durationSeconds, tokensUsed, artifactPath |
-| `agent_failed` | Agent errored or timed out | stage, agentName, durationSeconds, error |
+| `agent_completed` | Agent finished successfully | stage, agentName, durationSeconds, tokensUsed, artifactPath, agentStreamLog |
+| `agent_failed` | Agent errored or timed out | stage, agentName, durationSeconds, error, agentStreamLog |
 | `stage_transition` | Task moved between stages | fromStage, toStage |
 | `control` | Runtime control command | source, command, targetStage, feedback |
 
@@ -516,6 +516,7 @@ Example:
     "durationSeconds": 130,
     "tokensUsed": 4200,
     "artifactPath": "01-questions/done/fix-auth-bug/questions-output.md",
+    "agentStreamLog": "01-questions/done/fix-auth-bug/questions-stream.jsonl",
     "success": true
   },
   {
@@ -539,6 +540,30 @@ Example:
 
 Token usage comes from the Agent SDK's result — already available via `AgentRunResult`.
 
+### 11.3 Agent Stream Logs
+
+Each agent invocation writes a JSONL file capturing the full intermediate output from the Agent SDK's message stream. This provides complete observability into agent internals — reasoning, tool calls, tool results — not just the final output.
+
+**File location:** `{stage-dir}/{slug}/{stage}-stream.jsonl` (or `{stage}-stream-r{N}.jsonl` for retries).
+
+**Format:** One JSON object per line, appended as each message arrives from the SDK stream:
+
+```jsonl
+{"ts":"2026-04-05T10:30:06Z","type":"assistant","text":"Let me examine the auth module to understand the current flow..."}
+{"ts":"2026-04-05T10:30:08Z","type":"tool_use","tool":"Read","input":{"file_path":"src/auth/middleware.ts"}}
+{"ts":"2026-04-05T10:30:08Z","type":"tool_result","tool":"Read","output":"[file contents...]"}
+{"ts":"2026-04-05T10:30:12Z","type":"assistant","text":"I can see the issue — the session token is stored without encryption..."}
+{"ts":"2026-04-05T10:30:15Z","type":"tool_use","tool":"Write","input":{"file_path":"01-questions/done/fix-auth-bug/questions-output.md","content":"..."}}
+{"ts":"2026-04-05T10:30:15Z","type":"tool_result","tool":"Write","output":"File written successfully"}
+{"ts":"2026-04-05T10:30:16Z","type":"result","success":true,"costUsd":0.12,"turns":3}
+```
+
+**Implementation:** `agent-runner.ts` is modified to process all message types from the SDK async iterator (not just `result`). Each message is serialized and appended to the JSONL file. The file is written in append mode, so partial logs are available even if the agent crashes mid-run.
+
+**Referencing:** The daily JSON's `agent_completed` and `agent_failed` entries include an `agentStreamLog` field pointing to the JSONL file path. This keeps the daily JSON compact while providing full drill-down capability.
+
+**Size consideration:** Stream logs can be large (10-100KB+ per agent run). They are stored in the task's artifact directory and pushed to the dashboard repo alongside other artifacts. Spec 5 analytics can aggregate from the daily JSON without needing to parse stream logs.
+
 ---
 
 ## 12. Testing Strategy
@@ -554,6 +579,7 @@ Token usage comes from the Agent SDK's result — already available via `AgentRu
 | `intent-classifier.ts` | New intents (cancel, skip, pause, resume, modify-stages, restart-stage, retry), complexity classification, stage hint extraction |
 | `slug-resolver.ts` | Exact, prefix, keyword match; ambiguous/no-match cases |
 | `interactions.ts` | Per-task markdown format, global JSON append |
+| `agent-runner.ts` stream capture | JSONL written during run, all message types captured, partial log survives crash |
 | Pipeline control methods | State validation (can't skip a completed task), abort mechanics, retry versioning |
 | Quick task path | Classification routing, review hold, escalation to full pipeline |
 | Stage hints | Parsing from `.task` file, merging with RunState hints, injection into `buildSystemPrompt` |
