@@ -26,10 +26,9 @@ export function registerTaskCommand(program: Command): void {
       const config = loadConfig(configPath);
 
       // Parse stages
-      let stages: string[] | undefined;
-      if (opts.stages) {
-        stages = opts.stages.split(",").map((s) => s.trim()).filter(Boolean);
-      }
+      const stages = opts.quick
+        ? ["quick"]
+        : opts.stages?.split(",").map((s) => s.trim()).filter(Boolean);
 
       // Parse hints from "stage:hint" format into Record<string, string>
       const stageHints: Record<string, string> = {};
