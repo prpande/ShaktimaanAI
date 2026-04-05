@@ -9,6 +9,7 @@ import { createAgentRegistry } from "../core/registry.js";
 import { createPipeline } from "../core/pipeline.js";
 import { runAgent } from "../core/agent-runner.js";
 import { createWatcher, type Watcher } from "../core/watcher.js";
+import { createConsoleNotifier } from "../surfaces/console-notifier.js";
 import { runRecovery } from "../core/recovery.js";
 import { cleanupExpired } from "../core/worktree.js";
 
@@ -67,11 +68,19 @@ export function registerStartCommand(program: Command): void {
       // 6. Run crash recovery
       await runRecovery(config.pipeline.runtimeDir, pipeline, logger);
 
+      // 6b. Register notifiers
+      pipeline.addNotifier(createConsoleNotifier());
+
+      if (config.slack.enabled && config.slack.channelId) {
+        logger.info("[start] Slack notifications enabled");
+      }
+
       // 7. Create and start watcher
       activeWatcher = createWatcher({
         runtimeDir: config.pipeline.runtimeDir,
         pipeline,
         logger,
+        config,
       });
       activeWatcher.start();
 

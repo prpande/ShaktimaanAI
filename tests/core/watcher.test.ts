@@ -8,6 +8,7 @@ import { createRuntimeDirs } from "../../src/runtime/dirs.js";
 import { createWatcher, type Watcher, type WatcherOptions } from "../../src/core/watcher.js";
 import { type Pipeline } from "../../src/core/pipeline.js";
 import { type TaskLogger } from "../../src/core/logger.js";
+import { DEFAULT_CONFIG } from "../../src/config/defaults.js";
 
 // ─── helpers ─────────────────────────────────────────────────────────────────
 
@@ -20,12 +21,26 @@ const mockLogger: TaskLogger = {
   error() {},
 };
 
+const mockConfig = {
+  ...DEFAULT_CONFIG,
+  slack: { ...DEFAULT_CONFIG.slack, enabled: false },
+};
+
 function makeMockPipeline(): Pipeline {
   return {
     async startRun(path: string) { startedFiles.push(path); },
     async resumeRun() {},
     async approveAndResume() {},
     getActiveRuns() { return []; },
+    async cancel() {},
+    async skip() {},
+    async pause() {},
+    async resume() {},
+    async modifyStages() {},
+    async restartStage() {},
+    async retry() {},
+    async startQuickRun() {},
+    addNotifier() {},
   };
 }
 
@@ -49,7 +64,7 @@ afterEach(() => {
 describe("createWatcher", () => {
   it("starts and stops without error", async () => {
     const pipeline = makeMockPipeline();
-    const watcher = createWatcher({ runtimeDir: TEST_DIR, pipeline, logger: mockLogger });
+    const watcher = createWatcher({ runtimeDir: TEST_DIR, pipeline, logger: mockLogger, config: mockConfig });
 
     expect(watcher.isRunning()).toBe(false);
     watcher.start();
@@ -61,7 +76,7 @@ describe("createWatcher", () => {
 
   it("does not start twice (second start is no-op)", async () => {
     const pipeline = makeMockPipeline();
-    const watcher = createWatcher({ runtimeDir: TEST_DIR, pipeline, logger: mockLogger });
+    const watcher = createWatcher({ runtimeDir: TEST_DIR, pipeline, logger: mockLogger, config: mockConfig });
 
     watcher.start();
     expect(watcher.isRunning()).toBe(true);
@@ -75,7 +90,7 @@ describe("createWatcher", () => {
 
   it("calls pipeline.startRun when a .task file appears in inbox", async () => {
     const pipeline = makeMockPipeline();
-    const watcher = createWatcher({ runtimeDir: TEST_DIR, pipeline, logger: mockLogger });
+    const watcher = createWatcher({ runtimeDir: TEST_DIR, pipeline, logger: mockLogger, config: mockConfig });
 
     watcher.start();
 
@@ -97,7 +112,7 @@ describe("createWatcher", () => {
 
   it("ignores non-.task files in inbox", async () => {
     const pipeline = makeMockPipeline();
-    const watcher = createWatcher({ runtimeDir: TEST_DIR, pipeline, logger: mockLogger });
+    const watcher = createWatcher({ runtimeDir: TEST_DIR, pipeline, logger: mockLogger, config: mockConfig });
 
     watcher.start();
 
