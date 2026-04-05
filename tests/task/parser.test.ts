@@ -83,4 +83,63 @@ describe("parseTaskFile", () => {
     expect(meta.title).toBe("Padded Title");
     expect(meta.repo).toBe("C:\\Code\\app");
   });
+
+  it("parses ## Stage Hints section into a Record<string, string>", () => {
+    const withHints = `# Task: My Task
+
+## What I want done
+Do the thing.
+
+## Stage Hints
+design: use contemporary and modular design patterns
+impl: prefer composition over inheritance
+review: focus on test coverage
+`;
+    const meta = parseTaskFile(withHints);
+    expect(meta.stageHints).toEqual({
+      design: "use contemporary and modular design patterns",
+      impl: "prefer composition over inheritance",
+      review: "focus on test coverage",
+    });
+  });
+
+  it("returns empty stageHints when Stage Hints section is absent", () => {
+    const bare = "# Task: Quick fix\n\n## What I want done\nFix the bug.\n";
+    const meta = parseTaskFile(bare);
+    expect(meta.stageHints).toEqual({});
+  });
+
+  it("returns empty stageHints when Stage Hints section is present but empty", () => {
+    const emptyHints = `# Task: My Task
+
+## What I want done
+Do stuff.
+
+## Stage Hints
+
+## Pipeline Config
+stages: impl
+review_after: none
+`;
+    const meta = parseTaskFile(emptyHints);
+    expect(meta.stageHints).toEqual({});
+  });
+
+  it("ignores malformed lines in Stage Hints that have no colon", () => {
+    const badHints = `# Task: My Task
+
+## What I want done
+Do stuff.
+
+## Stage Hints
+design: use modular patterns
+this line has no colon
+impl: keep it simple
+`;
+    const meta = parseTaskFile(badHints);
+    expect(meta.stageHints).toEqual({
+      design: "use modular patterns",
+      impl: "keep it simple",
+    });
+  });
 });

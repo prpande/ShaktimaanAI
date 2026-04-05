@@ -235,6 +235,46 @@ describe("buildTaskFileContent", () => {
     const content = buildTaskFileContent(input, config);
     expect(content).toContain("Source: dashboard");
   });
+
+  it("includes ## Stage Hints section when stageHints are provided", () => {
+    const config = makeConfig();
+    const input: CreateTaskInput = {
+      source: "cli",
+      content: "Task with hints",
+      stageHints: {
+        design: "use contemporary and modular design patterns",
+        impl: "prefer composition over inheritance",
+      },
+    };
+
+    const content = buildTaskFileContent(input, config);
+    expect(content).toContain("## Stage Hints");
+    expect(content).toContain("design: use contemporary and modular design patterns");
+    expect(content).toContain("impl: prefer composition over inheritance");
+  });
+
+  it("omits ## Stage Hints section when stageHints not provided", () => {
+    const config = makeConfig();
+    const input: CreateTaskInput = {
+      source: "cli",
+      content: "Task without hints",
+    };
+
+    const content = buildTaskFileContent(input, config);
+    expect(content).not.toContain("## Stage Hints");
+  });
+
+  it("omits ## Stage Hints section when stageHints is an empty object", () => {
+    const config = makeConfig();
+    const input: CreateTaskInput = {
+      source: "cli",
+      content: "Task with empty hints",
+      stageHints: {},
+    };
+
+    const content = buildTaskFileContent(input, config);
+    expect(content).not.toContain("## Stage Hints");
+  });
 });
 
 // ─── createTask ──────────────────────────────────────────────────────────────

@@ -12,6 +12,7 @@ export interface CreateTaskInput {
   slackThread?: string;
   stages?: string[];
   reviewAfter?: string;
+  stageHints?: Record<string, string>;
 }
 
 // ─── helpers ─────────────────────────────────────────────────────────────────
@@ -100,6 +101,14 @@ export function buildTaskFileContent(
   lines.push(`stages: ${stages}`);
   lines.push(`review_after: ${reviewAfter}`);
   lines.push("");
+
+  if (input.stageHints && Object.keys(input.stageHints).length > 0) {
+    lines.push("## Stage Hints");
+    for (const [stageName, hint] of Object.entries(input.stageHints)) {
+      lines.push(`${stageName}: ${hint}`);
+    }
+    lines.push("");
+  }
 
   return lines.join("\n");
 }

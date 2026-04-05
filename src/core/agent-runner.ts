@@ -122,6 +122,20 @@ export function buildSystemPrompt(options: AgentRunOptions): string {
     sections.push(`## Repo Context\n\n${repoContext}`);
   }
 
+  // User Guidance (stage hints from task file + runtime options)
+  const taskFileHint = taskMeta.stageHints[stage];
+  const runtimeHints = options.stageHints?.[stage] ?? [];
+  const allHints: string[] = [
+    ...(taskFileHint ? [taskFileHint] : []),
+    ...runtimeHints,
+  ];
+  if (allHints.length > 0) {
+    const bullets = allHints.map((h) => `- ${h}`).join("\n");
+    sections.push(
+      `## User Guidance\n\nThe user has provided the following instructions for this stage:\n${bullets}`,
+    );
+  }
+
   // Agent instructions
   sections.push(`---\n\n${agentInstructions}`);
 

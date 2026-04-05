@@ -9,6 +9,7 @@ export interface TaskMeta {
   slackThread: string;
   stages: string[];
   reviewAfter: string;
+  stageHints: Record<string, string>;
 }
 
 /**
@@ -95,6 +96,21 @@ export function parseTaskFile(content: string): TaskMeta {
     reviewAfter = DEFAULT_CONFIG.agents.defaultReviewAfter;
   }
 
+  // --- Stage Hints ---
+  const stageHints: Record<string, string> = {};
+  const hintsBody = sections["Stage Hints"];
+  if (hintsBody) {
+    for (const line of hintsBody.split("\n")) {
+      const colonIdx = line.indexOf(":");
+      if (colonIdx === -1) continue;
+      const key = line.slice(0, colonIdx).trim();
+      const value = line.slice(colonIdx + 1).trim();
+      if (key && value) {
+        stageHints[key] = value;
+      }
+    }
+  }
+
   return {
     title,
     description,
@@ -104,5 +120,6 @@ export function parseTaskFile(content: string): TaskMeta {
     slackThread,
     stages,
     reviewAfter,
+    stageHints,
   };
 }

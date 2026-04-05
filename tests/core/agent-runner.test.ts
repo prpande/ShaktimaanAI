@@ -157,6 +157,71 @@ describe("buildSystemPrompt", () => {
     expect(result).toContain("## Questions to Investigate");
     expect(result).toContain("(none)");
   });
+
+  it("includes ## User Guidance section when task file has hints for current stage", () => {
+    const taskContent = `# Task: Test task
+
+## What I want done
+Build something.
+
+## Stage Hints
+questions: focus on edge cases
+`;
+    const result = buildSystemPrompt(makeOptions({ stage: "questions", taskContent }));
+    expect(result).toContain("## User Guidance");
+    expect(result).toContain("- focus on edge cases");
+  });
+
+  it("includes ## User Guidance section with runtime hints from options.stageHints", () => {
+    const result = buildSystemPrompt(
+      makeOptions({
+        stage: "questions",
+        stageHints: { questions: ["prefer concise questions", "limit to 5 questions"] },
+      }),
+    );
+    expect(result).toContain("## User Guidance");
+    expect(result).toContain("- prefer concise questions");
+    expect(result).toContain("- limit to 5 questions");
+  });
+
+  it("merges task file hints and runtime hints into User Guidance", () => {
+    const taskContent = `# Task: Test task
+
+## What I want done
+Build something.
+
+## Stage Hints
+impl: use async/await
+`;
+    const result = buildSystemPrompt(
+      makeOptions({
+        stage: "impl",
+        taskContent,
+        stageHints: { impl: ["avoid global state"] },
+      }),
+    );
+    expect(result).toContain("## User Guidance");
+    expect(result).toContain("- use async/await");
+    expect(result).toContain("- avoid global state");
+  });
+
+  it("omits ## User Guidance section when no hints exist for the stage", () => {
+    const result = buildSystemPrompt(makeOptions({ stage: "questions" }));
+    expect(result).not.toContain("## User Guidance");
+  });
+
+  it("omits ## User Guidance when hints exist for a different stage only", () => {
+    const taskContent = `# Task: Test task
+
+## What I want done
+Build something.
+
+## Stage Hints
+design: use modular patterns
+`;
+    const result = buildSystemPrompt(makeOptions({ stage: "questions", taskContent }));
+    expect(result).not.toContain("## User Guidance");
+  });
 });
 
 // ─── resolveToolPermissions (2 params) ───────────────────────────────────────

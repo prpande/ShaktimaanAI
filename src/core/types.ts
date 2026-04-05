@@ -60,6 +60,7 @@ export interface AgentRunOptions {
   config: ResolvedConfig;
   abortController?: AbortController;
   logger: { info(msg: string): void; warn(msg: string): void; error(msg: string): void };
+  stageHints?: Record<string, string[]>;
 }
 
 export interface AgentRunResult {
