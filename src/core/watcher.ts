@@ -1,10 +1,24 @@
 import chokidar, { type FSWatcher } from "chokidar";
 import { join } from "node:path";
 import { readFileSync, unlinkSync } from "node:fs";
+import { z } from "zod";
 
 import { type Pipeline } from "./pipeline.js";
 import { type TaskLogger } from "./logger.js";
 import { type ResolvedConfig } from "../config/loader.js";
+
+// ─── Control file schema ──────────────────────────────────────────────────────
+
+const controlSchema = z.discriminatedUnion("operation", [
+  z.object({ operation: z.literal("cancel"), slug: z.string() }),
+  z.object({ operation: z.literal("skip"), slug: z.string(), stage: z.string().optional() }),
+  z.object({ operation: z.literal("pause"), slug: z.string() }),
+  z.object({ operation: z.literal("resume"), slug: z.string() }),
+  z.object({ operation: z.literal("approve"), slug: z.string(), feedback: z.string().optional() }),
+  z.object({ operation: z.literal("modify_stages"), slug: z.string(), stages: z.array(z.string()) }),
+  z.object({ operation: z.literal("restart_stage"), slug: z.string(), stage: z.string().optional() }),
+  z.object({ operation: z.literal("retry"), slug: z.string(), feedback: z.string() }),
+]);
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -31,18 +45,33 @@ export function createWatcher(options: WatcherOptions): Watcher {
 
   async function handleControlFile(filePath: string): Promise<void> {
     const content = readFileSync(filePath, "utf-8");
-    const cmd = JSON.parse(content) as { operation: string; slug: string; [key: string]: unknown };
 
+    let parsed: unknown;
+    try {
+      parsed = JSON.parse(content);
+    } catch (err) {
+      logger.error(`[watcher] Invalid JSON in control file "${filePath}": ${err instanceof Error ? err.message : String(err)}`);
+      try { unlinkSync(filePath); } catch { /* may already be gone */ }
+      return;
+    }
+
+    const result = controlSchema.safeParse(parsed);
+    if (!result.success) {
+      logger.error(`[watcher] Malformed control file "${filePath}": ${result.error.message}`);
+      try { unlinkSync(filePath); } catch { /* may already be gone */ }
+      return;
+    }
+
+    const cmd = result.data;
     switch (cmd.operation) {
       case "cancel": await pipeline.cancel(cmd.slug); break;
-      case "skip": await pipeline.skip(cmd.slug, cmd.stage as string | undefined); break;
+      case "skip": await pipeline.skip(cmd.slug, cmd.stage); break;
       case "pause": await pipeline.pause(cmd.slug); break;
       case "resume": await pipeline.resume(cmd.slug); break;
-      case "approve": await pipeline.approveAndResume(cmd.slug, cmd.feedback as string | undefined); break;
-      case "modify_stages": await pipeline.modifyStages(cmd.slug, cmd.stages as string[]); break;
-      case "restart_stage": await pipeline.restartStage(cmd.slug, cmd.stage as string | undefined); break;
-      case "retry": await pipeline.retry(cmd.slug, cmd.feedback as string); break;
-      default: logger.warn(`[watcher] Unknown control operation: ${cmd.operation}`);
+      case "approve": await pipeline.approveAndResume(cmd.slug, cmd.feedback); break;
+      case "modify_stages": await pipeline.modifyStages(cmd.slug, cmd.stages); break;
+      case "restart_stage": await pipeline.restartStage(cmd.slug, cmd.stage); break;
+      case "retry": await pipeline.retry(cmd.slug, cmd.feedback); break;
     }
 
     // Delete only after successful processing
