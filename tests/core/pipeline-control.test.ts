@@ -171,6 +171,55 @@ describe("modifyStages", () => {
     const state = readRunState(taskDir);
     expect(state.stages).toEqual(["questions", "impl", "pr"]);
   });
+
+  it("throws when newStages is empty", async () => {
+    const slug = "modify-stages-empty";
+    const stageDir = STAGE_DIR_MAP["questions"];
+    setupTaskInDir(slug, join(stageDir, "pending"), {
+      currentStage: "questions",
+      status: "running",
+    });
+
+    const config = makeConfig();
+    const registry = createAgentRegistry(5, 2);
+    const pipeline = createPipeline({ config, registry, runner: noopRunner, logger: noopLogger });
+
+    await expect(pipeline.modifyStages(slug, [])).rejects.toThrow("Cannot set empty stage list");
+  });
+
+  it("throws when newStages contains invalid stage names", async () => {
+    const slug = "modify-stages-invalid";
+    const stageDir = STAGE_DIR_MAP["questions"];
+    setupTaskInDir(slug, join(stageDir, "pending"), {
+      currentStage: "questions",
+      status: "running",
+    });
+
+    const config = makeConfig();
+    const registry = createAgentRegistry(5, 2);
+    const pipeline = createPipeline({ config, registry, runner: noopRunner, logger: noopLogger });
+
+    await expect(pipeline.modifyStages(slug, ["questions", "bogus", "notastage"])).rejects.toThrow(
+      /Invalid stage names: bogus, notastage/,
+    );
+  });
+
+  it("throws when newStages contains duplicates", async () => {
+    const slug = "modify-stages-dupes";
+    const stageDir = STAGE_DIR_MAP["questions"];
+    setupTaskInDir(slug, join(stageDir, "pending"), {
+      currentStage: "questions",
+      status: "running",
+    });
+
+    const config = makeConfig();
+    const registry = createAgentRegistry(5, 2);
+    const pipeline = createPipeline({ config, registry, runner: noopRunner, logger: noopLogger });
+
+    await expect(pipeline.modifyStages(slug, ["questions", "impl", "impl"])).rejects.toThrow(
+      /Duplicate stage names: impl/,
+    );
+  });
 });
 
 // ─── resume ────────────────────────────────────────────────────────────────

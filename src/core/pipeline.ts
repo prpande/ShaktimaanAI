@@ -672,8 +672,14 @@ export function createPipeline(options: PipelineOptions): Pipeline {
     },
 
     async modifyStages(slug: string, newStages: string[]): Promise<void> {
+      if (newStages.length === 0) throw new Error("Cannot set empty stage list");
+      const validStages = new Set([...Object.keys(STAGE_DIR_MAP), "quick"]);
+      const invalid = newStages.filter(s => !validStages.has(s));
+      if (invalid.length > 0) throw new Error(`Invalid stage names: ${invalid.join(", ")}`);
+      const dupes = newStages.filter((s, i) => newStages.indexOf(s) !== i);
+      if (dupes.length > 0) throw new Error(`Duplicate stage names: ${dupes.join(", ")}`);
+
       const found = findTaskDir(slug);
-      if (!found) throw new Error(`Task "${slug}" not found`);
       const state = readRunState(found.dir);
       const oldStages = [...state.stages];
       state.stages = newStages;
