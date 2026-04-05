@@ -232,14 +232,14 @@ export async function runAgent(options: AgentRunOptions): Promise<AgentRunResult
       try {
         if (message.type === "result") {
           const msg = message as Record<string, unknown>;
-          const _usage = msg.usage as Record<string, unknown> | undefined;
+          const usageLog = msg.usage as Record<string, unknown> | undefined;
           streamLogger.log({
             type: message.type,
             subtype: msg.subtype,
             costUsd: msg.total_cost_usd,
             turns: msg.num_turns,
-            inputTokens: typeof _usage?.input_tokens === "number" ? _usage.input_tokens : 0,
-            outputTokens: typeof _usage?.output_tokens === "number" ? _usage.output_tokens : 0,
+            inputTokens: typeof usageLog?.input_tokens === "number" ? usageLog.input_tokens : 0,
+            outputTokens: typeof usageLog?.output_tokens === "number" ? usageLog.output_tokens : 0,
           });
         } else {
           const { type, ...rest } = message as Record<string, unknown>;

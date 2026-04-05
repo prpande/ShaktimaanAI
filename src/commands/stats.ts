@@ -66,7 +66,7 @@ export function parseCompletedEntry(entry: DailyLogEntry): CompletedLogEntry | n
   return {
     timestamp: entry.timestamp,
     slug: entry.slug,
-    stage: entry.stage as string,
+    stage: entry.stage,
     durationSeconds,
     costUsd,
     turns,
@@ -187,6 +187,7 @@ export function computePipelineSummary(
 
 /** Formats seconds into a human-readable duration string. */
 export function formatDuration(seconds: number): string {
+  seconds = Math.round(seconds);
   if (seconds < 60) return `${seconds}s`;
   const h = Math.floor(seconds / 3600);
   const m = Math.floor((seconds % 3600) / 60);
