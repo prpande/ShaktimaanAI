@@ -10,6 +10,7 @@ import { STAGE_DIR_MAP, DIR_STAGE_MAP, STAGES_WITH_PENDING_DONE } from "./stage-
 import { type Notifier, type NotifyEvent } from "../surfaces/types.js";
 import { parseAgentVerdict, parseReviewFindings, decideAfterValidate, decideAfterReview } from "./retry.js";
 import { createWorktree, recordWorktreeCompletion } from "./worktree.js";
+import { appendDailyLogEntry, appendInteraction } from "./interactions.js";
 
 // Re-export for backwards compatibility
 export { STAGE_DIR_MAP, DIR_STAGE_MAP };
@@ -155,6 +156,7 @@ export interface Pipeline {
 export function createPipeline(options: PipelineOptions): Pipeline {
   const { config, registry, runner, logger } = options;
   const runtimeDir = config.pipeline.runtimeDir;
+  const interactionsDir = join(runtimeDir, "interactions");
   const activeRuns = new Map<string, RunState>();
 
   const EXECUTION_STAGES = new Set(["impl", "validate", "review", "pr"]);
@@ -282,6 +284,16 @@ export function createPipeline(options: PipelineOptions): Pipeline {
       const agentName = config.agents.names[stage] ?? stage;
       const agentId = registry.register(slug, stage, agentName, abortController);
       emitNotify({ type: "stage_started", slug, stage, timestamp: new Date().toISOString() });
+      try {
+        appendDailyLogEntry(interactionsDir, {
+          timestamp: new Date().toISOString(),
+          type: "agent_started",
+          slug,
+          stage,
+          agentName: config.agents.names[stage] ?? stage,
+          attempt: state.retryAttempts?.[stage] ?? 0,
+        });
+      } catch { /* swallow */ }
 
       // Collect previous outputs from artifacts/
       const artifactsDir = join(currentTaskDir, "artifacts");
@@ -341,6 +353,17 @@ export function createPipeline(options: PipelineOptions): Pipeline {
           );
         }
         emitNotify({ type: "task_failed", slug, stage, error: state.error, timestamp: new Date().toISOString() });
+        try {
+          appendDailyLogEntry(interactionsDir, {
+            timestamp: new Date().toISOString(),
+            type: "agent_failed",
+            slug,
+            stage,
+            agentName: config.agents.names[stage] ?? stage,
+            error: state.error ?? "Unknown error",
+            success: false,
+          });
+        } catch { /* swallow */ }
         activeRuns.delete(slug);
         return;
       }
@@ -366,6 +389,17 @@ export function createPipeline(options: PipelineOptions): Pipeline {
           );
         }
         emitNotify({ type: "task_failed", slug, stage, error: state.error, timestamp: new Date().toISOString() });
+        try {
+          appendDailyLogEntry(interactionsDir, {
+            timestamp: new Date().toISOString(),
+            type: "agent_failed",
+            slug,
+            stage,
+            agentName: config.agents.names[stage] ?? stage,
+            error: state.error ?? "Unknown error",
+            success: false,
+          });
+        } catch { /* swallow */ }
         activeRuns.delete(slug);
         return;
       }
@@ -476,6 +510,20 @@ export function createPipeline(options: PipelineOptions): Pipeline {
         turns: result.turns,
       });
       emitNotify({ type: "stage_completed", slug, stage, artifactPath: outputPath, timestamp: new Date().toISOString() });
+      try {
+        appendDailyLogEntry(interactionsDir, {
+          timestamp: new Date().toISOString(),
+          type: "agent_completed",
+          slug,
+          stage,
+          agentName: config.agents.names[stage] ?? stage,
+          durationSeconds: Math.round(result.durationMs / 1000),
+          tokensUsed: result.costUsd,
+          artifactPath: `${stage}-output${outputSuffix}.md`,
+          agentStreamLog: result.streamLogPath ?? "",
+          success: true,
+        });
+      } catch { /* swallow */ }
 
       // Move from pending to done
       const doneDir = moveTaskDir(
@@ -518,6 +566,15 @@ export function createPipeline(options: PipelineOptions): Pipeline {
       state.currentStage = nextStage;
       state.status = "running";
       writeRunState(doneDir, state);
+      try {
+        appendDailyLogEntry(interactionsDir, {
+          timestamp: new Date().toISOString(),
+          type: "stage_transition",
+          slug,
+          fromStage: stage,
+          toStage: nextStage,
+        });
+      } catch { /* swallow */ }
       currentTaskDir = moveTaskDir(
         runtimeDir, slug,
         join(STAGE_DIR_MAP[stage], "done"),
@@ -543,6 +600,17 @@ export function createPipeline(options: PipelineOptions): Pipeline {
       const stageDir = STAGE_DIR_MAP[firstStage];
       const taskDir = initTaskDir(runtimeDir, slug, stageDir, taskFilePath);
       writeRunState(taskDir, state);
+
+      // Log task creation interaction
+      try {
+        appendInteraction(taskDir, slug, {
+          timestamp: new Date().toISOString(),
+          source: "pipeline",
+          intent: "create_task",
+          message: taskMeta.title,
+          action: "Task created, pipeline started",
+        });
+      } catch { /* swallow */ }
 
       // Delete original inbox file
       unlinkSync(taskFilePath);
@@ -621,6 +689,15 @@ export function createPipeline(options: PipelineOptions): Pipeline {
       moveTaskDir(runtimeDir, slug, found.subdir, "11-failed");
       activeRuns.delete(slug);
       emitNotify({ type: "task_cancelled", slug, cancelledBy: "user", timestamp: new Date().toISOString() });
+      try {
+        appendDailyLogEntry(interactionsDir, {
+          timestamp: new Date().toISOString(),
+          type: "control",
+          slug,
+          source: "user",
+          command: "cancel",
+        });
+      } catch { /* swallow */ }
     },
 
     async skip(slug: string, stage?: string): Promise<void> {
@@ -640,6 +717,15 @@ export function createPipeline(options: PipelineOptions): Pipeline {
       writeRunState(found.dir, state);
       const nextDir = moveTaskDir(runtimeDir, slug, found.subdir, join(nextStageDir, "pending"));
       emitNotify({ type: "stage_skipped", slug, stage: targetStage, timestamp: new Date().toISOString() });
+      try {
+        appendDailyLogEntry(interactionsDir, {
+          timestamp: new Date().toISOString(),
+          type: "control",
+          slug,
+          source: "user",
+          command: "skip",
+        });
+      } catch { /* swallow */ }
       await processStage(slug, nextDir);
     },
 
@@ -654,6 +740,15 @@ export function createPipeline(options: PipelineOptions): Pipeline {
       moveTaskDir(runtimeDir, slug, found.subdir, "12-hold");
       activeRuns.set(slug, readRunState(join(runtimeDir, "12-hold", slug)));
       emitNotify({ type: "task_paused", slug, pausedBy: "user", timestamp: new Date().toISOString() });
+      try {
+        appendDailyLogEntry(interactionsDir, {
+          timestamp: new Date().toISOString(),
+          type: "control",
+          slug,
+          source: "user",
+          command: "pause",
+        });
+      } catch { /* swallow */ }
     },
 
     async resume(slug: string): Promise<void> {
@@ -669,6 +764,15 @@ export function createPipeline(options: PipelineOptions): Pipeline {
       const nextDir = moveTaskDir(runtimeDir, slug, "12-hold", join(STAGE_DIR_MAP[resumeStage], "pending"));
       activeRuns.set(slug, state);
       emitNotify({ type: "task_resumed", slug, resumedBy: "user", timestamp: new Date().toISOString() });
+      try {
+        appendDailyLogEntry(interactionsDir, {
+          timestamp: new Date().toISOString(),
+          type: "control",
+          slug,
+          source: "user",
+          command: "resume",
+        });
+      } catch { /* swallow */ }
       await processStage(slug, nextDir);
     },
 
@@ -686,6 +790,15 @@ export function createPipeline(options: PipelineOptions): Pipeline {
       state.stages = newStages;
       writeRunState(found.dir, state);
       emitNotify({ type: "stages_modified", slug, oldStages, newStages, timestamp: new Date().toISOString() });
+      try {
+        appendDailyLogEntry(interactionsDir, {
+          timestamp: new Date().toISOString(),
+          type: "control",
+          slug,
+          source: "user",
+          command: "modifyStages",
+        });
+      } catch { /* swallow */ }
     },
 
     async restartStage(slug: string, stage?: string): Promise<void> {
@@ -702,6 +815,15 @@ export function createPipeline(options: PipelineOptions): Pipeline {
       state.status = "running";
       writeRunState(found.dir, state);
       const nextDir = moveTaskDir(runtimeDir, slug, found.subdir, join(stageDir, "pending"));
+      try {
+        appendDailyLogEntry(interactionsDir, {
+          timestamp: new Date().toISOString(),
+          type: "control",
+          slug,
+          source: "user",
+          command: "restartStage",
+        });
+      } catch { /* swallow */ }
       await processStage(slug, nextDir);
     },
 
@@ -727,6 +849,15 @@ export function createPipeline(options: PipelineOptions): Pipeline {
       const nextDir = moveTaskDir(runtimeDir, slug, "12-hold", join(stageDir, "pending"));
       activeRuns.set(slug, state);
       emitNotify({ type: "stage_retried", slug, stage: retryStage, attempt: state.retryAttempts[retryStage], feedback, timestamp: new Date().toISOString() });
+      try {
+        appendDailyLogEntry(interactionsDir, {
+          timestamp: new Date().toISOString(),
+          type: "control",
+          slug,
+          source: "user",
+          command: "retry",
+        });
+      } catch { /* swallow */ }
       await processStage(slug, nextDir);
     },
 
