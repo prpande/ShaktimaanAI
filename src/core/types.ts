@@ -46,7 +46,7 @@ export interface RunState {
 
   // Spec 3 fields
   stageHints: Record<string, string[]>;
-  retryAttempt: number;
+  retryAttempts: Record<string, number>;
   pausedAtStage?: string;
 }
 

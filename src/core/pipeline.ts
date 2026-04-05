@@ -57,7 +57,7 @@ export function createRunState(
     reviewRetryCount: 0,
     reviewIssues: [],
     stageHints: {},
-    retryAttempt: 0,
+    retryAttempts: {},
   };
 }
 
@@ -296,7 +296,8 @@ export function createPipeline(options: PipelineOptions): Pipeline {
       // Read task content
       const taskContent = readFileSync(join(currentTaskDir, "task.task"), "utf-8");
 
-      const outputSuffix = state.retryAttempt > 0 ? `-r${state.retryAttempt}` : "";
+      const stageRetryCount = state.retryAttempts?.[stage] ?? 0;
+      const outputSuffix = stageRetryCount > 0 ? `-r${stageRetryCount}` : "";
       const outputPath = join(artifactsDir, `${stage}-output${outputSuffix}.md`);
 
       // Execution stages (impl, validate, review, pr) work in the resolved workDir.
@@ -714,17 +715,18 @@ export function createPipeline(options: PipelineOptions): Pipeline {
       if (!stageDir) {
         throw new Error(`Cannot retry stage "${retryStage}" — no stage directory mapping exists`);
       }
-      state.retryAttempt = (state.retryAttempt ?? 0) + 1;
+      state.retryAttempts = state.retryAttempts ?? {};
+      state.retryAttempts[retryStage] = (state.retryAttempts[retryStage] ?? 0) + 1;
       state.status = "running";
 
       // Write versioned feedback artifact
-      const feedbackFile = `retry-feedback-${retryStage}-${state.retryAttempt}.md`;
+      const feedbackFile = `retry-feedback-${retryStage}-${state.retryAttempts[retryStage]}.md`;
       writeFileSync(join(holdDir, "artifacts", feedbackFile), feedback, "utf-8");
 
       writeRunState(holdDir, state);
       const nextDir = moveTaskDir(runtimeDir, slug, "12-hold", join(stageDir, "pending"));
       activeRuns.set(slug, state);
-      emitNotify({ type: "stage_retried", slug, stage: retryStage, attempt: state.retryAttempt, feedback, timestamp: new Date().toISOString() });
+      emitNotify({ type: "stage_retried", slug, stage: retryStage, attempt: state.retryAttempts[retryStage], feedback, timestamp: new Date().toISOString() });
       await processStage(slug, nextDir);
     },
 
@@ -766,7 +768,7 @@ export function createPipeline(options: PipelineOptions): Pipeline {
         reviewRetryCount: 0,
         reviewIssues: [],
         stageHints: {},
-        retryAttempt: 0,
+        retryAttempts: {},
       };
       writeRunState(destDir, state);
 

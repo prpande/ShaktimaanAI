@@ -56,7 +56,7 @@ function makeRunState(slug: string, overrides: Partial<RunState> = {}): RunState
     reviewRetryCount: 0,
     reviewIssues: [],
     stageHints: {},
-    retryAttempt: 0,
+    retryAttempts: {},
     ...overrides,
   };
 }
