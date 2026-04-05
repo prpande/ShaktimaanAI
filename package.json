@@ -10,7 +10,7 @@
     "dist"
   ],
   "scripts": {
-    "build": "tsup && cp -r agents/ dist/agents",
+    "build": "tsup && node -e \"const fs=require('fs');const p=require('path');const d='dist/agents';fs.rmSync(d,{recursive:true,force:true});fs.mkdirSync(d,{recursive:true});fs.readdirSync('agents').filter(f=>f.endsWith('.md')).forEach(f=>fs.copyFileSync(p.join('agents',f),p.join(d,f)))\"",
     "dev": "tsup --watch",
     "test": "vitest run",
     "test:watch": "vitest"
