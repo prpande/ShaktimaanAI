@@ -1,5 +1,5 @@
 import type { Command } from "commander";
-import { readFileSync, watchFile, unwatchFile, existsSync, statSync } from "node:fs";
+import { readFileSync, watchFile, unwatchFile, existsSync, statSync, openSync, readSync, closeSync } from "node:fs";
 import { join } from "node:path";
 import { resolveConfigPath } from "../config/resolve-path.js";
 import { loadConfig } from "../config/loader.js";
@@ -46,32 +46,25 @@ export function registerLogsCommand(program: Command): void {
         return;
       }
 
-      // Follow mode: watch for new content using watchFile
+      // Follow mode: use file descriptor + offset reads for O(1) updates
       let lastSize = statSync(logFile).size;
+      const fd = openSync(logFile, "r");
 
-      watchFile(logFile, { interval: 500 }, (curr) => {
-        if (curr.size > lastSize) {
-          // Read only the new bytes
-          const content = readFileSync(logFile, "utf-8");
-          const allLines = content.split(/\r?\n/);
-          if (allLines[allLines.length - 1] === "") allLines.pop();
-
-          // Determine how many lines were in the file before
-          const prevContent = content.slice(0, lastSize);
-          const prevLines = prevContent.split(/\r?\n/);
-          if (prevLines[prevLines.length - 1] === "") prevLines.pop();
-
-          const newLines = allLines.slice(prevLines.length);
-          for (const line of newLines) {
-            console.log(line);
+      watchFile(logFile, { interval: 500 }, () => {
+        try {
+          const newSize = statSync(logFile).size;
+          if (newSize > lastSize) {
+            const buf = Buffer.alloc(newSize - lastSize);
+            readSync(fd, buf, 0, buf.length, lastSize);
+            process.stdout.write(buf.toString("utf-8"));
+            lastSize = newSize;
           }
-
-          lastSize = curr.size;
-        }
+        } catch { /* file may have rotated */ }
       });
 
       // Handle SIGINT: stop watching and exit
       process.on("SIGINT", () => {
+        closeSync(fd);
         unwatchFile(logFile);
         process.exit(0);
       });
