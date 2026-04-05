@@ -6,7 +6,8 @@ import { type ResolvedConfig } from "../config/loader.js";
 import { type AgentRunnerFn, type AgentRunOptions, type RunState, type CompletedStage, type ReviewIssue } from "./types.js";
 import { type AgentRegistry } from "./registry.js";
 import { type TaskLogger, createTaskLogger } from "./logger.js";
-import { STAGE_DIR_MAP, DIR_STAGE_MAP } from "./stage-map.js";
+import { STAGE_DIR_MAP, DIR_STAGE_MAP, STAGES_WITH_PENDING_DONE } from "./stage-map.js";
+import { type Notifier, type NotifyEvent } from "../surfaces/types.js";
 import { parseAgentVerdict, parseReviewFindings, decideAfterValidate, decideAfterReview } from "./retry.js";
 import { createWorktree, recordWorktreeCompletion } from "./worktree.js";
 
@@ -127,10 +128,26 @@ export interface PipelineOptions {
 }
 
 export interface Pipeline {
+  // existing
   startRun(taskFilePath: string, invocationCwd?: string): Promise<void>;
   resumeRun(slug: string, stageSubdir: string): Promise<void>;
   approveAndResume(slug: string, feedback?: string): Promise<void>;
   getActiveRuns(): RunState[];
+
+  // control operations
+  cancel(slug: string): Promise<void>;
+  skip(slug: string, stage?: string): Promise<void>;
+  pause(slug: string): Promise<void>;
+  resume(slug: string): Promise<void>;
+  modifyStages(slug: string, newStages: string[]): Promise<void>;
+  restartStage(slug: string, stage?: string): Promise<void>;
+  retry(slug: string, feedback: string): Promise<void>;
+
+  // quick path
+  startQuickRun(taskFilePath: string, taskContent: string): Promise<void>;
+
+  // notifier
+  addNotifier(notifier: Notifier): void;
 }
 
 // ─── Pipeline Factory ──────────────────────────────────────────────────────
@@ -141,6 +158,32 @@ export function createPipeline(options: PipelineOptions): Pipeline {
   const activeRuns = new Map<string, RunState>();
 
   const EXECUTION_STAGES = new Set(["impl", "validate", "review", "pr"]);
+
+  // ─── Notifier infrastructure ───────────────────────────────────────────────
+  const notifiers: Notifier[] = [];
+
+  function emitNotify(event: NotifyEvent): void {
+    for (const n of notifiers) {
+      n.notify(event).catch(() => { /* swallow errors */ });
+    }
+  }
+
+  // ─── findTaskDir: search 12-hold first, then all stage dirs (pending+done) ─
+  function findTaskDir(slug: string): { dir: string; subdir: string } | null {
+    // Check 12-hold first
+    const holdPath = join(runtimeDir, "12-hold", slug);
+    if (existsSync(holdPath)) return { dir: holdPath, subdir: "12-hold" };
+
+    // Check all stage dirs (pending and done)
+    for (const stageDir of STAGES_WITH_PENDING_DONE) {
+      const pendingPath = join(runtimeDir, stageDir, "pending", slug);
+      if (existsSync(pendingPath)) return { dir: pendingPath, subdir: join(stageDir, "pending") };
+      const donePath = join(runtimeDir, stageDir, "done", slug);
+      if (existsSync(donePath)) return { dir: donePath, subdir: join(stageDir, "done") };
+    }
+
+    return null;
+  }
 
   function mergeReviewIssues(
     existing: ReviewIssue[],
@@ -238,6 +281,7 @@ export function createPipeline(options: PipelineOptions): Pipeline {
       const abortController = new AbortController();
       const agentName = config.agents.names[stage] ?? stage;
       const agentId = registry.register(slug, stage, agentName, abortController);
+      emitNotify({ type: "stage_started", slug, stage, timestamp: new Date().toISOString() });
 
       // Collect previous outputs from artifacts/
       const artifactsDir = join(currentTaskDir, "artifacts");
@@ -252,7 +296,8 @@ export function createPipeline(options: PipelineOptions): Pipeline {
       // Read task content
       const taskContent = readFileSync(join(currentTaskDir, "task.task"), "utf-8");
 
-      const outputPath = join(artifactsDir, `${stage}-output.md`);
+      const outputSuffix = state.retryAttempt > 0 ? `-r${state.retryAttempt}` : "";
+      const outputPath = join(artifactsDir, `${stage}-output${outputSuffix}.md`);
 
       // Execution stages (impl, validate, review, pr) work in the resolved workDir.
       // Alignment stages work in the task directory as before.
@@ -294,6 +339,7 @@ export function createPipeline(options: PipelineOptions): Pipeline {
             `Original error: ${state.error}`,
           );
         }
+        emitNotify({ type: "task_failed", slug, stage, error: state.error, timestamp: new Date().toISOString() });
         activeRuns.delete(slug);
         return;
       }
@@ -318,6 +364,7 @@ export function createPipeline(options: PipelineOptions): Pipeline {
             `Original error: ${state.error}`,
           );
         }
+        emitNotify({ type: "task_failed", slug, stage, error: state.error, timestamp: new Date().toISOString() });
         activeRuns.delete(slug);
         return;
       }
@@ -419,13 +466,15 @@ export function createPipeline(options: PipelineOptions): Pipeline {
       }
 
       // Add completed stage
+      const outputFileName = `${stage}-output${outputSuffix}.md`;
       state.completedStages.push({
         stage,
         completedAt: new Date().toISOString(),
-        outputFile: `${stage}-output.md`,
+        outputFile: outputFileName,
         costUsd: result.costUsd,
         turns: result.turns,
       });
+      emitNotify({ type: "stage_completed", slug, stage, artifactPath: outputPath, timestamp: new Date().toISOString() });
 
       // Move from pending to done
       const doneDir = moveTaskDir(
@@ -444,6 +493,7 @@ export function createPipeline(options: PipelineOptions): Pipeline {
           "12-hold",
         );
         activeRuns.set(slug, readRunState(join(runtimeDir, "12-hold", slug)));
+        emitNotify({ type: "task_held", slug, stage, artifactUrl: "", timestamp: new Date().toISOString() });
         return;
       }
 
@@ -459,6 +509,7 @@ export function createPipeline(options: PipelineOptions): Pipeline {
           "10-complete",
         );
         activeRuns.set(slug, readRunState(join(runtimeDir, "10-complete", slug)));
+        emitNotify({ type: "task_completed", slug, timestamp: new Date().toISOString() });
         return;
       }
 
@@ -496,6 +547,14 @@ export function createPipeline(options: PipelineOptions): Pipeline {
       unlinkSync(taskFilePath);
 
       activeRuns.set(slug, state);
+      emitNotify({
+        type: "task_created",
+        slug,
+        title: slug,
+        source: "cli",
+        stages: state.stages,
+        timestamp: new Date().toISOString(),
+      });
       await processStage(slug, taskDir);
     },
 
@@ -546,6 +605,143 @@ export function createPipeline(options: PipelineOptions): Pipeline {
 
     getActiveRuns(): RunState[] {
       return Array.from(activeRuns.values());
+    },
+
+    // ─── Control Operations ──────────────────────────────────────────────────
+
+    async cancel(slug: string): Promise<void> {
+      registry.abortBySlug(slug);
+      const found = findTaskDir(slug);
+      if (!found) throw new Error(`Task "${slug}" not found`);
+      const state = readRunState(found.dir);
+      state.status = "failed";
+      state.error = "Cancelled by user";
+      writeRunState(found.dir, state);
+      moveTaskDir(runtimeDir, slug, found.subdir, "11-failed");
+      activeRuns.delete(slug);
+      emitNotify({ type: "task_cancelled", slug, cancelledBy: "user", timestamp: new Date().toISOString() });
+    },
+
+    async skip(slug: string, stage?: string): Promise<void> {
+      registry.abortBySlug(slug);
+      const found = findTaskDir(slug);
+      if (!found) throw new Error(`Task "${slug}" not found`);
+      const state = readRunState(found.dir);
+      const targetStage = stage ?? state.currentStage;
+      const nextStage = getNextStage(targetStage, state.stages);
+      if (!nextStage) throw new Error(`No stage after "${targetStage}" to skip to`);
+      state.currentStage = nextStage;
+      state.status = "running";
+      writeRunState(found.dir, state);
+      const nextDir = moveTaskDir(runtimeDir, slug, found.subdir, join(STAGE_DIR_MAP[nextStage], "pending"));
+      emitNotify({ type: "stage_skipped", slug, stage: targetStage, timestamp: new Date().toISOString() });
+      await processStage(slug, nextDir);
+    },
+
+    async pause(slug: string): Promise<void> {
+      registry.abortBySlug(slug);
+      const found = findTaskDir(slug);
+      if (!found) throw new Error(`Task "${slug}" not found`);
+      const state = readRunState(found.dir);
+      state.status = "hold";
+      state.pausedAtStage = state.currentStage;
+      writeRunState(found.dir, state);
+      moveTaskDir(runtimeDir, slug, found.subdir, "12-hold");
+      activeRuns.set(slug, readRunState(join(runtimeDir, "12-hold", slug)));
+      emitNotify({ type: "task_paused", slug, pausedBy: "user", timestamp: new Date().toISOString() });
+    },
+
+    async resume(slug: string): Promise<void> {
+      const holdDir = join(runtimeDir, "12-hold", slug);
+      if (!existsSync(holdDir)) throw new Error(`Task "${slug}" not found in hold`);
+      const state = readRunState(holdDir);
+      if (!state.pausedAtStage) throw new Error(`Task "${slug}" was not paused — use approve instead`);
+      const resumeStage = state.pausedAtStage;
+      state.status = "running";
+      state.currentStage = resumeStage;
+      delete state.pausedAtStage;
+      writeRunState(holdDir, state);
+      const nextDir = moveTaskDir(runtimeDir, slug, "12-hold", join(STAGE_DIR_MAP[resumeStage], "pending"));
+      activeRuns.set(slug, state);
+      emitNotify({ type: "task_resumed", slug, resumedBy: "user", timestamp: new Date().toISOString() });
+      await processStage(slug, nextDir);
+    },
+
+    async modifyStages(slug: string, newStages: string[]): Promise<void> {
+      const found = findTaskDir(slug);
+      if (!found) throw new Error(`Task "${slug}" not found`);
+      const state = readRunState(found.dir);
+      const oldStages = [...state.stages];
+      state.stages = newStages;
+      writeRunState(found.dir, state);
+      emitNotify({ type: "stages_modified", slug, oldStages, newStages, timestamp: new Date().toISOString() });
+    },
+
+    async restartStage(slug: string, stage?: string): Promise<void> {
+      registry.abortBySlug(slug);
+      const found = findTaskDir(slug);
+      if (!found) throw new Error(`Task "${slug}" not found`);
+      const state = readRunState(found.dir);
+      const targetStage = stage ?? state.currentStage;
+      state.currentStage = targetStage;
+      state.status = "running";
+      writeRunState(found.dir, state);
+      const nextDir = moveTaskDir(runtimeDir, slug, found.subdir, join(STAGE_DIR_MAP[targetStage], "pending"));
+      await processStage(slug, nextDir);
+    },
+
+    async retry(slug: string, feedback: string): Promise<void> {
+      const holdDir = join(runtimeDir, "12-hold", slug);
+      if (!existsSync(holdDir)) throw new Error(`Task "${slug}" not found in hold`);
+      const state = readRunState(holdDir);
+      if (state.pausedAtStage) throw new Error(`Task "${slug}" was paused — use resume instead`);
+      const retryStage = state.currentStage;
+      state.retryAttempt = (state.retryAttempt ?? 0) + 1;
+      state.status = "running";
+
+      // Write versioned feedback artifact
+      const feedbackFile = `retry-feedback-${retryStage}-${state.retryAttempt}.md`;
+      writeFileSync(join(holdDir, "artifacts", feedbackFile), feedback, "utf-8");
+
+      writeRunState(holdDir, state);
+      const nextDir = moveTaskDir(runtimeDir, slug, "12-hold", join(STAGE_DIR_MAP[retryStage], "pending"));
+      activeRuns.set(slug, state);
+      emitNotify({ type: "stage_retried", slug, stage: retryStage, attempt: state.retryAttempt, feedback, timestamp: new Date().toISOString() });
+      await processStage(slug, nextDir);
+    },
+
+    // ─── Quick path ──────────────────────────────────────────────────────────
+
+    async startQuickRun(taskFilePath: string, taskContent: string): Promise<void> {
+      const slug = basename(taskFilePath, ".task");
+      const taskMeta = parseTaskFile(taskContent);
+      const state = createRunState(slug, taskMeta, config);
+
+      const firstStage = state.stages[0];
+      state.currentStage = firstStage;
+
+      const stageDir = STAGE_DIR_MAP[firstStage];
+      const taskDir = initTaskDir(runtimeDir, slug, stageDir, taskFilePath);
+      writeRunState(taskDir, state);
+
+      unlinkSync(taskFilePath);
+
+      activeRuns.set(slug, state);
+      emitNotify({
+        type: "task_created",
+        slug,
+        title: slug,
+        source: "quick",
+        stages: state.stages,
+        timestamp: new Date().toISOString(),
+      });
+      await processStage(slug, taskDir);
+    },
+
+    // ─── Notifier ────────────────────────────────────────────────────────────
+
+    addNotifier(notifier: Notifier): void {
+      notifiers.push(notifier);
     },
   };
 }
