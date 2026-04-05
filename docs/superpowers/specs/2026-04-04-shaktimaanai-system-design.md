@@ -497,20 +497,25 @@ Five specs, in implementation order. Each spec gets its own document.
 - Git worktree management for Karigar
 - Per-stage agent template files (see section 17)
 
-### Spec 3: Input Surfaces
-- Slack integration (inbound parsing → Brahma, outbound notifications, thread-based approvals → Indra)
-- CLI commands (`shkmn task`, `shkmn approve`, `shkmn status`, `shkmn logs`)
-- Dashboard web form → Brahma
-- Dashboard approve button → Indra
+### Spec 3: Input Surfaces (CLI + Slack)
+- CLI commands (`shkmn task`, `shkmn approve`, `shkmn status`, `shkmn logs`, `shkmn cancel`, `shkmn skip`, `shkmn pause`, `shkmn resume`, `shkmn modify-stages`, `shkmn restart-stage`, `shkmn retry`)
+- Slack integration (inbound MCP polling → Sutradhaar → Brahma/Indra, outbound thread-based notifications with configurable verbosity)
+- Pipeline control operations (cancel, skip, pause, resume, modify-stages, restart-stage, retry with versioned artifacts)
+- Quick task path (short-circuit for simple tasks via `agents/quick.md`, configurable review hold)
+- Stage hints (user guidance extracted from input, injected into agent prompts)
+- Interaction logging (per-task `interactions.md` + global daily `interactions/YYYY-MM-DD.json`)
+- Slug resolution (fuzzy matching for Slack and CLI)
+- Notifier interface (ConsoleNotifier for CLI, SlackNotifier for Slack)
 
 ### Spec 4: Dashboard
 - GitHub template repo structure
 - Static site (HTML/JS/CSS, no framework dependency)
 - GitHub Actions workflow (dalakotilaw pattern: data push → rebuild → auto-commit to docs/)
 - Kanban board, list view, detail panel
-- Task submission form, approve button
+- Task submission form → Brahma, approve button → Indra (dashboard input surface)
 - `status.json` event schema
 - Responsive design, dark theme
+- DashboardNotifier (third Notifier implementation)
 
 ### Spec 5: History, Analytics & Reporting
 - `history.json` (append-only record)
