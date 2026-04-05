@@ -326,6 +326,7 @@ export function createPipeline(options: PipelineOptions): Pipeline {
         outputPath,
         cwd: stageCwd,
         config,
+        stageHints: state.stageHints,
         abortController,
         logger: taskLogger,
       };
@@ -785,6 +786,7 @@ export function createPipeline(options: PipelineOptions): Pipeline {
       if (dupes.length > 0) throw new Error(`Duplicate stage names: ${dupes.join(", ")}`);
 
       const found = findTaskDir(slug);
+      if (!found) throw new Error(`Task "${slug}" not found`);
       const state = readRunState(found.dir);
       const oldStages = [...state.stages];
       state.stages = newStages;

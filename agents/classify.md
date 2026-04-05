@@ -10,7 +10,7 @@ Output ONLY valid JSON. No markdown, no explanation, no code fences. The JSON ob
 - `extractedContent` — string or null — the full cleaned task content to pass into the pipeline (set for create_task), otherwise null
 - `extractedStages` — array of strings or null — stage names explicitly mentioned (e.g., `["research", "design"]`), otherwise null
 - `extractedFeedback` — string or null — feedback text provided by the user (e.g., after a rejection), otherwise null
-- `stageHints` — object or null — a map of stage name to instruction override for that stage (e.g., `{"design": "use minimalist style"}`), otherwise null
+- `stageHints` — object or null — a map of stage name to instruction override for that stage (e.g., `{"design": "use minimalist style"}`). If the user provides guidance but you cannot determine which specific stage it targets, use `"*"` as the key to apply the hint to all remaining stages. Otherwise null
 - `complexity` — string or null — `"quick"` if the task is a small/single-stage job, `"pipeline"` if it requires a full multi-stage pipeline, otherwise null
 - `complexityConfidence` — number between 0.0 and 1.0 — confidence in the complexity classification (0 if complexity is null)
 
