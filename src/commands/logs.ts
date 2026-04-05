@@ -3,6 +3,7 @@ import { readFileSync, watchFile, unwatchFile, existsSync, statSync } from "node
 import { join } from "node:path";
 import { resolveConfigPath } from "../config/resolve-path.js";
 import { loadConfig } from "../config/loader.js";
+import { resolveSlugOrExit } from "./resolve-slug-or-exit.js";
 
 export function registerLogsCommand(program: Command): void {
   program
@@ -14,9 +15,10 @@ export function registerLogsCommand(program: Command): void {
     .action((slug: string, opts: { follow?: boolean; lines: string }) => {
       const configPath = resolveConfigPath();
       const config = loadConfig(configPath);
+      const resolved = resolveSlugOrExit(slug, config.pipeline.runtimeDir);
 
       const lineCount = parseInt(opts.lines, 10) || 50;
-      const logFile = join(config.pipeline.runtimeDir, "logs", `${slug}.log`);
+      const logFile = join(config.pipeline.runtimeDir, "logs", `${resolved}.log`);
 
       if (!existsSync(logFile)) {
         console.error(`Log file not found: ${logFile}`);

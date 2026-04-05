@@ -4,6 +4,7 @@ import { join } from "node:path";
 import { resolveConfigPath } from "../config/resolve-path.js";
 import { loadConfig } from "../config/loader.js";
 import { findHeldTask } from "../core/approval-handler.js";
+import { resolveSlugOrExit } from "./resolve-slug-or-exit.js";
 
 export function registerApproveCommand(program: Command): void {
   program
@@ -14,10 +15,11 @@ export function registerApproveCommand(program: Command): void {
     .action((slug: string, opts: { feedback?: string }) => {
       const configPath = resolveConfigPath();
       const config = loadConfig(configPath);
+      const resolved = resolveSlugOrExit(slug, config.pipeline.runtimeDir);
 
-      const taskPath = findHeldTask(config.pipeline.runtimeDir, slug);
+      const taskPath = findHeldTask(config.pipeline.runtimeDir, resolved);
       if (taskPath === null) {
-        console.error(`Task "${slug}" not found in hold (12-hold). Is it waiting for review?`);
+        console.error(`Task "${resolved}" not found in hold (12-hold). Is it waiting for review?`);
         process.exit(1);
       }
 
@@ -27,16 +29,16 @@ export function registerApproveCommand(program: Command): void {
 
       const controlPayload: Record<string, unknown> = {
         operation: "approve",
-        slug,
+        slug: resolved,
       };
       if (opts.feedback) {
         controlPayload.feedback = opts.feedback;
       }
 
-      const controlFile = join(inboxDir, `${slug}.control`);
+      const controlFile = join(inboxDir, `${resolved}.control`);
       writeFileSync(controlFile, JSON.stringify(controlPayload, null, 2), "utf-8");
 
       const feedbackNote = opts.feedback ? ` with feedback: "${opts.feedback}"` : "";
-      console.log(`Approval queued for "${slug}"${feedbackNote}. The pipeline watcher will resume it.`);
+      console.log(`Approval queued for "${resolved}"${feedbackNote}. The pipeline watcher will resume it.`);
     });
 }
