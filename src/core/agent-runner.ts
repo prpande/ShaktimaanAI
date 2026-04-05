@@ -139,8 +139,20 @@ export function buildSystemPrompt(options: AgentRunOptions): string {
   // Agent instructions
   sections.push(`---\n\n${agentInstructions}`);
 
-  // Output path
-  sections.push(`---\n\nWrite your output to: ${outputPath}`);
+  // Output instructions — agents with Write access write directly;
+  // agents without Write access produce text output that the pipeline captures.
+  const { disallowed } = resolveToolPermissions(stage, config);
+  const canWrite = !disallowed.includes("Write");
+  if (canWrite) {
+    sections.push(`---\n\nWrite your output to: ${outputPath}`);
+  } else {
+    sections.push(
+      `---\n\n## Output Instructions\n\n` +
+      `Output your complete response as text. Do NOT attempt to write files — ` +
+      `the pipeline will capture your text output automatically. ` +
+      `Do NOT use Bash to write files (echo, cat heredoc, python, etc.).`,
+    );
+  }
 
   return sections.join("\n\n");
 }
