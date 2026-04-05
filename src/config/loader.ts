@@ -1,57 +1,12 @@
 import { readFileSync } from "node:fs";
 import { configSchema, type ConfigParsed } from "./schema.js";
-import { DEFAULT_CONFIG, DEFAULT_AGENT_NAMES } from "./defaults.js";
+import { DEFAULT_CONFIG, DEFAULT_AGENT_NAMES, type ShkmnConfig } from "./defaults.js";
 
-export interface ResolvedConfig {
-  pipeline: {
-    runtimeDir: string;
-    agentsDir: string;
-    dashboardRepoLocal: string;
-    dashboardRepoUrl: string;
-  };
-  repos: {
-    root: string;
-    aliases: Record<string, { path: string; sequentialBuild?: boolean }>;
-  };
-  ado: {
-    org: string;
-    project: string;
-    defaultArea: string;
-  };
-  slack: {
-    enabled: boolean;
-    channel: string;
-    channelId: string;
-    pollIntervalSeconds: number;
-  };
-  agents: {
-    names: Record<string, string>;
-    defaultStages: string[];
-    defaultReviewAfter: string;
-    maxConcurrentTotal: number;
-    maxConcurrentValidate: number;
-    maxTurns: Record<string, number>;
-    timeoutsMinutes: Record<string, number>;
-    heartbeatTimeoutMinutes: number;
-    retryCount: number;
-    maxValidateRetries: number;
-    maxReviewRecurrence: number;
-  };
-  schedule: {
-    rollupTime: string;
-    notionPushDay: string;
-    notionPushTime: string;
-    monthlyReportDay: number;
-    monthlyReportTime: string;
-  };
-  worktree: {
-    retentionDays: number;
-    cleanupOnStartup: boolean;
-  };
-  review: {
-    enforceSuggestions: boolean;
-  };
-}
+/**
+ * A fully resolved config with all fields present (no optionals).
+ * Alias for ShkmnConfig — single source of truth lives in defaults.ts.
+ */
+export type ResolvedConfig = ShkmnConfig;
 
 /**
  * Reads a JSON config file from disk, validates with the Zod schema, and
@@ -124,6 +79,7 @@ export function resolveConfig(parsed: ConfigParsed): ResolvedConfig {
       retryCount: parsed.agents?.retryCount ?? da.retryCount,
       maxValidateRetries: parsed.agents?.maxValidateRetries ?? da.maxValidateRetries,
       maxReviewRecurrence: parsed.agents?.maxReviewRecurrence ?? da.maxReviewRecurrence,
+      tools: { ...da.tools, ...parsed.agents?.tools },
     },
     schedule: {
       rollupTime: parsed.schedule?.rollupTime ?? d.schedule.rollupTime,

@@ -210,7 +210,7 @@ describe("classifyByKeywords", () => {
 
 describe("classifyByLLM", () => {
   it("parses JSON result from stub runner", async () => {
-    const result = await classifyByLLM("some ambiguous input", stubRunner, {} as any, "/tmp", noopLogger);
+    const result = await classifyByLLM("some ambiguous input", stubRunner, {} as any, noopLogger);
     expect(result.intent).toBe("create_task");
     expect(result.confidence).toBe(0.85);
     expect(result.extractedSlug).toBeNull();
@@ -218,7 +218,7 @@ describe("classifyByLLM", () => {
   });
 
   it("returns unknown intent when runner fails", async () => {
-    const result = await classifyByLLM("some input", failRunner, {} as any, "/tmp", noopLogger);
+    const result = await classifyByLLM("some input", failRunner, {} as any, noopLogger);
     expect(result.intent).toBe("unknown");
     expect(result.confidence).toBe(0);
   });
@@ -231,7 +231,7 @@ describe("classifyByLLM", () => {
       turns: 1,
       durationMs: 10,
     });
-    const result = await classifyByLLM("input", badJsonRunner, {} as any, "/tmp", noopLogger);
+    const result = await classifyByLLM("input", badJsonRunner, {} as any, noopLogger);
     expect(result.intent).toBe("unknown");
     expect(result.confidence).toBe(0);
   });
@@ -244,7 +244,7 @@ describe("classifyByLLM", () => {
       turns: 1,
       durationMs: 10,
     });
-    const result = await classifyByLLM("lgtm-ish", fencedRunner, {} as any, "/tmp", noopLogger);
+    const result = await classifyByLLM("lgtm-ish", fencedRunner, {} as any, noopLogger);
     expect(result.intent).toBe("approve");
     expect(result.confidence).toBe(0.9);
   });
@@ -260,7 +260,7 @@ describe("classifyIntent", () => {
       return stubRunner(opts);
     };
 
-    const result = await classifyIntent("create task build the feature", trackingRunner, {} as any, "/tmp", noopLogger);
+    const result = await classifyIntent("create task build the feature", trackingRunner, {} as any, noopLogger);
     expect(result.intent).toBe("create_task");
     expect(result.confidence).toBe(0.95);
     expect(llmCalled).toBe(false);
@@ -273,13 +273,13 @@ describe("classifyIntent", () => {
       return stubRunner(opts);
     };
 
-    const result = await classifyIntent("something completely ambiguous", trackingRunner, {} as any, "/tmp", noopLogger);
+    const result = await classifyIntent("something completely ambiguous", trackingRunner, {} as any, noopLogger);
     expect(llmCalled).toBe(true);
     expect(result.intent).toBe("create_task"); // stubRunner returns create_task
   });
 
   it("returns unknown when LLM fails on unrecognized input", async () => {
-    const result = await classifyIntent("totally unrecognized input", failRunner, {} as any, "/tmp", noopLogger);
+    const result = await classifyIntent("totally unrecognized input", failRunner, {} as any, noopLogger);
     expect(result.intent).toBe("unknown");
     expect(result.confidence).toBe(0);
   });
@@ -293,7 +293,7 @@ describe("classifyIntent", () => {
     };
 
     // With threshold = 0.99, keyword match at 0.95 should trigger LLM fallback
-    const result = await classifyIntent("create task build feature", trackingRunner, {} as any, "/tmp", noopLogger, 0.99);
+    const result = await classifyIntent("create task build feature", trackingRunner, {} as any, noopLogger, 0.99);
     expect(llmCalled).toBe(true);
     // LLM stub returns create_task
     expect(result.intent).toBe("create_task");
@@ -307,7 +307,7 @@ describe("classifyIntent", () => {
       return stubRunner(opts);
     };
 
-    await classifyIntent("approve", trackingRunner, {} as any, "/tmp", noopLogger);
+    await classifyIntent("approve", trackingRunner, {} as any, noopLogger);
     expect(llmCalled).toBe(false);
   });
 });

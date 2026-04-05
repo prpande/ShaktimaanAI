@@ -8,7 +8,7 @@ import { type AgentRegistry } from "./registry.js";
 import { type TaskLogger, createTaskLogger } from "./logger.js";
 import { STAGE_DIR_MAP, DIR_STAGE_MAP } from "./stage-map.js";
 import { parseAgentVerdict, parseReviewFindings, decideAfterValidate, decideAfterReview } from "./retry.js";
-import { recordWorktreeCompletion } from "./worktree.js";
+import { createWorktree, recordWorktreeCompletion } from "./worktree.js";
 
 // Re-export for backwards compatibility
 export { STAGE_DIR_MAP, DIR_STAGE_MAP };
@@ -172,12 +172,32 @@ export function createPipeline(options: PipelineOptions): Pipeline {
     }
   }
 
-  function resolveWorkDir(state: RunState): string {
+  function resolveWorkDir(state: RunState, taskMeta: TaskMeta): string {
     // Resolution chain:
-    // 1. workDir already set (retry or resume) → reuse
+    // 0. workDir already set (retry or resume) → reuse
     if (state.workDir) return state.workDir;
 
-    // 2. No repo path on task — check repos.root
+    // 1. Task has a repo path → create worktree
+    if (taskMeta.repo) {
+      // Resolve repo path: check aliases first, then use raw path
+      const alias = config.repos.aliases[taskMeta.repo];
+      const repoPath = alias ? alias.path : taskMeta.repo;
+
+      try {
+        const worktreesDir = join(runtimeDir, "worktrees");
+        const worktreePath = createWorktree(repoPath, state.slug, worktreesDir);
+        state.worktreePath = worktreePath;
+        return worktreePath;
+      } catch (err) {
+        // Not a git repo or git not available — fall through to next step
+        logger.warn(
+          `[pipeline] Could not create worktree for "${state.slug}" at "${repoPath}": ` +
+          `${err instanceof Error ? err.message : String(err)}. Falling back.`,
+        );
+      }
+    }
+
+    // 2. No repo (or worktree failed) — check repos.root
     if (config.repos.root) {
       const dir = join(config.repos.root, state.slug);
       mkdirSync(dir, { recursive: true });
@@ -199,7 +219,9 @@ export function createPipeline(options: PipelineOptions): Pipeline {
 
       // Resolve workDir when entering impl for the first time
       if (stage === "impl" && !state.workDir) {
-        state.workDir = resolveWorkDir(state);
+        const taskContent = readFileSync(join(currentTaskDir, "task.task"), "utf-8");
+        const taskMeta = parseTaskFile(taskContent);
+        state.workDir = resolveWorkDir(state, taskMeta);
         writeRunState(currentTaskDir, state);
       }
 
@@ -244,7 +266,6 @@ export function createPipeline(options: PipelineOptions): Pipeline {
         outputPath,
         cwd: stageCwd,
         config,
-        templateDir: join(runtimeDir, "templates"),
         abortController,
         logger: taskLogger,
       };

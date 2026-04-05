@@ -39,6 +39,10 @@ export const configSchema = z.object({
     retryCount: z.number().optional(),
     maxValidateRetries: z.number().optional(),
     maxReviewRecurrence: z.number().optional(),
+    tools: z.record(z.string(), z.object({
+      allowed: z.array(z.string()).optional(),
+      disallowed: z.array(z.string()).optional(),
+    })).optional().default({}),
   }).optional().default({}),
   schedule: z.object({
     rollupTime: z.string().optional(),

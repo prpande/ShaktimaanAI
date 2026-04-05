@@ -1,7 +1,6 @@
 import { Command } from "commander";
 import { writeFileSync, unlinkSync, existsSync } from "node:fs";
 import { join, dirname } from "node:path";
-import { fileURLToPath } from "node:url";
 import { resolveConfigPath } from "../config/resolve-path.js";
 import { loadConfig, loadEnvFile } from "../config/loader.js";
 import { verifyRuntimeDirs } from "../runtime/dirs.js";
@@ -11,6 +10,7 @@ import { createPipeline } from "../core/pipeline.js";
 import { runAgent } from "../core/agent-runner.js";
 import { createWatcher, type Watcher } from "../core/watcher.js";
 import { runRecovery } from "../core/recovery.js";
+import { cleanupExpired } from "../core/worktree.js";
 
 // ─── Module-level watcher reference ─────────────────────────────────────────
 
@@ -47,12 +47,14 @@ export function registerStartCommand(program: Command): void {
         config.agents.maxConcurrentValidate,
       );
 
-      // 4. Resolve template dir (relative to this compiled file)
-      const templateDir = join(
-        dirname(fileURLToPath(import.meta.url)),
-        "..",
-        "templates",
-      );
+      // 4. Run worktree cleanup on startup if enabled
+      if (config.worktree.cleanupOnStartup) {
+        const manifestPath = join(config.pipeline.runtimeDir, "worktree-manifest.json");
+        const removed = cleanupExpired(manifestPath, config.worktree.retentionDays);
+        if (removed.length > 0) {
+          logger.info(`[startup] Cleaned up ${removed.length} expired worktree(s)`);
+        }
+      }
 
       // 5. Create pipeline
       const pipeline = createPipeline({

@@ -64,4 +64,25 @@ describe("config agents section additions", () => {
     expect(resolved.agents.maxValidateRetries).toBe(5);
     expect(resolved.agents.maxReviewRecurrence).toBe(1);
   });
+
+  it("defaults agents.tools to empty object", () => {
+    const parsed = configSchema.parse({ pipeline: { runtimeDir: "/tmp/test" } });
+    const resolved = resolveConfig(parsed);
+    expect(resolved.agents.tools).toEqual({});
+  });
+
+  it("accepts per-stage tool overrides", () => {
+    const parsed = configSchema.parse({
+      pipeline: { runtimeDir: "/tmp/test" },
+      agents: {
+        tools: {
+          impl: { allowed: ["Read", "Write", "Bash"], disallowed: [] },
+          review: { allowed: ["Read", "Glob"] },
+        },
+      },
+    });
+    const resolved = resolveConfig(parsed);
+    expect(resolved.agents.tools["impl"]).toEqual({ allowed: ["Read", "Write", "Bash"], disallowed: [] });
+    expect(resolved.agents.tools["review"]).toEqual({ allowed: ["Read", "Glob"] });
+  });
 });

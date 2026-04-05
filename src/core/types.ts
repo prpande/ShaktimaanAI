@@ -53,7 +53,6 @@ export interface AgentRunOptions {
   outputPath: string;
   cwd: string;
   config: ResolvedConfig;
-  templateDir: string;
   abortController?: AbortController;
   logger: { info(msg: string): void; warn(msg: string): void; error(msg: string): void };
 }

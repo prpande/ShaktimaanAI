@@ -98,7 +98,6 @@ export async function classifyByLLM(
   input: string,
   runAgentFn: AgentRunnerFn,
   config: ResolvedConfig,
-  templateDir: string,
   logger: Logger,
 ): Promise<ClassifyResult> {
   let result: AgentRunResult;
@@ -112,7 +111,6 @@ export async function classifyByLLM(
       outputPath: "",
       cwd: process.cwd(),
       config,
-      templateDir,
       logger,
     });
   } catch (err) {
@@ -159,7 +157,6 @@ export async function classifyIntent(
   input: string,
   runAgentFn: AgentRunnerFn,
   config: ResolvedConfig,
-  templateDir: string,
   logger: Logger,
   confidenceThreshold = 0.7,
 ): Promise<ClassifyResult> {
@@ -170,5 +167,5 @@ export async function classifyIntent(
   }
 
   // Fallback to LLM
-  return classifyByLLM(input, runAgentFn, config, templateDir, logger);
+  return classifyByLLM(input, runAgentFn, config, logger);
 }
