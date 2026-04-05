@@ -224,6 +224,11 @@ describe("formatDuration", () => {
     expect(formatDuration(0.4)).toBe("0s");
     expect(formatDuration(59.5)).toBe("1m 0s");
   });
+
+  it("clamps negative input to 0s", () => {
+    expect(formatDuration(-5)).toBe("0s");
+    expect(formatDuration(-100)).toBe("0s");
+  });
 });
 
 // ─── formatStatsTable ───────────────────────────────────────────────────────

@@ -187,7 +187,7 @@ export function computePipelineSummary(
 
 /** Formats seconds into a human-readable duration string. */
 export function formatDuration(seconds: number): string {
-  seconds = Math.round(seconds);
+  seconds = Math.max(0, Math.round(seconds));
   if (seconds < 60) return `${seconds}s`;
   const h = Math.floor(seconds / 3600);
   const m = Math.floor((seconds % 3600) / 60);
