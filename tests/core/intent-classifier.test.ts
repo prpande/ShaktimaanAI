@@ -204,6 +204,113 @@ describe("classifyByKeywords", () => {
     expect(result).not.toBeNull();
     expect(result!.extractedContent).toBeNull();
   });
+
+  // new intents
+  it("classifies 'cancel <slug>' as cancel with slug extracted", () => {
+    const slug = "fix-auth-bug-20260404103000";
+    const result = classifyByKeywords(`cancel ${slug}`);
+    expect(result).not.toBeNull();
+    expect(result!.intent).toBe("cancel");
+    expect(result!.extractedSlug).toBe(slug);
+  });
+
+  it("classifies 'skip research' as skip intent", () => {
+    const result = classifyByKeywords("skip research");
+    expect(result).not.toBeNull();
+    expect(result!.intent).toBe("skip");
+    expect(result!.confidence).toBe(0.95);
+  });
+
+  it("classifies 'pause fix-auth' as pause intent", () => {
+    const result = classifyByKeywords("pause fix-auth");
+    expect(result).not.toBeNull();
+    expect(result!.intent).toBe("pause");
+    expect(result!.confidence).toBe(0.95);
+  });
+
+  it("classifies 'hold on fix-auth' as pause intent", () => {
+    const result = classifyByKeywords("hold on fix-auth");
+    expect(result).not.toBeNull();
+    expect(result!.intent).toBe("pause");
+  });
+
+  it("classifies 'resume fix-auth' as resume intent", () => {
+    const result = classifyByKeywords("resume fix-auth");
+    expect(result).not.toBeNull();
+    expect(result!.intent).toBe("resume");
+    expect(result!.confidence).toBe(0.95);
+  });
+
+  it("classifies 'continue fix-auth' as resume intent", () => {
+    const result = classifyByKeywords("continue fix-auth");
+    expect(result).not.toBeNull();
+    expect(result!.intent).toBe("resume");
+  });
+
+  it("classifies 'retry design' as retry intent", () => {
+    const result = classifyByKeywords("retry design");
+    expect(result).not.toBeNull();
+    expect(result!.intent).toBe("retry");
+    expect(result!.confidence).toBe(0.95);
+  });
+
+  it("classifies 'redo design' as retry intent", () => {
+    const result = classifyByKeywords("redo design");
+    expect(result).not.toBeNull();
+    expect(result!.intent).toBe("retry");
+  });
+
+  it("classifies 'restart implement' as restart_stage intent", () => {
+    const result = classifyByKeywords("restart implement");
+    expect(result).not.toBeNull();
+    expect(result!.intent).toBe("restart_stage");
+    expect(result!.confidence).toBe(0.95);
+  });
+
+  it("classifies 'drop research' as modify_stages intent", () => {
+    const result = classifyByKeywords("drop research");
+    expect(result).not.toBeNull();
+    expect(result!.intent).toBe("modify_stages");
+    expect(result!.confidence).toBe(0.95);
+  });
+
+  // quick/full pipeline prefix detection
+  it("classifies 'quick: rewrite this paragraph' as create_task with complexity=quick", () => {
+    const result = classifyByKeywords("quick: rewrite this paragraph");
+    expect(result).not.toBeNull();
+    expect(result!.intent).toBe("create_task");
+    expect(result!.complexity).toBe("quick");
+    expect(result!.complexityConfidence).toBe(1.0);
+    expect(result!.extractedContent).toBe("rewrite this paragraph");
+  });
+
+  it("classifies 'full pipeline: build auth system' as create_task with complexity=pipeline", () => {
+    const result = classifyByKeywords("full pipeline: build auth system");
+    expect(result).not.toBeNull();
+    expect(result!.intent).toBe("create_task");
+    expect(result!.complexity).toBe("pipeline");
+    expect(result!.complexityConfidence).toBe(1.0);
+    expect(result!.extractedContent).toBe("build auth system");
+  });
+
+  it("quick prefix is case insensitive", () => {
+    const result = classifyByKeywords("QUICK: fix the typo");
+    expect(result).not.toBeNull();
+    expect(result!.intent).toBe("create_task");
+    expect(result!.complexity).toBe("quick");
+    expect(result!.extractedContent).toBe("fix the typo");
+  });
+
+  // expanded fields default to null
+  it("returns null for all new fields on regular keyword match", () => {
+    const result = classifyByKeywords("cancel some-task");
+    expect(result).not.toBeNull();
+    expect(result!.extractedStages).toBeNull();
+    expect(result!.extractedFeedback).toBeNull();
+    expect(result!.stageHints).toBeNull();
+    expect(result!.complexity).toBeNull();
+    expect(result!.complexityConfidence).toBe(0);
+  });
 });
 
 // ─── classifyByLLM ───────────────────────────────────────────────────────────

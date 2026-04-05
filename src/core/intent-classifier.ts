@@ -5,10 +5,15 @@ import type { ResolvedConfig } from "../config/loader.js";
 // ─── ClassifyResult ──────────────────────────────────────────────────────────
 
 export interface ClassifyResult {
-  intent: "create_task" | "approve" | "status" | "cancel" | "unknown";
+  intent: "create_task" | "approve" | "status" | "cancel" | "skip" | "pause" | "resume" | "modify_stages" | "restart_stage" | "retry" | "unknown";
   confidence: number;
   extractedSlug: string | null;
   extractedContent: string | null;
+  extractedStages: string[] | null;
+  extractedFeedback: string | null;
+  stageHints: Record<string, string> | null;
+  complexity: "quick" | "pipeline" | null;
+  complexityConfidence: number;
 }
 
 // ─── Slug pattern ────────────────────────────────────────────────────────────
@@ -53,20 +58,95 @@ const KEYWORD_RULES: KeywordRule[] = [
     intent: "cancel",
     confidence: 0.95,
   },
+  {
+    pattern: /^(skip)\s+/i,
+    intent: "skip",
+    confidence: 0.95,
+  },
+  {
+    pattern: /^(pause|hold on)\s+/i,
+    intent: "pause",
+    confidence: 0.95,
+  },
+  {
+    pattern: /^(resume|continue)\s+/i,
+    intent: "resume",
+    confidence: 0.95,
+  },
+  {
+    pattern: /^(retry|redo)\s+/i,
+    intent: "retry",
+    confidence: 0.95,
+  },
+  {
+    pattern: /^(restart)\s+/i,
+    intent: "restart_stage",
+    confidence: 0.95,
+  },
+  {
+    pattern: /^(modify.stages|change.stages|drop|add.stage)\s+/i,
+    intent: "modify_stages",
+    confidence: 0.95,
+  },
 ];
+
+// ─── UNKNOWN_RESULT ──────────────────────────────────────────────────────────
+
+const UNKNOWN_RESULT: ClassifyResult = {
+  intent: "unknown",
+  confidence: 0,
+  extractedSlug: null,
+  extractedContent: null,
+  extractedStages: null,
+  extractedFeedback: null,
+  stageHints: null,
+  complexity: null,
+  complexityConfidence: 0,
+};
 
 // ─── classifyByKeywords ──────────────────────────────────────────────────────
 
 /**
  * Attempts to classify the input by matching against keyword patterns.
  * Returns a ClassifyResult if a pattern matches, or null if none match.
+ *
+ * Checks quick/full pipeline prefixes first before the keyword rules loop.
  */
 export function classifyByKeywords(input: string): ClassifyResult | null {
   const trimmed = input.trim();
 
+  // Quick prefix: "quick: <text>"
+  const quickMatch = trimmed.match(/^quick:\s*(.+)$/i);
+  if (quickMatch) {
+    return {
+      ...UNKNOWN_RESULT,
+      intent: "create_task",
+      confidence: 0.95,
+      extractedSlug: extractSlug(trimmed),
+      extractedContent: quickMatch[1].trim(),
+      complexity: "quick",
+      complexityConfidence: 1.0,
+    };
+  }
+
+  // Full pipeline prefix: "full pipeline: <text>"
+  const fullPipelineMatch = trimmed.match(/^full pipeline:\s*(.+)$/i);
+  if (fullPipelineMatch) {
+    return {
+      ...UNKNOWN_RESULT,
+      intent: "create_task",
+      confidence: 0.95,
+      extractedSlug: extractSlug(trimmed),
+      extractedContent: fullPipelineMatch[1].trim(),
+      complexity: "pipeline",
+      complexityConfidence: 1.0,
+    };
+  }
+
   for (const rule of KEYWORD_RULES) {
     if (rule.pattern.test(trimmed)) {
       return {
+        ...UNKNOWN_RESULT,
         intent: rule.intent,
         confidence: rule.confidence,
         extractedSlug: extractSlug(trimmed),
@@ -81,13 +161,6 @@ export function classifyByKeywords(input: string): ClassifyResult | null {
 // ─── classifyByLLM ───────────────────────────────────────────────────────────
 
 type Logger = { info(msg: string): void; warn(msg: string): void; error(msg: string): void };
-
-const UNKNOWN_RESULT: ClassifyResult = {
-  intent: "unknown",
-  confidence: 0,
-  extractedSlug: null,
-  extractedContent: null,
-};
 
 /**
  * Classifies the input by calling the agent runner with stage "classify".
@@ -128,10 +201,17 @@ export async function classifyByLLM(
   json = json.replace(/^```(?:json)?\s*/i, "").replace(/\s*```$/, "").trim();
 
   const classifySchema = z.object({
-    intent: z.enum(["create_task", "approve", "status", "cancel", "unknown"]).catch("unknown"),
+    intent: z
+      .enum(["create_task", "approve", "status", "cancel", "skip", "pause", "resume", "modify_stages", "restart_stage", "retry", "unknown"])
+      .catch("unknown"),
     confidence: z.number().min(0).max(1).catch(0),
     extractedSlug: z.string().nullable().catch(null),
     extractedContent: z.string().nullable().catch(null),
+    extractedStages: z.array(z.string()).nullable().catch(null),
+    extractedFeedback: z.string().nullable().catch(null),
+    stageHints: z.record(z.string(), z.string()).nullable().catch(null),
+    complexity: z.enum(["quick", "pipeline"]).nullable().catch(null),
+    complexityConfidence: z.number().min(0).max(1).catch(0),
   });
 
   try {
