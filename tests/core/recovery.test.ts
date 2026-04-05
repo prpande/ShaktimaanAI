@@ -59,12 +59,14 @@ describe("scanForRecovery", () => {
     expect(slugs).toEqual(["task-impl", "task-questions", "task-research"]);
   });
 
-  it("ignores done dirs (only looks in pending)", () => {
+  it("scans done dirs for tasks needing advancement", () => {
     const doneDir = join(TEST_DIR, STAGE_DIR_MAP["design"], "done");
     mkdirSync(join(doneDir, "done-task"), { recursive: true });
 
     const items = scanForRecovery(TEST_DIR);
-    expect(items).toHaveLength(0);
+    expect(items).toHaveLength(1);
+    expect(items[0].slug).toBe("done-task");
+    expect(items[0].location).toBe("done");
   });
 
   it("returns empty array when nothing is pending", () => {

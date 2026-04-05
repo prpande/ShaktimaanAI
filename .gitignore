@@ -6,6 +6,7 @@ dist/
 
 # Environment
 .env
+shkmn.config.json
 
 # OS
 .DS_Store
