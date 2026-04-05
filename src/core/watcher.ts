@@ -31,7 +31,6 @@ export function createWatcher(options: WatcherOptions): Watcher {
 
   async function handleControlFile(filePath: string): Promise<void> {
     const content = readFileSync(filePath, "utf-8");
-    unlinkSync(filePath);
     const cmd = JSON.parse(content) as { operation: string; slug: string; [key: string]: unknown };
 
     switch (cmd.operation) {
@@ -45,6 +44,9 @@ export function createWatcher(options: WatcherOptions): Watcher {
       case "retry": await pipeline.retry(cmd.slug, cmd.feedback as string); break;
       default: logger.warn(`[watcher] Unknown control operation: ${cmd.operation}`);
     }
+
+    // Delete only after successful processing
+    try { unlinkSync(filePath); } catch { /* may already be gone */ }
   }
 
   return {
