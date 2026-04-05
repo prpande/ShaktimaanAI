@@ -103,10 +103,19 @@ export function buildSystemPrompt(options: AgentRunOptions): string {
   sections.push(`# Identity\n\nYou are ${agentName}, the ${stage} agent in the ShaktimaanAI pipeline.`);
 
   // Pipeline context
+  const EXECUTION_STAGES = new Set(["impl", "validate", "review", "pr"]);
+  const isExecStage = EXECUTION_STAGES.has(stage);
   let pipelineCtx = `## Pipeline Context\n\nPipeline: ShaktimaanAI | Task: ${slug} | Stage: ${stage}\nStage sequence for this task: ${stageList}`;
   if (taskMeta.repo) {
-    pipelineCtx += `\nTarget repository: ${taskMeta.repo}`;
-    pipelineCtx += `\nIMPORTANT: Your working directory is NOT the repo root. Use absolute paths when reading repo files.`;
+    if (isExecStage && options.cwd !== taskMeta.repo) {
+      // Execution stages run in a git worktree — direct all file operations there
+      pipelineCtx += `\nTarget repository (original): ${taskMeta.repo}`;
+      pipelineCtx += `\nWorking directory (YOUR worktree copy): ${options.cwd}`;
+      pipelineCtx += `\nCRITICAL: You are working in a git worktree. ALL file reads, writes, and edits MUST use paths under your working directory (${options.cwd}), NOT the original repo path. The worktree is a full copy of the repo.`;
+    } else {
+      pipelineCtx += `\nTarget repository: ${taskMeta.repo}`;
+      pipelineCtx += `\nIMPORTANT: Your working directory is NOT the repo root. Use absolute paths when reading repo files.`;
+    }
     pipelineCtx += `\nIMPORTANT: On Windows, use forward slashes or escaped backslashes in paths. Do NOT use /c/Users/... paths in Node.js — use C:/Users/... instead.`;
   }
   sections.push(pipelineCtx);
