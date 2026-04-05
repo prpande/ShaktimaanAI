@@ -183,17 +183,19 @@ export async function runAgent(options: AgentRunOptions): Promise<AgentRunResult
 
     const messages = query({
       prompt: systemPrompt,
-      allowedTools,
-      disallowedTools,
-      maxTurns,
-      cwd,
-      abortController,
-      // The Agent SDK requires bypassPermissions for non-interactive (headless)
-      // agent runs. Per-stage tool restrictions are enforced via allowedTools /
-      // disallowedTools above — the SDK's own permission UI is designed for
-      // interactive CLI use and cannot be used in a pipeline context.
-      permissionMode: "bypassPermissions" as const,
-      allowDangerouslySkipPermissions: true,
+      options: {
+        allowedTools,
+        disallowedTools,
+        maxTurns,
+        cwd,
+        abortController,
+        // The Agent SDK requires bypassPermissions for non-interactive (headless)
+        // agent runs. Per-stage tool restrictions are enforced via allowedTools /
+        // disallowedTools above — the SDK's own permission UI is designed for
+        // interactive CLI use and cannot be used in a pipeline context.
+        permissionMode: "bypassPermissions" as const,
+        allowDangerouslySkipPermissions: true,
+      },
     });
 
     for await (const message of messages) {
