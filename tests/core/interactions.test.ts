@@ -5,6 +5,7 @@ import { tmpdir } from "os";
 import {
   appendInteraction,
   appendDailyLogEntry,
+  readDailyLog,
   type InteractionEntry,
   type DailyLogEntry,
 } from "../../src/core/interactions.js";
@@ -168,7 +169,7 @@ describe("appendInteraction", () => {
 // ---------------------------------------------------------------------------
 
 describe("appendDailyLogEntry", () => {
-  it("creates YYYY-MM-DD.json on first write", () => {
+  it("creates YYYY-MM-DD.jsonl on first write", () => {
     const entry: DailyLogEntry = {
       timestamp: "2026-04-05T10:00:00.000Z",
       type: "interaction",
@@ -177,11 +178,11 @@ describe("appendDailyLogEntry", () => {
 
     appendDailyLogEntry(TEST_DIR, entry);
 
-    const filePath = join(TEST_DIR, "2026-04-05.json");
+    const filePath = join(TEST_DIR, "2026-04-05.jsonl");
     expect(existsSync(filePath)).toBe(true);
   });
 
-  it("creates a valid JSON array containing the entry on first write", () => {
+  it("creates a valid JSONL file containing the entry on first write", () => {
     const entry: DailyLogEntry = {
       timestamp: "2026-04-05T10:00:00.000Z",
       type: "interaction",
@@ -191,8 +192,7 @@ describe("appendDailyLogEntry", () => {
 
     appendDailyLogEntry(TEST_DIR, entry);
 
-    const raw = readFileSync(join(TEST_DIR, "2026-04-05.json"), "utf8");
-    const parsed = JSON.parse(raw);
+    const parsed = readDailyLog(TEST_DIR, "2026-04-05");
     expect(Array.isArray(parsed)).toBe(true);
     expect(parsed).toHaveLength(1);
     expect(parsed[0].type).toBe("interaction");
@@ -216,8 +216,7 @@ describe("appendDailyLogEntry", () => {
     appendDailyLogEntry(TEST_DIR, entry1);
     appendDailyLogEntry(TEST_DIR, entry2);
 
-    const raw = readFileSync(join(TEST_DIR, "2026-04-05.json"), "utf8");
-    const parsed = JSON.parse(raw);
+    const parsed = readDailyLog(TEST_DIR, "2026-04-05");
     expect(parsed).toHaveLength(2);
     expect(parsed[0].slug).toBe("slug-a");
     expect(parsed[1].slug).toBe("slug-b");
@@ -239,11 +238,11 @@ describe("appendDailyLogEntry", () => {
     appendDailyLogEntry(TEST_DIR, entry1);
     appendDailyLogEntry(TEST_DIR, entry2);
 
-    expect(existsSync(join(TEST_DIR, "2026-04-05.json"))).toBe(true);
-    expect(existsSync(join(TEST_DIR, "2026-04-06.json"))).toBe(true);
+    expect(existsSync(join(TEST_DIR, "2026-04-05.jsonl"))).toBe(true);
+    expect(existsSync(join(TEST_DIR, "2026-04-06.jsonl"))).toBe(true);
 
-    const day1 = JSON.parse(readFileSync(join(TEST_DIR, "2026-04-05.json"), "utf8"));
-    const day2 = JSON.parse(readFileSync(join(TEST_DIR, "2026-04-06.json"), "utf8"));
+    const day1 = readDailyLog(TEST_DIR, "2026-04-05");
+    const day2 = readDailyLog(TEST_DIR, "2026-04-06");
     expect(day1).toHaveLength(1);
     expect(day2).toHaveLength(1);
   });
@@ -258,7 +257,7 @@ describe("appendDailyLogEntry", () => {
 
     appendDailyLogEntry(nestedDir, entry);
 
-    expect(existsSync(join(nestedDir, "2026-04-05.json"))).toBe(true);
+    expect(existsSync(join(nestedDir, "2026-04-05.jsonl"))).toBe(true);
   });
 
   it("preserves all extra fields on DailyLogEntry", () => {
@@ -273,7 +272,7 @@ describe("appendDailyLogEntry", () => {
 
     appendDailyLogEntry(TEST_DIR, entry);
 
-    const parsed = JSON.parse(readFileSync(join(TEST_DIR, "2026-04-05.json"), "utf8"));
+    const parsed = readDailyLog(TEST_DIR, "2026-04-05");
     expect(parsed[0].durationMs).toBe(1234);
     expect(parsed[0].exitCode).toBe(0);
     expect(parsed[0].nested).toEqual({ a: 1 });

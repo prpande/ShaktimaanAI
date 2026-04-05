@@ -1,4 +1,4 @@
-import { mkdirSync, existsSync, readFileSync, writeFileSync, appendFileSync } from "fs";
+import { mkdirSync, existsSync, readFileSync, appendFileSync } from "fs";
 import { join } from "path";
 
 // ---------------------------------------------------------------------------
@@ -67,28 +67,38 @@ export function appendInteraction(dir: string, slug: string, entry: InteractionE
 // ---------------------------------------------------------------------------
 
 /**
- * Appends an entry to {dir}/YYYY-MM-DD.json (derived from entry.timestamp).
- * Creates the file with an empty array on first write, then reads + pushes + writes.
+ * Appends an entry to {dir}/YYYY-MM-DD.jsonl (derived from entry.timestamp).
+ * Each line is a self-contained JSON object. Concurrent writes are safe because
+ * appendFileSync is atomic at the OS level for a single line with no read-modify-write.
  */
 export function appendDailyLogEntry(dir: string, entry: DailyLogEntry): void {
   mkdirSync(dir, { recursive: true });
 
   // Extract YYYY-MM-DD from the ISO timestamp
   const dateStr = entry.timestamp.slice(0, 10);
-  const filePath = join(dir, `${dateStr}.json`);
+  const filePath = join(dir, `${dateStr}.jsonl`);
 
-  let entries: DailyLogEntry[] = [];
+  appendFileSync(filePath, JSON.stringify(entry) + "\n", "utf8");
+}
 
-  if (existsSync(filePath)) {
-    try {
-      const raw = readFileSync(filePath, "utf8");
-      entries = JSON.parse(raw) as DailyLogEntry[];
-    } catch {
-      // If the file is corrupt, start fresh
-      entries = [];
-    }
+// ---------------------------------------------------------------------------
+// readDailyLog
+// ---------------------------------------------------------------------------
+
+/**
+ * Reads {dir}/{date}.jsonl and parses each non-empty line into a DailyLogEntry.
+ * Returns an empty array if the file does not exist.
+ */
+export function readDailyLog(dir: string, date: string): DailyLogEntry[] {
+  const filePath = join(dir, `${date}.jsonl`);
+
+  if (!existsSync(filePath)) {
+    return [];
   }
 
-  entries.push(entry);
-  writeFileSync(filePath, JSON.stringify(entries, null, 2), "utf8");
+  const raw = readFileSync(filePath, "utf8");
+  return raw
+    .split("\n")
+    .filter((line) => line.trim().length > 0)
+    .map((line) => JSON.parse(line) as DailyLogEntry);
 }
