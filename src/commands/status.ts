@@ -1,7 +1,29 @@
 import type { Command } from "commander";
+import { readFileSync, existsSync } from "node:fs";
+import { join } from "node:path";
 import { resolveConfigPath } from "../config/resolve-path.js";
 import { loadConfig } from "../config/loader.js";
 import { listActiveSlugs } from "../core/slug-resolver.js";
+
+function formatElapsed(startedAt: string): string {
+  const ms = Date.now() - new Date(startedAt).getTime();
+  const minutes = Math.floor(ms / 60_000);
+  if (minutes < 60) return `${minutes}m`;
+  const hours = Math.floor(minutes / 60);
+  return `${hours}h${minutes % 60}m`;
+}
+
+function readStartedAt(runStatePath: string): string | null {
+  try {
+    if (!existsSync(runStatePath)) return null;
+    const raw = readFileSync(runStatePath, "utf-8");
+    const parsed = JSON.parse(raw) as Record<string, unknown>;
+    if (typeof parsed.startedAt === "string") return parsed.startedAt;
+    return null;
+  } catch {
+    return null;
+  }
+}
 
 export function registerStatusCommand(program: Command): void {
   program
@@ -22,19 +44,23 @@ export function registerStatusCommand(program: Command): void {
       const held = tasks.filter((t) => t.status === "held");
 
       if (active.length > 0) {
-        console.log("ACTIVE");
+        console.log("Active:");
         for (const task of active) {
-          const slug = task.slug.padEnd(60);
-          console.log(`  ${slug}  ${task.stage.padEnd(12)}  ${task.dir}`);
+          const runStatePath = join(config.pipeline.runtimeDir, task.dir, task.slug, "run-state.json");
+          const startedAt = readStartedAt(runStatePath);
+          const duration = startedAt ? ` (${formatElapsed(startedAt)})` : "";
+          console.log(`  ${task.slug.padEnd(40)}  → ${task.stage.padEnd(12)}${duration}`);
         }
       }
 
       if (held.length > 0) {
         if (active.length > 0) console.log("");
-        console.log("HELD (awaiting approval)");
+        console.log("Held (awaiting approval):");
         for (const task of held) {
-          const slug = task.slug.padEnd(60);
-          console.log(`  ${slug}  ${task.stage.padEnd(12)}  ${task.dir}`);
+          const runStatePath = join(config.pipeline.runtimeDir, "12-hold", task.slug, "run-state.json");
+          const startedAt = readStartedAt(runStatePath);
+          const duration = startedAt ? ` (held ${formatElapsed(startedAt)})` : "";
+          console.log(`  ${task.slug.padEnd(40)}  → ${task.stage.padEnd(12)}${duration}`);
         }
       }
     });
