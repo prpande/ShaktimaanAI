@@ -17,6 +17,7 @@ export interface AgentRegistry {
   getActiveValidateCount(): number;
   canStartAgent(stage: string): boolean;
   abortAll(): void;
+  abortBySlug(slug: string): boolean;
 }
 
 export function createAgentRegistry(maxConcurrentTotal: number, maxConcurrentValidate: number): AgentRegistry {
@@ -69,6 +70,17 @@ export function createAgentRegistry(maxConcurrentTotal: number, maxConcurrentVal
         entry.abortController.abort();
       }
       agents.clear();
+    },
+
+    abortBySlug(slug: string): boolean {
+      for (const [id, entry] of agents.entries()) {
+        if (entry.slug === slug) {
+          entry.abortController.abort();
+          agents.delete(id);
+          return true;
+        }
+      }
+      return false;
     },
   };
 }

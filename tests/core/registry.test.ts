@@ -210,3 +210,35 @@ describe("abortAll", () => {
     expect(typeof id).toBe("string");
   });
 });
+
+// ─── abortBySlug ─────────────────────────────────────────────────────────────
+
+describe("abortBySlug", () => {
+  it("aborts the agent matching the slug and removes it", () => {
+    const registry = createAgentRegistry(5, 2);
+    const ac = new AbortController();
+    registry.register("target-slug", "impl", "Karigar", ac);
+    registry.register("other-slug", "research", "Chitragupta", new AbortController());
+    const aborted = registry.abortBySlug("target-slug");
+    expect(aborted).toBe(true);
+    expect(ac.signal.aborted).toBe(true);
+    expect(registry.getActiveCount()).toBe(1);
+  });
+
+  it("returns false if slug not found", () => {
+    const registry = createAgentRegistry(5, 2);
+    const aborted = registry.abortBySlug("nonexistent");
+    expect(aborted).toBe(false);
+  });
+
+  it("does not abort other agents", () => {
+    const registry = createAgentRegistry(5, 2);
+    const ac1 = new AbortController();
+    const ac2 = new AbortController();
+    registry.register("slug-1", "impl", "Karigar", ac1);
+    registry.register("slug-2", "research", "Chitragupta", ac2);
+    registry.abortBySlug("slug-1");
+    expect(ac1.signal.aborted).toBe(true);
+    expect(ac2.signal.aborted).toBe(false);
+  });
+});
