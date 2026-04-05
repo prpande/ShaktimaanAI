@@ -118,8 +118,9 @@ export function readAllDailyLogs(
 ): DailyLogEntry[] {
   if (!existsSync(dir)) return [];
 
+  const DATE_JSONL_RE = /^\d{4}-\d{2}-\d{2}\.jsonl$/;
   const files = readdirSync(dir)
-    .filter((f) => f.endsWith(".jsonl"))
+    .filter((f) => DATE_JSONL_RE.test(f))
     .sort(); // alphabetical = chronological for YYYY-MM-DD.jsonl
 
   const entries: DailyLogEntry[] = [];

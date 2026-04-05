@@ -241,7 +241,7 @@ export function formatStatsTable(stats: StageStats[], summary: PipelineSummary):
     lines.push(
       s.stage.padEnd(COL.stage) +
       String(s.count).padStart(COL.runs) +
-      formatDuration(Math.round(s.avgDurationSeconds)).padStart(COL.time) +
+      formatDuration(s.avgDurationSeconds).padStart(COL.time) +
       s.avgTurns.toFixed(1).padStart(COL.turns) +
       formatCost(s.avgCostUsd).padStart(COL.avgCost) +
       formatCost(s.totalCostUsd).padStart(COL.totalCost),
@@ -254,7 +254,7 @@ export function formatStatsTable(stats: StageStats[], summary: PipelineSummary):
   lines.push(
     "TOTAL".padEnd(COL.stage) +
     String(summary.totalRuns).padStart(COL.runs) +
-    formatDuration(Math.round(summary.avgTotalDurationSeconds)).padStart(COL.time) +
+    formatDuration(summary.avgTotalDurationSeconds).padStart(COL.time) +
     summary.avgTotalTurns.toFixed(1).padStart(COL.turns) +
     formatCost(summary.avgTotalCostUsd).padStart(COL.avgCost) +
     formatCost(stats.reduce((sum, s) => sum + s.totalCostUsd, 0)).padStart(COL.totalCost),

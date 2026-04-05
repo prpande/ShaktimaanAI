@@ -218,6 +218,12 @@ describe("formatDuration", () => {
   it("formats exact hours", () => {
     expect(formatDuration(3600)).toBe("1h 0m 0s");
   });
+
+  it("rounds fractional seconds", () => {
+    expect(formatDuration(83.7)).toBe("1m 24s");
+    expect(formatDuration(0.4)).toBe("0s");
+    expect(formatDuration(59.5)).toBe("1m 0s");
+  });
 });
 
 // ─── formatStatsTable ───────────────────────────────────────────────────────
@@ -336,6 +342,7 @@ describe("executeStats", () => {
   });
 
   afterEach(() => {
+    vi.restoreAllMocks();
     rmSync(TEST_DIR, { recursive: true, force: true });
   });
 
@@ -345,7 +352,7 @@ describe("executeStats", () => {
     executeStats({ runtimeDir: TEST_DIR, json: false });
 
     expect(consoleSpy).toHaveBeenCalledWith("No pipeline data found.");
-    consoleSpy.mockRestore();
+
   });
 
   it("prints 'No completed stage data found.' when only agent_started entries exist", () => {
@@ -358,7 +365,7 @@ describe("executeStats", () => {
     executeStats({ runtimeDir: TEST_DIR, json: false });
 
     expect(consoleSpy).toHaveBeenCalledWith("No completed stage data found.");
-    consoleSpy.mockRestore();
+
   });
 
   it("prints 'No data found for task: ...' when --task slug matches nothing", () => {
@@ -371,7 +378,7 @@ describe("executeStats", () => {
     executeStats({ runtimeDir: TEST_DIR, json: false, task: "nonexistent-slug" });
 
     expect(consoleSpy).toHaveBeenCalledWith("No data found for task: nonexistent-slug");
-    consoleSpy.mockRestore();
+
   });
 
   it("outputs formatted table for valid data", () => {
@@ -388,7 +395,7 @@ describe("executeStats", () => {
     expect(output).toContain("questions");
     expect(output).toContain("research");
     expect(output).toContain("TOTAL");
-    consoleSpy.mockRestore();
+
   });
 
   it("outputs valid JSON when --json is set", () => {
@@ -405,7 +412,7 @@ describe("executeStats", () => {
     expect(parsed.stages).toHaveLength(1);
     expect(parsed.stages[0].stage).toBe("questions");
     expect(parsed.summary.totalRuns).toBe(1);
-    consoleSpy.mockRestore();
+
   });
 
   it("filters by --task slug", () => {
@@ -421,7 +428,7 @@ describe("executeStats", () => {
     const parsed = JSON.parse(consoleSpy.mock.calls[0][0]);
     expect(parsed.stages[0].count).toBe(1);
     expect(parsed.stages[0].avgCostUsd).toBeCloseTo(0.05);
-    consoleSpy.mockRestore();
+
   });
 
   it("filters by --from and --to date range", () => {
@@ -440,7 +447,7 @@ describe("executeStats", () => {
     const parsed = JSON.parse(consoleSpy.mock.calls[0][0]);
     expect(parsed.stages).toHaveLength(1);
     expect(parsed.stages[0].stage).toBe("research");
-    consoleSpy.mockRestore();
+
   });
 
   it("handles backward compat with tokensUsed field name", () => {
@@ -454,6 +461,6 @@ describe("executeStats", () => {
 
     const parsed = JSON.parse(consoleSpy.mock.calls[0][0]);
     expect(parsed.stages[0].avgCostUsd).toBeCloseTo(0.05);
-    consoleSpy.mockRestore();
+
   });
 });
