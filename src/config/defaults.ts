@@ -28,6 +28,7 @@ export const DEFAULT_STAGE_TOOLS: Record<string, { allowed: string[]; disallowed
   review:     { allowed: ["Read","Glob","Grep"], disallowed: ["Write","Edit","Bash"] },
   pr:         { allowed: ["Bash"], disallowed: ["Write","Edit","Read","Glob","Grep"] },
   classify:   { allowed: [], disallowed: ["Read","Write","Edit","Bash","Glob","Grep"] },
+  quick:      { allowed: ["Read","Write","Edit","Bash","Glob","Grep","WebSearch","WebFetch"], disallowed: [] },
 };
 
 export const STAGE_CONTEXT_RULES: Record<string, {
@@ -45,6 +46,7 @@ export const STAGE_CONTEXT_RULES: Record<string, {
   review:    { includeTaskContent: true,  previousOutputLabel: "Validation Report",        includeRepoContext: true },
   pr:        { includeTaskContent: true,  previousOutputLabel: "Review Output",            includeRepoContext: false },
   classify:  { includeTaskContent: true,  previousOutputLabel: null,                      includeRepoContext: false },
+  quick:     { includeTaskContent: true,  previousOutputLabel: null,                      includeRepoContext: true },
 };
 
 export interface ShkmnConfig {
@@ -156,6 +158,7 @@ export const DEFAULT_CONFIG: ShkmnConfig = {
       validate: 10,
       review: 30,
       classify: 5,
+      quick: 30,
     },
     timeoutsMinutes: {
       questions: 15,
@@ -167,6 +170,7 @@ export const DEFAULT_CONFIG: ShkmnConfig = {
       validate: 15,
       review: 45,
       classify: 2,
+      quick: 30,
     },
     heartbeatTimeoutMinutes: 10,
     retryCount: 1,

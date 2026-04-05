@@ -714,17 +714,43 @@ export function createPipeline(options: PipelineOptions): Pipeline {
 
     async startQuickRun(taskFilePath: string, taskContent: string): Promise<void> {
       const slug = basename(taskFilePath, ".task");
-      const taskMeta = parseTaskFile(taskContent);
-      const state = createRunState(slug, taskMeta, config);
+      const taskLogger = createTaskLogger(join(runtimeDir, "logs"), slug);
 
-      const firstStage = state.stages[0];
-      state.currentStage = firstStage;
+      // Determine destination directory based on requireReview config
+      const destTopDir = config.quickTask.requireReview ? "12-hold" : "10-complete";
+      const destDir = join(runtimeDir, destTopDir, slug);
 
-      const stageDir = STAGE_DIR_MAP[firstStage];
-      const taskDir = initTaskDir(runtimeDir, slug, stageDir, taskFilePath);
-      writeRunState(taskDir, state);
+      // Create dest dir with artifacts subdir
+      mkdirSync(join(destDir, "artifacts"), { recursive: true });
 
+      // Copy task file into dest dir
+      copyFileSync(taskFilePath, join(destDir, "task.task"));
+
+      // Delete original inbox file
       unlinkSync(taskFilePath);
+
+      // Output path: artifacts/quick-output.md
+      const outputPath = join(destDir, "artifacts", "quick-output.md");
+
+      // Build minimal run state for quick task
+      const now = new Date().toISOString();
+      const state: import("./types.js").RunState = {
+        slug,
+        taskFile: "task.task",
+        stages: ["quick"],
+        reviewAfter: "",
+        currentStage: "quick",
+        status: "running",
+        startedAt: now,
+        updatedAt: now,
+        completedStages: [],
+        validateRetryCount: 0,
+        reviewRetryCount: 0,
+        reviewIssues: [],
+        stageHints: {},
+        retryAttempt: 0,
+      };
+      writeRunState(destDir, state);
 
       activeRuns.set(slug, state);
       emitNotify({
@@ -732,10 +758,86 @@ export function createPipeline(options: PipelineOptions): Pipeline {
         slug,
         title: slug,
         source: "quick",
-        stages: state.stages,
+        stages: ["quick"],
         timestamp: new Date().toISOString(),
       });
-      await processStage(slug, taskDir);
+
+      // Register agent
+      const abortController = new AbortController();
+      const agentName = config.agents.names["quick"] ?? "quick";
+      const agentId = registry.register(slug, "quick", agentName, abortController);
+
+      const runOptions: AgentRunOptions = {
+        stage: "quick",
+        slug,
+        taskContent,
+        previousOutput: "",
+        outputPath,
+        cwd: destDir,
+        config,
+        abortController,
+        logger: taskLogger,
+      };
+
+      let result;
+      try {
+        result = await runner(runOptions);
+      } catch (err) {
+        registry.unregister(agentId);
+        state.status = "failed";
+        state.error = err instanceof Error ? err.message : String(err);
+        writeRunState(destDir, state);
+        // Move to 11-failed from wherever we put it
+        try {
+          moveTaskDir(runtimeDir, slug, destTopDir, "11-failed");
+        } catch (moveErr) {
+          logger.error(
+            `[pipeline] Failed to move quick task "${slug}" to 11-failed: ` +
+            `${moveErr instanceof Error ? moveErr.message : String(moveErr)}`,
+          );
+        }
+        emitNotify({ type: "task_failed", slug, stage: "quick", error: state.error, timestamp: new Date().toISOString() });
+        activeRuns.delete(slug);
+        return;
+      }
+
+      registry.unregister(agentId);
+
+      if (!result.success) {
+        state.status = "failed";
+        state.error = result.error ?? "Quick agent failed";
+        writeRunState(destDir, state);
+        try {
+          moveTaskDir(runtimeDir, slug, destTopDir, "11-failed");
+        } catch (moveErr) {
+          logger.error(
+            `[pipeline] Failed to move quick task "${slug}" to 11-failed: ` +
+            `${moveErr instanceof Error ? moveErr.message : String(moveErr)}`,
+          );
+        }
+        emitNotify({ type: "task_failed", slug, stage: "quick", error: state.error, timestamp: new Date().toISOString() });
+        activeRuns.delete(slug);
+        return;
+      }
+
+      // Write output if agent didn't
+      if (!existsSync(outputPath)) {
+        mkdirSync(dirname(outputPath), { recursive: true });
+        writeFileSync(outputPath, result.output, "utf-8");
+      }
+
+      // Update state based on requireReview
+      if (config.quickTask.requireReview) {
+        state.status = "hold";
+        writeRunState(destDir, state);
+        activeRuns.set(slug, readRunState(destDir));
+        emitNotify({ type: "task_held", slug, stage: "quick", artifactUrl: "", timestamp: new Date().toISOString() });
+      } else {
+        state.status = "complete";
+        writeRunState(destDir, state);
+        activeRuns.set(slug, readRunState(destDir));
+        emitNotify({ type: "task_completed", slug, timestamp: new Date().toISOString() });
+      }
     },
 
     // ─── Notifier ────────────────────────────────────────────────────────────

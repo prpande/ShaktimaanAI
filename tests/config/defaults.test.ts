@@ -61,13 +61,13 @@ describe("DEFAULT_CONFIG", () => {
 });
 
 describe("DEFAULT_STAGE_TOOLS", () => {
-  const ALL_STAGES = ["questions", "research", "design", "structure", "plan", "impl", "validate", "review", "pr", "classify"];
+  const ALL_STAGES = ["questions", "research", "design", "structure", "plan", "impl", "validate", "review", "pr", "classify", "quick"];
 
-  it("has entries for all 10 stages", () => {
+  it("has entries for all 11 stages", () => {
     for (const stage of ALL_STAGES) {
       expect(DEFAULT_STAGE_TOOLS).toHaveProperty(stage);
     }
-    expect(Object.keys(DEFAULT_STAGE_TOOLS)).toHaveLength(10);
+    expect(Object.keys(DEFAULT_STAGE_TOOLS)).toHaveLength(11);
   });
 
   it("impl has full write access", () => {
@@ -97,13 +97,13 @@ describe("DEFAULT_STAGE_TOOLS", () => {
 });
 
 describe("STAGE_CONTEXT_RULES", () => {
-  const ALL_STAGES = ["questions", "research", "design", "structure", "plan", "impl", "validate", "review", "pr", "classify"];
+  const ALL_STAGES = ["questions", "research", "design", "structure", "plan", "impl", "validate", "review", "pr", "classify", "quick"];
 
-  it("has entries for all 10 stages", () => {
+  it("has entries for all 11 stages", () => {
     for (const stage of ALL_STAGES) {
       expect(STAGE_CONTEXT_RULES).toHaveProperty(stage);
     }
-    expect(Object.keys(STAGE_CONTEXT_RULES)).toHaveLength(10);
+    expect(Object.keys(STAGE_CONTEXT_RULES)).toHaveLength(11);
   });
 
   it("research does NOT include task content (QRSPI blind)", () => {
