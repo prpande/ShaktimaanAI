@@ -10,6 +10,13 @@ import { registerLogsCommand } from "./commands/logs.js";
 import { registerHistoryCommand } from "./commands/history.js";
 import { getConfigValue, setConfigValue } from "./commands/config.js";
 import { resolveConfigPath } from "./config/resolve-path.js";
+import { registerCancelCommand } from "./commands/cancel.js";
+import { registerSkipCommand } from "./commands/skip.js";
+import { registerPauseCommand } from "./commands/pause.js";
+import { registerResumeCommand } from "./commands/resume.js";
+import { registerModifyStagesCommand } from "./commands/modify-stages.js";
+import { registerRestartStageCommand } from "./commands/restart-stage.js";
+import { registerRetryCommand } from "./commands/retry.js";
 
 const program = new Command();
 
@@ -66,5 +73,12 @@ registerApproveCommand(program);
 registerStatusCommand(program);
 registerLogsCommand(program);
 registerHistoryCommand(program);
+registerCancelCommand(program);
+registerSkipCommand(program);
+registerPauseCommand(program);
+registerResumeCommand(program);
+registerModifyStagesCommand(program);
+registerRestartStageCommand(program);
+registerRetryCommand(program);
 
 program.parse();
