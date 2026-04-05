@@ -250,7 +250,7 @@ describe("startQuickRun", () => {
         mkdirSync(dirname(options.outputPath), { recursive: true });
         writeFileSync(options.outputPath, "output", "utf-8");
       }
-      return { success: true, output: "output", costUsd: 0, turns: 1, durationMs: 10 };
+      return { success: true, output: "output", costUsd: 0, turns: 1, inputTokens: 0, outputTokens: 0, durationMs: 10 };
     };
 
     const pipeline = createPipeline({
@@ -275,7 +275,7 @@ describe("startQuickRun", () => {
 
     // Runner that does NOT write outputPath
     const runner = async (_options: AgentRunOptions): Promise<AgentRunResult> => {
-      return { success: true, output: "runner produced output", costUsd: 0, turns: 1, durationMs: 10 };
+      return { success: true, output: "runner produced output", costUsd: 0, turns: 1, inputTokens: 0, outputTokens: 0, durationMs: 10 };
     };
 
     const pipeline = createPipeline({
