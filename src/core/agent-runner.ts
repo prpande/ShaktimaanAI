@@ -247,6 +247,7 @@ export async function runAgent(options: AgentRunOptions): Promise<AgentRunResult
           logger.warn(
             `[agent-runner] Stage "${stage}" hit max turns (${turns}) — using partial output (${output.length} chars)`,
           );
+          break; // Stop reading stream after max turns to avoid wasted tokens
         } else {
           // Hard error subtype (abort, timeout, etc.)
           const msg = message as Record<string, unknown>;
