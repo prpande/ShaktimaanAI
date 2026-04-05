@@ -68,6 +68,14 @@ export interface ShkmnConfig {
     channel: string;
     channelId: string;
     pollIntervalSeconds: number;
+    notifyLevel: "minimal" | "bookends" | "stages";
+    allowDMs: boolean;
+    requirePrefix: boolean;
+    prefix: string;
+  };
+  quickTask: {
+    requireReview: boolean;
+    complexityThreshold: number;
   };
   agents: {
     names: Record<string, string>;
@@ -120,6 +128,14 @@ export const DEFAULT_CONFIG: ShkmnConfig = {
     channel: "#agent-pipeline",
     channelId: "",
     pollIntervalSeconds: 30,
+    notifyLevel: "bookends",
+    allowDMs: false,
+    requirePrefix: true,
+    prefix: "shkmn",
+  },
+  quickTask: {
+    requireReview: true,
+    complexityThreshold: 0.8,
   },
   agents: {
     names: { ...DEFAULT_AGENT_NAMES },

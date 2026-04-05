@@ -47,6 +47,63 @@ describe("config review section", () => {
   });
 });
 
+describe("config slack notify/prefix/DMs additions", () => {
+  it("defaults slack.notifyLevel to 'bookends'", () => {
+    const parsed = configSchema.parse({ pipeline: { runtimeDir: "/tmp/test" } });
+    const resolved = resolveConfig(parsed);
+    expect(resolved.slack.notifyLevel).toBe("bookends");
+  });
+
+  it("defaults slack.allowDMs to false", () => {
+    const parsed = configSchema.parse({ pipeline: { runtimeDir: "/tmp/test" } });
+    const resolved = resolveConfig(parsed);
+    expect(resolved.slack.allowDMs).toBe(false);
+  });
+
+  it("defaults slack.requirePrefix to true", () => {
+    const parsed = configSchema.parse({ pipeline: { runtimeDir: "/tmp/test" } });
+    const resolved = resolveConfig(parsed);
+    expect(resolved.slack.requirePrefix).toBe(true);
+  });
+
+  it("defaults slack.prefix to 'shkmn'", () => {
+    const parsed = configSchema.parse({ pipeline: { runtimeDir: "/tmp/test" } });
+    const resolved = resolveConfig(parsed);
+    expect(resolved.slack.prefix).toBe("shkmn");
+  });
+
+  it("accepts custom slack notify config", () => {
+    const parsed = configSchema.parse({
+      pipeline: { runtimeDir: "/tmp/test" },
+      slack: {
+        notifyLevel: "stages",
+        allowDMs: true,
+        requirePrefix: false,
+        prefix: "bot",
+      },
+    });
+    const resolved = resolveConfig(parsed);
+    expect(resolved.slack.notifyLevel).toBe("stages");
+    expect(resolved.slack.allowDMs).toBe(true);
+    expect(resolved.slack.requirePrefix).toBe(false);
+    expect(resolved.slack.prefix).toBe("bot");
+  });
+});
+
+describe("config quickTask section", () => {
+  it("defaults quickTask.requireReview to true", () => {
+    const parsed = configSchema.parse({ pipeline: { runtimeDir: "/tmp/test" } });
+    const resolved = resolveConfig(parsed);
+    expect(resolved.quickTask.requireReview).toBe(true);
+  });
+
+  it("defaults quickTask.complexityThreshold to 0.8", () => {
+    const parsed = configSchema.parse({ pipeline: { runtimeDir: "/tmp/test" } });
+    const resolved = resolveConfig(parsed);
+    expect(resolved.quickTask.complexityThreshold).toBe(0.8);
+  });
+});
+
 describe("config agents section additions", () => {
   it("defaults maxValidateRetries=2 and maxReviewRecurrence=3", () => {
     const parsed = configSchema.parse({ pipeline: { runtimeDir: "/tmp/test" } });

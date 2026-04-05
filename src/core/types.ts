@@ -43,6 +43,11 @@ export interface RunState {
   validateRetryCount: number;
   reviewRetryCount: number;
   reviewIssues: ReviewIssue[];
+
+  // Spec 3 fields
+  stageHints: Record<string, string[]>;
+  retryAttempt: number;
+  pausedAtStage?: string;
 }
 
 export interface AgentRunOptions {

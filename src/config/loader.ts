@@ -66,6 +66,10 @@ export function resolveConfig(parsed: ConfigParsed): ResolvedConfig {
       channel: parsed.slack?.channel ?? d.slack.channel,
       channelId: parsed.slack?.channelId ?? d.slack.channelId,
       pollIntervalSeconds: parsed.slack?.pollIntervalSeconds ?? d.slack.pollIntervalSeconds,
+      notifyLevel: parsed.slack?.notifyLevel ?? d.slack.notifyLevel,
+      allowDMs: parsed.slack?.allowDMs ?? d.slack.allowDMs,
+      requirePrefix: parsed.slack?.requirePrefix ?? d.slack.requirePrefix,
+      prefix: parsed.slack?.prefix ?? d.slack.prefix,
     },
     agents: {
       names: { ...DEFAULT_AGENT_NAMES, ...parsed.agents?.names },
@@ -94,6 +98,10 @@ export function resolveConfig(parsed: ConfigParsed): ResolvedConfig {
     },
     review: {
       enforceSuggestions: parsed.review?.enforceSuggestions ?? d.review.enforceSuggestions,
+    },
+    quickTask: {
+      requireReview: parsed.quickTask?.requireReview ?? d.quickTask.requireReview,
+      complexityThreshold: parsed.quickTask?.complexityThreshold ?? d.quickTask.complexityThreshold,
     },
   };
 }

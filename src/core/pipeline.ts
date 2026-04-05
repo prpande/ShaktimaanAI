@@ -55,6 +55,8 @@ export function createRunState(
     validateRetryCount: 0,
     reviewRetryCount: 0,
     reviewIssues: [],
+    stageHints: {},
+    retryAttempt: 0,
   };
 }
 
