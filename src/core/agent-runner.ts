@@ -224,8 +224,19 @@ export async function runAgent(options: AgentRunOptions): Promise<AgentRunResult
           output = typeof msg.result === "string" ? msg.result : "";
           costUsd = typeof msg.total_cost_usd === "number" ? msg.total_cost_usd : 0;
           turns = typeof msg.num_turns === "number" ? msg.num_turns : 0;
+        } else if (message.subtype === "error_max_turns") {
+          // Agent hit turn limit but may have produced useful partial output.
+          // Capture the output and cost, mark as success so the pipeline can
+          // decide whether the partial output is sufficient for the stage.
+          const msg = message as Record<string, unknown>;
+          output = typeof msg.result === "string" ? msg.result : "";
+          costUsd = typeof msg.total_cost_usd === "number" ? msg.total_cost_usd : 0;
+          turns = typeof msg.num_turns === "number" ? msg.num_turns : 0;
+          logger.warn(
+            `[agent-runner] Stage "${stage}" hit max turns (${turns}) — using partial output (${output.length} chars)`,
+          );
         } else {
-          // error subtype
+          // Hard error subtype (abort, timeout, etc.)
           const msg = message as Record<string, unknown>;
           const errors = Array.isArray(msg.errors) ? (msg.errors as string[]) : [];
           return {
