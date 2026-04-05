@@ -103,7 +103,13 @@ export function buildSystemPrompt(options: AgentRunOptions): string {
   sections.push(`# Identity\n\nYou are ${agentName}, the ${stage} agent in the ShaktimaanAI pipeline.`);
 
   // Pipeline context
-  sections.push(`## Pipeline Context\n\nPipeline: ShaktimaanAI | Task: ${slug} | Stage: ${stage}\nStage sequence for this task: ${stageList}`);
+  let pipelineCtx = `## Pipeline Context\n\nPipeline: ShaktimaanAI | Task: ${slug} | Stage: ${stage}\nStage sequence for this task: ${stageList}`;
+  if (taskMeta.repo) {
+    pipelineCtx += `\nTarget repository: ${taskMeta.repo}`;
+    pipelineCtx += `\nIMPORTANT: Your working directory is NOT the repo root. Use absolute paths when reading repo files.`;
+    pipelineCtx += `\nIMPORTANT: On Windows, use forward slashes or escaped backslashes in paths. Do NOT use /c/Users/... paths in Node.js — use C:/Users/... instead.`;
+  }
+  sections.push(pipelineCtx);
 
   // Task content (conditional)
   if (rules.includeTaskContent) {
