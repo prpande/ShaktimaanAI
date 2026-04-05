@@ -72,7 +72,17 @@ export function registerStartCommand(program: Command): void {
       pipeline.addNotifier(createConsoleNotifier());
 
       if (config.slack.enabled && config.slack.channelId) {
-        logger.info("[start] Slack notifications enabled");
+        const { createSlackNotifier } = await import("../surfaces/slack-notifier.js");
+        pipeline.addNotifier(createSlackNotifier({
+          channelId: config.slack.channelId,
+          notifyLevel: config.slack.notifyLevel,
+          sendMessage: async (params) => {
+            // Placeholder — actual Slack MCP wiring is a follow-up
+            logger.info(`[slack] ${params.channel}: ${params.text.slice(0, 120)}...`);
+            return { ts: String(Date.now() / 1000) };
+          },
+        }));
+        logger.info("[start] SlackNotifier registered");
       }
 
       // 7. Create and start watcher
