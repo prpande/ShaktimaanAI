@@ -673,6 +673,7 @@ export function createPipeline(options: PipelineOptions): Pipeline {
         title: slug,
         source: "cli",
         stages: state.stages,
+        slackThread: taskMeta.slackThread || undefined,
         timestamp: new Date().toISOString(),
       });
       await processStage(slug, taskDir);
