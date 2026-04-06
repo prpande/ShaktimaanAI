@@ -70,16 +70,20 @@ describe("DEFAULT_CONFIG", () => {
     expect(DEFAULT_CONFIG.agents.models.impl).toBe("opus");
     expect(DEFAULT_CONFIG.agents.models.questions).toBe("sonnet");
   });
+
+  it("has slack.dmUserIds defaulting to empty array", () => {
+    expect(DEFAULT_CONFIG.slack.dmUserIds).toEqual([]);
+  });
 });
 
 describe("DEFAULT_STAGE_TOOLS", () => {
-  const ALL_STAGES = ["questions", "research", "design", "structure", "plan", "impl", "validate", "review", "pr", "classify", "quick"];
+  const ALL_STAGES = ["questions", "research", "design", "structure", "plan", "impl", "validate", "review", "pr", "classify", "quick", "slack-io"];
 
-  it("has entries for all 11 stages", () => {
+  it("has entries for all 12 stages", () => {
     for (const stage of ALL_STAGES) {
       expect(DEFAULT_STAGE_TOOLS).toHaveProperty(stage);
     }
-    expect(Object.keys(DEFAULT_STAGE_TOOLS)).toHaveLength(11);
+    expect(Object.keys(DEFAULT_STAGE_TOOLS)).toHaveLength(12);
   });
 
   it("impl has full write access", () => {
@@ -106,16 +110,24 @@ describe("DEFAULT_STAGE_TOOLS", () => {
     expect(disallowed).toContain("Edit");
     expect(disallowed).toContain("Bash");
   });
+
+  it("slack-io has MCP Slack tools and Read/Write", () => {
+    const { allowed, disallowed } = DEFAULT_STAGE_TOOLS["slack-io"];
+    expect(allowed).toContain("mcp__claude_ai_Slack__*");
+    expect(allowed).toContain("Read");
+    expect(allowed).toContain("Write");
+    expect(disallowed).toContain("Bash");
+  });
 });
 
 describe("STAGE_CONTEXT_RULES", () => {
-  const ALL_STAGES = ["questions", "research", "design", "structure", "plan", "impl", "validate", "review", "pr", "classify", "quick"];
+  const ALL_STAGES = ["questions", "research", "design", "structure", "plan", "impl", "validate", "review", "pr", "classify", "quick", "slack-io"];
 
-  it("has entries for all 11 stages", () => {
+  it("has entries for all 12 stages", () => {
     for (const stage of ALL_STAGES) {
       expect(STAGE_CONTEXT_RULES).toHaveProperty(stage);
     }
-    expect(Object.keys(STAGE_CONTEXT_RULES)).toHaveLength(11);
+    expect(Object.keys(STAGE_CONTEXT_RULES)).toHaveLength(12);
   });
 
   it("research does NOT include task content (QRSPI blind)", () => {
@@ -150,5 +162,11 @@ describe("STAGE_CONTEXT_RULES", () => {
 
   it("pr excludes repo context", () => {
     expect(STAGE_CONTEXT_RULES.pr.includeRepoContext).toBe(false);
+  });
+
+  it("slack-io includes task content but no repo context", () => {
+    expect(STAGE_CONTEXT_RULES["slack-io"].includeTaskContent).toBe(true);
+    expect(STAGE_CONTEXT_RULES["slack-io"].includeRepoContext).toBe(false);
+    expect(STAGE_CONTEXT_RULES["slack-io"].previousOutputLabel).toBeNull();
   });
 });
