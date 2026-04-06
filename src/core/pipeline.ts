@@ -187,6 +187,7 @@ export function createPipeline(options: PipelineOptions): Pipeline {
   const runtimeDir = config.pipeline.runtimeDir;
   const interactionsDir = join(runtimeDir, "interactions");
   const activeRuns = new Map<string, RunState>();
+  const deferredTasks: { slug: string; taskDir: string }[] = [];
 
   const EXECUTION_STAGES = new Set(["impl", "validate", "review", "pr"]);
 
@@ -196,6 +197,33 @@ export function createPipeline(options: PipelineOptions): Pipeline {
   function emitNotify(event: NotifyEvent): void {
     for (const n of notifiers) {
       n.notify(event).catch(() => { /* swallow errors */ });
+    }
+  }
+
+  // ─── retryDeferredTasks: called after an agent finishes to unblock waiting tasks
+  function retryDeferredTasks(): void {
+    if (deferredTasks.length === 0) return;
+
+    // Snapshot and clear — processStage will re-add if still at capacity
+    const toRetry = deferredTasks.splice(0);
+    for (const { slug, taskDir } of toRetry) {
+      // Verify the task is still in pending/ (not cancelled, failed, or already running)
+      if (!existsSync(taskDir)) continue;
+      try {
+        const state = readRunState(taskDir);
+        if (state.status !== "running") continue;
+      } catch {
+        continue;
+      }
+      if (activeRuns.has(slug)) continue;
+
+      logger.info(`[pipeline] Retrying deferred task "${slug}"`);
+      // Fire-and-forget — processStage will re-defer if still at capacity
+      processStage(slug, taskDir).catch((err: unknown) => {
+        logger.error(
+          `[pipeline] Failed to retry deferred task "${slug}": ${err instanceof Error ? err.message : String(err)}`,
+        );
+      });
     }
   }
 
@@ -302,7 +330,10 @@ export function createPipeline(options: PipelineOptions): Pipeline {
       }
 
       if (!registry.canStartAgent(stage)) {
-        // Task stays in pending/ — crash recovery will resume it on next startup.
+        // Track deferred task so we can retry when a slot frees up
+        if (!deferredTasks.some(d => d.slug === slug)) {
+          deferredTasks.push({ slug, taskDir: currentTaskDir });
+        }
         logger.warn(
           `[pipeline] Capacity reached — task "${slug}" stage "${stage}" deferred (remains in pending/)`,
         );
@@ -365,6 +396,7 @@ export function createPipeline(options: PipelineOptions): Pipeline {
         result = await runner(runOptions);
       } catch (err) {
         registry.unregister(agentId);
+        retryDeferredTasks();
         state.status = "failed";
         state.error = err instanceof Error ? err.message : String(err);
         writeRunState(currentTaskDir, state);
@@ -399,6 +431,7 @@ export function createPipeline(options: PipelineOptions): Pipeline {
       }
 
       registry.unregister(agentId);
+      retryDeferredTasks();
 
       if (!result.success) {
         state.status = "failed";
@@ -968,6 +1001,7 @@ export function createPipeline(options: PipelineOptions): Pipeline {
         result = await runner(runOptions);
       } catch (err) {
         registry.unregister(agentId);
+        retryDeferredTasks();
         state.status = "failed";
         state.error = err instanceof Error ? err.message : String(err);
         writeRunState(destDir, state);
@@ -986,6 +1020,7 @@ export function createPipeline(options: PipelineOptions): Pipeline {
       }
 
       registry.unregister(agentId);
+      retryDeferredTasks();
 
       if (!result.success) {
         state.status = "failed";
