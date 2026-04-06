@@ -105,21 +105,21 @@ describe("config quickTask section", () => {
 });
 
 describe("config agents section additions", () => {
-  it("defaults maxValidateRetries=2 and maxReviewRecurrence=3", () => {
+  it("defaults maxValidateRetries=2 and maxSuggestionRetriesPerCycle=1", () => {
     const parsed = configSchema.parse({ pipeline: { runtimeDir: "/tmp/test" } });
     const resolved = resolveConfig(parsed);
     expect(resolved.agents.maxValidateRetries).toBe(2);
-    expect(resolved.agents.maxReviewRecurrence).toBe(3);
+    expect(resolved.agents.maxSuggestionRetriesPerCycle).toBe(1);
   });
 
   it("accepts custom values", () => {
     const parsed = configSchema.parse({
       pipeline: { runtimeDir: "/tmp/test" },
-      agents: { maxValidateRetries: 5, maxReviewRecurrence: 1 },
+      agents: { maxValidateRetries: 5, maxSuggestionRetriesPerCycle: 3 },
     });
     const resolved = resolveConfig(parsed);
     expect(resolved.agents.maxValidateRetries).toBe(5);
-    expect(resolved.agents.maxReviewRecurrence).toBe(1);
+    expect(resolved.agents.maxSuggestionRetriesPerCycle).toBe(3);
   });
 
   it("defaults agents.tools to empty object", () => {
