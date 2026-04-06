@@ -120,6 +120,41 @@ describe("parseReviewFindings", () => {
     const f2 = parseReviewFindings(output2);
     expect(f1[0].id).toBe(f2[0].id);
   });
+
+  it("parses SUGGESTION(HIGH_VALUE) sub-class", () => {
+    const output = "[R1] SUGGESTION(HIGH_VALUE): Naming inconsistency — _usage vs usage\n";
+    const findings = parseReviewFindings(output);
+    expect(findings).toHaveLength(1);
+    expect(findings[0].severity).toBe("SUGGESTION(HIGH_VALUE)");
+    expect(findings[0].description).toContain("Naming inconsistency");
+  });
+
+  it("parses SUGGESTION(NITPICK) sub-class", () => {
+    const output = "[R1] SUGGESTION(NITPICK): formatDuration could guard against negative input\n";
+    const findings = parseReviewFindings(output);
+    expect(findings).toHaveLength(1);
+    expect(findings[0].severity).toBe("SUGGESTION(NITPICK)");
+  });
+
+  it("parses mixed findings with sub-classes and plain severities", () => {
+    const output = [
+      "[R1] MUST_FIX: Missing null check",
+      "[R2] SUGGESTION(HIGH_VALUE): DRY violation in readAllDailyLogs",
+      "[R3] SUGGESTION(NITPICK): Consider adding --sort option",
+    ].join("\n");
+    const findings = parseReviewFindings(output);
+    expect(findings).toHaveLength(3);
+    expect(findings[0].severity).toBe("MUST_FIX");
+    expect(findings[1].severity).toBe("SUGGESTION(HIGH_VALUE)");
+    expect(findings[2].severity).toBe("SUGGESTION(NITPICK)");
+  });
+
+  it("falls back to plain SUGGESTION when no sub-class provided", () => {
+    const output = "[R1] SUGGESTION: Some general suggestion\n";
+    const findings = parseReviewFindings(output);
+    expect(findings).toHaveLength(1);
+    expect(findings[0].severity).toBe("SUGGESTION");
+  });
 });
 
 // ─── issueHash ───────────────────────────────────────────────────────────────
@@ -231,31 +266,31 @@ describe("decideAfterReview", () => {
   });
 
   it("returns continue for APPROVED", () => {
-    const decision = decideAfterReview(approvedOutcome, [], 1, 3, true);
+    const decision = decideAfterReview(approvedOutcome, [], 1, false, true);
     expect(decision.action).toBe("continue");
   });
 
   it("returns continue for APPROVED_WITH_SUGGESTIONS when enforceSuggestions=false", () => {
-    const decision = decideAfterReview(suggestionsOutcome, [], 1, 3, false);
+    const decision = decideAfterReview(suggestionsOutcome, [], 1, false, false);
     expect(decision.action).toBe("continue");
   });
 
   it("returns retry for APPROVED_WITH_SUGGESTIONS when enforceSuggestions=true", () => {
-    const decision = decideAfterReview(suggestionsOutcome, [], 1, 3, true);
+    const decision = decideAfterReview(suggestionsOutcome, [], 1, false, true);
     expect(decision.action).toBe("retry");
     expect(decision.retryTarget).toBe("impl");
   });
 
   it("returns retry for CHANGES_REQUIRED with new issues (no previous)", () => {
     const output = "[R1] MUST_FIX: Error A\n\n**Verdict:** CHANGES_REQUIRED";
-    const decision = decideAfterReview(changesOutcome(output), [], 1, 3, true);
+    const decision = decideAfterReview(changesOutcome(output), [], 1, false, true);
     expect(decision.action).toBe("retry");
     expect(decision.retryTarget).toBe("impl");
   });
 
   it("returns retry for CHANGES_REQUIRED with only new issues even on iteration 3", () => {
     const output = "[R1] MUST_FIX: Brand new issue\n\n**Verdict:** CHANGES_REQUIRED";
-    const decision = decideAfterReview(changesOutcome(output), [], 3, 3, true);
+    const decision = decideAfterReview(changesOutcome(output), [], 3, false, true);
     // New issues always get a retry
     expect(decision.action).toBe("retry");
   });
@@ -270,14 +305,14 @@ describe("decideAfterReview", () => {
     const findings = parseReviewFindings(output);
     // Simulate that the finding matches a previous issue
     const prevIssue = { ...existingIssue, id: findings[0].id };
-    const decision = decideAfterReview(changesOutcome(output), [prevIssue], 3, 2, true);
+    const decision = decideAfterReview(changesOutcome(output), [prevIssue], 3, false, true);
     expect(decision.action).toBe("fail");
     expect(decision.reason).toContain("recurrence");
   });
 
   it("feedback content includes findings from current review", () => {
     const output = "[R1] MUST_FIX: Missing null guard in loader\n\n**Verdict:** CHANGES_REQUIRED";
-    const decision = decideAfterReview(changesOutcome(output), [], 1, 3, true);
+    const decision = decideAfterReview(changesOutcome(output), [], 1, false, true);
     expect(decision.feedbackContent).toContain("Missing null guard");
   });
 
@@ -286,9 +321,77 @@ describe("decideAfterReview", () => {
       { stage: "review", success: true, verdict: "unknown", output: "no verdict" },
       [],
       1,
-      3,
+      false,
       true,
     );
     expect(decision.action).toBe("fail");
+  });
+});
+
+// ─── decideAfterReview — per-cycle suggestion budget ─────────────────────────
+
+describe("decideAfterReview — per-cycle suggestion budget", () => {
+  const highValueOutput = [
+    "[R1] SUGGESTION(HIGH_VALUE): DRY violation in readAllDailyLogs",
+    "",
+    "**Verdict:** APPROVED_WITH_SUGGESTIONS",
+  ].join("\n");
+
+  const nitpickOnlyOutput = [
+    "[R1] SUGGESTION(NITPICK): formatDuration could guard against negative input",
+    "[R2] SUGGESTION(NITPICK): Consider adding --sort option",
+    "",
+    "**Verdict:** APPROVED_WITH_SUGGESTIONS",
+  ].join("\n");
+
+  const mixedOutput = [
+    "[R1] SUGGESTION(HIGH_VALUE): Naming inconsistency",
+    "[R2] SUGGESTION(NITPICK): Extra decimal guard",
+    "",
+    "**Verdict:** APPROVED_WITH_SUGGESTIONS",
+  ].join("\n");
+
+  it("returns retry when HIGH_VALUE suggestions and suggestionRetryUsed=false", () => {
+    const outcome = { stage: "review", success: true, verdict: "APPROVED_WITH_SUGGESTIONS", output: highValueOutput };
+    const decision = decideAfterReview(outcome, [], 1, false, true);
+    expect(decision.action).toBe("retry");
+  });
+
+  it("returns continue when HIGH_VALUE suggestions but suggestionRetryUsed=true", () => {
+    const outcome = { stage: "review", success: true, verdict: "APPROVED_WITH_SUGGESTIONS", output: highValueOutput };
+    const decision = decideAfterReview(outcome, [], 2, true, true);
+    expect(decision.action).toBe("continue");
+  });
+
+  it("returns continue when only NITPICK suggestions (treated as APPROVED)", () => {
+    const outcome = { stage: "review", success: true, verdict: "APPROVED_WITH_SUGGESTIONS", output: nitpickOnlyOutput };
+    const decision = decideAfterReview(outcome, [], 1, false, true);
+    expect(decision.action).toBe("continue");
+  });
+
+  it("returns retry for mixed output when suggestionRetryUsed=false (has HIGH_VALUE)", () => {
+    const outcome = { stage: "review", success: true, verdict: "APPROVED_WITH_SUGGESTIONS", output: mixedOutput };
+    const decision = decideAfterReview(outcome, [], 1, false, true);
+    expect(decision.action).toBe("retry");
+  });
+
+  it("returns continue when enforceSuggestions=false regardless of HIGH_VALUE", () => {
+    const outcome = { stage: "review", success: true, verdict: "APPROVED_WITH_SUGGESTIONS", output: highValueOutput };
+    const decision = decideAfterReview(outcome, [], 1, false, false);
+    expect(decision.action).toBe("continue");
+  });
+
+  it("CHANGES_REQUIRED still retries regardless of suggestion budget", () => {
+    const output = "[R1] MUST_FIX: Missing null check\n\n**Verdict:** CHANGES_REQUIRED";
+    const outcome = { stage: "review", success: true, verdict: "CHANGES_REQUIRED", output };
+    const decision = decideAfterReview(outcome, [], 1, true, true);
+    expect(decision.action).toBe("retry");
+  });
+
+  it("plain SUGGESTION (no sub-class) is treated as HIGH_VALUE for backward compat", () => {
+    const output = "[R1] SUGGESTION: Some suggestion\n\n**Verdict:** APPROVED_WITH_SUGGESTIONS";
+    const outcome = { stage: "review", success: true, verdict: "APPROVED_WITH_SUGGESTIONS", output };
+    const decision = decideAfterReview(outcome, [], 1, false, true);
+    expect(decision.action).toBe("retry");
   });
 });

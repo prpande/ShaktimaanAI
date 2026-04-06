@@ -80,7 +80,7 @@ export function parseAgentVerdict(output: string, stage: string): string {
  */
 export function parseReviewFindings(output: string): ReviewIssue[] {
   // Match lines like: [R1] MUST_FIX: Some description here — with trailing context
-  const pattern = /\[R\d+\]\s+(MUST_FIX|SHOULD_FIX|SUGGESTION):\s*(.+)/g;
+  const pattern = /\[R\d+\]\s+(MUST_FIX|SHOULD_FIX|SUGGESTION(?:\(HIGH_VALUE\)|\(NITPICK\))?):\s*(.+)/g;
   const findings: ReviewIssue[] = [];
   let match: RegExpExecArray | null;
 
@@ -156,21 +156,21 @@ function buildValidateFeedback(output: string, attempt: number): string {
 
 /**
  * Decides what to do after the review stage completes.
+ * Spec 5a: uses per-cycle suggestion budget instead of maxRecurrence.
  *
- * Rules:
  * - APPROVED → continue
- * - APPROVED_WITH_SUGGESTIONS + enforceSuggestions=false → continue
- * - APPROVED_WITH_SUGGESTIONS + enforceSuggestions=true → retry (suggestions are actionable)
- * - CHANGES_REQUIRED with any recurring issue persisted >= maxRecurrence → fail
- * - CHANGES_REQUIRED with new issues → retry (progress being made)
- * - CHANGES_REQUIRED with only recurring issues below maxRecurrence → retry
- * - unknown verdict → fail
+ * - APPROVED_WITH_SUGGESTIONS:
+ *   - Only NITPICK findings → treat as APPROVED (continue)
+ *   - Any HIGH_VALUE (or plain SUGGESTION) + enforceSuggestions + !suggestionRetryUsed → retry
+ *   - Otherwise → continue
+ * - CHANGES_REQUIRED → retry (with issue tracking for recurring detection)
+ * - unknown → fail
  */
 export function decideAfterReview(
   outcome: StageOutcome,
   previousIssues: ReviewIssue[],
   currentIteration: number,
-  maxRecurrence: number,
+  suggestionRetryUsed: boolean,
   enforceSuggestions: boolean,
 ): RetryDecision {
   if (outcome.verdict === "APPROVED") {
@@ -178,31 +178,46 @@ export function decideAfterReview(
   }
 
   if (outcome.verdict === "APPROVED_WITH_SUGGESTIONS") {
-    if (!enforceSuggestions || currentIteration >= maxRecurrence) {
+    if (!enforceSuggestions) {
       return {
         action: "continue",
-        reason: enforceSuggestions
-          ? `Review approved with suggestions — max recurrence (${maxRecurrence}) reached, continuing`
-          : "Review approved with suggestions (not enforced)",
+        reason: "Review approved with suggestions (not enforced)",
       };
     }
-    const currentFindings = parseReviewFindings(outcome.output).map(f => ({
-      ...f,
-      firstSeen: currentIteration,
-      lastSeen: currentIteration,
-    }));
+
+    const currentFindings = parseReviewFindings(outcome.output);
+    const hasHighValue = currentFindings.some(
+      f => f.severity === "SUGGESTION(HIGH_VALUE)" || f.severity === "SUGGESTION",
+    );
+
+    if (!hasHighValue) {
+      return {
+        action: "continue",
+        reason: "Review approved — all suggestions are NITPICK",
+      };
+    }
+
+    if (suggestionRetryUsed) {
+      return {
+        action: "continue",
+        reason: "Review has HIGH_VALUE suggestions but suggestion retry budget spent for this cycle",
+      };
+    }
+
+    const taggedFindings = currentFindings
+      .filter(f => f.severity !== "SUGGESTION(NITPICK)")
+      .map(f => ({ ...f, firstSeen: currentIteration, lastSeen: currentIteration }));
+
     return {
       action: "retry",
       retryTarget: "impl",
-      feedbackContent: buildReviewFeedback(currentFindings, currentIteration),
-      reason: "Review has suggestions — enforcing address before continue",
+      feedbackContent: buildReviewFeedback(taggedFindings, currentIteration),
+      reason: "Review has HIGH_VALUE suggestions — retrying impl",
     };
   }
 
   if (outcome.verdict === "CHANGES_REQUIRED") {
     const currentFindings = parseReviewFindings(outcome.output);
-
-    // Categorize findings
     const recurring: ReviewIssue[] = [];
     const newIssues: ReviewIssue[] = [];
 
@@ -215,23 +230,19 @@ export function decideAfterReview(
       }
     }
 
-    // Check if any recurring issue has exceeded maxRecurrence
+    const maxRecurrenceHardCap = 3;
     const exhaustedIssues = recurring.filter(
-      r => (currentIteration - r.firstSeen + 1) >= maxRecurrence,
+      r => (currentIteration - r.firstSeen + 1) >= maxRecurrenceHardCap,
     );
 
     if (exhaustedIssues.length > 0) {
       return {
         action: "fail",
-        reason: `Review failed: ${exhaustedIssues.length} issue(s) exceeded max recurrence (${maxRecurrence}) without resolution`,
+        reason: `Review failed: ${exhaustedIssues.length} issue(s) exceeded max recurrence (${maxRecurrenceHardCap}) without resolution`,
       };
     }
 
-    // New issues or recurring below threshold → retry
-    const allCurrentIssues = [
-      ...recurring,
-      ...newIssues,
-    ];
+    const allCurrentIssues = [...recurring, ...newIssues];
     const hasNewIssues = newIssues.length > 0;
 
     return {
