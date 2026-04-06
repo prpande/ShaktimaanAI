@@ -1,11 +1,12 @@
-import { describe, it, expect, beforeEach, afterEach } from "vitest";
-import { mkdirSync, rmSync, readFileSync, existsSync } from "fs";
+import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
+import { mkdirSync, rmSync, readFileSync, existsSync, writeFileSync } from "fs";
 import { join } from "path";
 import { tmpdir } from "os";
 import {
   appendInteraction,
   appendDailyLogEntry,
   readDailyLog,
+  readAllDailyLogs,
   type InteractionEntry,
   type DailyLogEntry,
 } from "../../src/core/interactions.js";
@@ -276,5 +277,125 @@ describe("appendDailyLogEntry", () => {
     expect(parsed[0].durationMs).toBe(1234);
     expect(parsed[0].exitCode).toBe(0);
     expect(parsed[0].nested).toEqual({ a: 1 });
+  });
+});
+
+// ---------------------------------------------------------------------------
+// readAllDailyLogs
+// ---------------------------------------------------------------------------
+
+describe("readAllDailyLogs", () => {
+  it("reads all JSONL files and returns entries sorted by timestamp", () => {
+    appendDailyLogEntry(TEST_DIR, {
+      timestamp: "2026-04-01T10:00:00.000Z",
+      type: "agent_completed",
+      slug: "task-a",
+      stage: "questions",
+    });
+    appendDailyLogEntry(TEST_DIR, {
+      timestamp: "2026-04-03T12:00:00.000Z",
+      type: "agent_completed",
+      slug: "task-a",
+      stage: "research",
+    });
+    appendDailyLogEntry(TEST_DIR, {
+      timestamp: "2026-04-01T14:00:00.000Z",
+      type: "agent_completed",
+      slug: "task-a",
+      stage: "design",
+    });
+
+    const all = readAllDailyLogs(TEST_DIR);
+    expect(all).toHaveLength(3);
+    expect(all[0].timestamp).toBe("2026-04-01T10:00:00.000Z");
+    expect(all[1].timestamp).toBe("2026-04-01T14:00:00.000Z");
+    expect(all[2].timestamp).toBe("2026-04-03T12:00:00.000Z");
+  });
+
+  it("filters by from date (inclusive)", () => {
+    appendDailyLogEntry(TEST_DIR, {
+      timestamp: "2026-04-01T10:00:00.000Z",
+      type: "agent_completed",
+      slug: "t",
+    });
+    appendDailyLogEntry(TEST_DIR, {
+      timestamp: "2026-04-05T10:00:00.000Z",
+      type: "agent_completed",
+      slug: "t",
+    });
+
+    const result = readAllDailyLogs(TEST_DIR, { from: "2026-04-05" });
+    expect(result).toHaveLength(1);
+    expect(result[0].timestamp).toBe("2026-04-05T10:00:00.000Z");
+  });
+
+  it("filters by to date (inclusive)", () => {
+    appendDailyLogEntry(TEST_DIR, {
+      timestamp: "2026-04-01T10:00:00.000Z",
+      type: "agent_completed",
+      slug: "t",
+    });
+    appendDailyLogEntry(TEST_DIR, {
+      timestamp: "2026-04-05T10:00:00.000Z",
+      type: "agent_completed",
+      slug: "t",
+    });
+
+    const result = readAllDailyLogs(TEST_DIR, { to: "2026-04-03" });
+    expect(result).toHaveLength(1);
+    expect(result[0].timestamp).toBe("2026-04-01T10:00:00.000Z");
+  });
+
+  it("filters by both from and to", () => {
+    appendDailyLogEntry(TEST_DIR, {
+      timestamp: "2026-04-01T10:00:00.000Z",
+      type: "agent_completed",
+      slug: "t",
+    });
+    appendDailyLogEntry(TEST_DIR, {
+      timestamp: "2026-04-03T10:00:00.000Z",
+      type: "agent_completed",
+      slug: "t",
+    });
+    appendDailyLogEntry(TEST_DIR, {
+      timestamp: "2026-04-05T10:00:00.000Z",
+      type: "agent_completed",
+      slug: "t",
+    });
+
+    const result = readAllDailyLogs(TEST_DIR, { from: "2026-04-02", to: "2026-04-04" });
+    expect(result).toHaveLength(1);
+    expect(result[0].timestamp).toBe("2026-04-03T10:00:00.000Z");
+  });
+
+  it("returns empty array when directory does not exist", () => {
+    const result = readAllDailyLogs(join(TEST_DIR, "nonexistent"));
+    expect(result).toEqual([]);
+  });
+
+  it("returns empty array when directory has no JSONL files", () => {
+    const result = readAllDailyLogs(TEST_DIR);
+    expect(result).toEqual([]);
+  });
+
+  it("skips malformed JSONL lines and returns valid entries", () => {
+    const filePath = join(TEST_DIR, "2026-04-01.jsonl");
+    writeFileSync(
+      filePath,
+      '{"timestamp":"2026-04-01T10:00:00.000Z","type":"agent_completed","slug":"t"}\n' +
+      'not valid json\n' +
+      '{"timestamp":"2026-04-01T12:00:00.000Z","type":"agent_started","slug":"t"}\n',
+      "utf8",
+    );
+
+    const stderrWrite = vi.spyOn(process.stderr, "write").mockImplementation(() => true);
+
+    const result = readAllDailyLogs(TEST_DIR);
+    expect(result).toHaveLength(2);
+    expect(result[0].type).toBe("agent_completed");
+    expect(result[1].type).toBe("agent_started");
+
+    expect(stderrWrite).toHaveBeenCalled();
+    stderrWrite.mockRestore();
   });
 });
