@@ -55,7 +55,7 @@ Each agent is named after figures from Hindu mythology and Hindi culture, reflec
 | 5 | plan | **Chanakya** | Writes a tactical, step-by-step implementation plan | Master strategist and advisor |
 | 6 | impl | **Karigar** | Writes code following TDD (tests first, then implementation) | Craftsman / artisan |
 | 7 | validate | **Dharma** | Validates that builds pass and tests are green | Impartial judge of right action |
-| 8 | review | **Drono** | Reviews code quality and suggests improvements | Strict guru and teacher |
+| 8 | review | **Drona** | Reviews code quality and suggests improvements | Strict guru and teacher |
 | 9 | pr | **Garuda** | Creates the pull request and pushes the branch | Swift divine messenger |
 
 ### Infrastructure Components
