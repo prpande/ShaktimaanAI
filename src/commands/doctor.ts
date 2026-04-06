@@ -17,13 +17,6 @@ export interface CheckResult {
   fixable: boolean;
 }
 
-/** Aggregated doctor report. */
-export interface DoctorReport {
-  checks: CheckResult[];
-  passCount: number;
-  failCount: number;
-}
-
 /** Options passed to runDoctor. */
 export interface DoctorOptions {
   fix: boolean;
@@ -79,10 +72,9 @@ function isNotInstalledError(err: unknown): boolean {
   );
 }
 
-export function checkGhAuth(): CheckResult {
-  const name = "GitHub CLI authenticated";
+function checkAuthCommand(name: string, command: string, toolLabel: string): CheckResult {
   try {
-    execSync("gh auth status", {
+    execSync(command, {
       encoding: "utf-8",
       timeout: AUTH_TIMEOUT,
       stdio: ["pipe", "pipe", "pipe"],
@@ -90,33 +82,21 @@ export function checkGhAuth(): CheckResult {
     return { name, passed: true, message: "Authenticated", fixable: false };
   } catch (err) {
     if (isTimeoutError(err)) {
-      return { name, passed: false, message: "GitHub CLI auth check timed out (15s)", fixable: false };
+      return { name, passed: false, message: `${toolLabel} auth check timed out (15s)`, fixable: false };
     }
     if (isNotInstalledError(err)) {
-      return { name, passed: false, message: "GitHub CLI not installed — gh: command not found", fixable: false };
+      return { name, passed: false, message: `${toolLabel} not installed \u2014 ${command.split(" ")[0]}: command not found`, fixable: false };
     }
     return { name, passed: false, message: (err as Error).message, fixable: false };
   }
 }
 
+export function checkGhAuth(): CheckResult {
+  return checkAuthCommand("GitHub CLI authenticated", "gh auth status", "GitHub CLI");
+}
+
 export function checkAzAuth(): CheckResult {
-  const name = "Azure CLI authenticated";
-  try {
-    execSync("az account show", {
-      encoding: "utf-8",
-      timeout: AUTH_TIMEOUT,
-      stdio: ["pipe", "pipe", "pipe"],
-    });
-    return { name, passed: true, message: "Authenticated", fixable: false };
-  } catch (err) {
-    if (isTimeoutError(err)) {
-      return { name, passed: false, message: "Azure CLI auth check timed out (15s)", fixable: false };
-    }
-    if (isNotInstalledError(err)) {
-      return { name, passed: false, message: "Azure CLI not installed — az: command not found", fixable: false };
-    }
-    return { name, passed: false, message: (err as Error).message, fixable: false };
-  }
+  return checkAuthCommand("Azure CLI authenticated", "az account show", "Azure CLI");
 }
 
 // ── Config Check ──────────────────────────────────────────────────────
@@ -128,9 +108,9 @@ export function checkConfig(configPath: string | null): CheckResult {
   }
   try {
     loadConfig(configPath);
-    return { name, passed: true, message: "Valid", fixable: false };
+    return { name, passed: true, message: "Valid", fixable: true };
   } catch (err) {
-    return { name, passed: false, message: (err as Error).message, fixable: false };
+    return { name, passed: false, message: (err as Error).message, fixable: true };
   }
 }
 
@@ -248,25 +228,35 @@ export function fixMissingConfigDefaults(configPath: string): FixResult {
  * Recursively merge defaults into target. Only adds keys that are missing
  * in target. Never overwrites existing values.
  */
+/**
+ * Recursively merge defaults into target. Only adds keys that are missing
+ * in target. Never overwrites existing values. Skips empty-string defaults
+ * to avoid blanking out user values with placeholder defaults.
+ */
 function deepMergeDefaults(
   target: Record<string, unknown>,
   defaults: Record<string, unknown>,
 ): Record<string, unknown> {
   const result = { ...target };
   for (const key of Object.keys(defaults)) {
+    const defaultVal = defaults[key];
+
+    // Skip empty-string defaults — they are placeholders, not useful values
+    if (defaultVal === "") continue;
+
     if (!(key in result)) {
-      result[key] = defaults[key];
+      result[key] = defaultVal;
     } else if (
       typeof result[key] === "object" &&
       result[key] !== null &&
       !Array.isArray(result[key]) &&
-      typeof defaults[key] === "object" &&
-      defaults[key] !== null &&
-      !Array.isArray(defaults[key])
+      typeof defaultVal === "object" &&
+      defaultVal !== null &&
+      !Array.isArray(defaultVal)
     ) {
       result[key] = deepMergeDefaults(
         result[key] as Record<string, unknown>,
-        defaults[key] as Record<string, unknown>,
+        defaultVal as Record<string, unknown>,
       );
     }
     // If key exists in target, keep target's value (never overwrite)

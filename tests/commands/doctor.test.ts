@@ -177,11 +177,19 @@ describe("checkAzAuth", () => {
 // ── S3: checkConfig ──────────────────────────────────────────────────
 
 describe("checkConfig", () => {
-  it("returns passed: false when configPath is null", () => {
+  it("returns passed: false and fixable: false when configPath is null", () => {
     const result = checkConfig(null);
     expect(result.passed).toBe(false);
     expect(result.message).toMatch(/config.*not found/i);
     expect(result.fixable).toBe(false);
+  });
+
+  it("returns fixable: true when configPath exists but validation fails", () => {
+    const configPath = join(TEST_DIR, "fixable.config.json");
+    writeFileSync(configPath, JSON.stringify({ repos: { root: "/x" } }));
+    const result = checkConfig(configPath);
+    expect(result.passed).toBe(false);
+    expect(result.fixable).toBe(true);
   });
 
   it("returns passed: true for valid config file", () => {
@@ -532,10 +540,30 @@ describe("fixMissingConfigDefaults", () => {
     // Existing values preserved
     expect(updated.pipeline.runtimeDir).toBe("/my/runtime");
     expect(updated.repos.root).toBe("/my/repos");
-    // Default values added for missing keys
+    // Default values added for missing sections
     expect(updated).toHaveProperty("slack");
     expect(updated.slack.enabled).toBe(false);
     expect(updated).toHaveProperty("worktree");
+  });
+
+  it("does not merge empty-string defaults from DEFAULT_CONFIG", () => {
+    const configPath = join(TEST_DIR, "fix-no-blanks.json");
+    writeFileSync(
+      configPath,
+      JSON.stringify({
+        pipeline: { runtimeDir: "/my/runtime" },
+      }),
+    );
+
+    fixMissingConfigDefaults(configPath);
+
+    const updated = JSON.parse(readFileSync(configPath, "utf-8"));
+    // Empty-string defaults like pipeline.agentsDir, pipeline.dashboardRepoLocal
+    // should NOT be added since they are placeholder empty strings
+    expect(updated.pipeline.agentsDir).toBeUndefined();
+    expect(updated.pipeline.dashboardRepoLocal).toBeUndefined();
+    // But non-empty defaults should be added
+    expect(updated.slack.channel).toBe("#agent-pipeline");
   });
 
   it("preserves existing user values — never overwrites", () => {
