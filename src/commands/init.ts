@@ -42,6 +42,11 @@ export function writeInitConfig(dir: string, answers: InitAnswers): void {
       channel: d.slack.channel,
       channelId: d.slack.channelId,
       pollIntervalSeconds: d.slack.pollIntervalSeconds,
+      notifyLevel: d.slack.notifyLevel,
+      requirePrefix: d.slack.requirePrefix,
+      prefix: d.slack.prefix,
+      allowDMs: d.slack.allowDMs,
+      dmUserIds: d.slack.dmUserIds,
     },
     agents: {
       names: { ...DEFAULT_AGENT_NAMES },
@@ -82,8 +87,7 @@ export function writeInitEnv(dir: string): void {
     "",
     "ADO_PAT=",
     "GITHUB_PAT=",
-    "SLACK_TOKEN=",
-    "SLACK_WEBHOOK_URL=",
+    "SLACK_TOKEN=  # Not required when using MCP-based Slack integration",
     "ANTHROPIC_API_KEY=",
     "",
   ].join("\n");

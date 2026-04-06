@@ -55,14 +55,15 @@ describe("writeInitConfig", () => {
 });
 
 describe("writeInitEnv", () => {
-  it("writes .env file with placeholder keys", () => {
+  it("writes .env file without SLACK_WEBHOOK_URL", () => {
     writeInitEnv(TEST_DIR);
     const envPath = join(TEST_DIR, ".env");
-    expect(existsSync(envPath)).toBe(true);
-
     const content = readFileSync(envPath, "utf-8");
     expect(content).toContain("ADO_PAT=");
     expect(content).toContain("ANTHROPIC_API_KEY=");
+    expect(content).not.toContain("SLACK_WEBHOOK_URL");
+    expect(content).toContain("SLACK_TOKEN=");
+    expect(content).toContain("Not required when using MCP-based Slack integration");
   });
 
   it("does not overwrite existing .env", () => {
