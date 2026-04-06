@@ -52,11 +52,30 @@ export function createWatcher(options: WatcherOptions): Watcher {
   let slackPollInProgress = false;
   let slackInterval: ReturnType<typeof setInterval> | null = null;
 
+  function ensureSlackFiles(): void {
+    const files = [
+      { name: "slack-outbox.jsonl", content: "" },
+      { name: "slack-inbox.jsonl", content: "" },
+      { name: "slack-sent.jsonl", content: "" },
+      { name: "slack-threads.json", content: "{}" },
+      { name: "slack-cursor.json", content: JSON.stringify({ channelTs: String(Date.now() / 1000), dmTs: String(Date.now() / 1000) }) },
+    ];
+    for (const f of files) {
+      const p = join(runtimeDir, f.name);
+      if (!existsSync(p)) {
+        writeFileSync(p, f.content, "utf-8");
+      }
+    }
+  }
+
   async function pollSlack(): Promise<void> {
     if (!runner) return;
     slackPollInProgress = true;
 
     try {
+      // Ensure queue files exist before spawning Narada
+      ensureSlackFiles();
+
       // Find held task slugs for approval checking
       const holdDir = join(runtimeDir, "12-hold");
       let heldSlugs: string[] = [];
