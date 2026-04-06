@@ -169,7 +169,7 @@ export const DEFAULT_CONFIG: ShkmnConfig = {
       structure: 20,
       plan: 30,
       impl: 90,
-      validate: 15,
+      validate: 30,
       review: 45,
       pr: 15,
       classify: 2,
