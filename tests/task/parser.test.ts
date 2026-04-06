@@ -66,7 +66,7 @@ describe("parseTaskFile", () => {
     expect(meta.title).toBe("Quick fix");
     expect(meta.stages).toEqual([
       "questions", "research", "design", "structure", "plan",
-      "impl", "validate", "review", "pr",
+      "impl", "review", "validate", "pr",
     ]);
     expect(meta.reviewAfter).toBe("design");
   });

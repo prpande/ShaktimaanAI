@@ -39,11 +39,13 @@ Determine:
 
 ---
 
-## Step 2 — Implement Each Slice (TDD when tests available)
+## Step 2 — Implement Each Slice
+
+Determine your implementation mode by checking the stage sequence in the Pipeline Context above.
+
+### TDD mode (strict) — when `validate` IS in the stage sequence:
 
 For each slice in the plan, in order:
-
-### With test framework (TDD — strict):
 
 1. **Write the failing test first**
    - Follow the project's existing test file naming and placement conventions
@@ -64,7 +66,20 @@ For each slice in the plan, in order:
    git commit -m "feat(<scope>): <what this slice does>"
    ```
 
-### Without test framework (code only):
+### Direct mode — when `validate` is NOT in the stage sequence (documentation, config, non-code tasks):
+
+For each slice in the plan, in order:
+
+1. **Write the deliverable** (docs, config, README, etc.)
+2. **If the deliverable has a verifiable format** (JSON, YAML, TOML), validate it parses correctly
+3. **Do NOT write test files** for documentation or config content
+4. **Commit the slice**
+   ```bash
+   git add <files>
+   git commit -m "docs(<scope>): <what>" # or chore(<scope>): <what>
+   ```
+
+### Without test framework (code task but no test runner detected):
 
 1. Write the code for the slice
 2. Ensure it compiles/builds

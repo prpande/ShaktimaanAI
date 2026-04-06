@@ -30,7 +30,6 @@ describe("DEFAULT_CONFIG", () => {
   it("has agents section with names and concurrency", () => {
     expect(DEFAULT_CONFIG.agents.names).toEqual(DEFAULT_AGENT_NAMES);
     expect(DEFAULT_CONFIG.agents.maxConcurrentTotal).toBe(3);
-    expect(DEFAULT_CONFIG.agents.maxConcurrentValidate).toBe(1);
   });
 
   it("has schedule section with default times", () => {
@@ -54,7 +53,7 @@ describe("DEFAULT_CONFIG", () => {
   it("has default stages for coding tasks", () => {
     expect(DEFAULT_CONFIG.agents.defaultStages).toEqual([
       "questions", "research", "design", "structure", "plan",
-      "impl", "validate", "review", "pr",
+      "impl", "review", "validate", "pr",
     ]);
     expect(DEFAULT_CONFIG.agents.defaultReviewAfter).toBe("design");
   });

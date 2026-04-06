@@ -78,8 +78,8 @@ describe("STAGE_DIR_MAP", () => {
     expect(STAGE_DIR_MAP["structure"]).toBe("04-structure");
     expect(STAGE_DIR_MAP["plan"]).toBe("05-plan");
     expect(STAGE_DIR_MAP["impl"]).toBe("06-impl");
-    expect(STAGE_DIR_MAP["validate"]).toBe("07-validate");
-    expect(STAGE_DIR_MAP["review"]).toBe("08-review");
+    expect(STAGE_DIR_MAP["review"]).toBe("07-review");
+    expect(STAGE_DIR_MAP["validate"]).toBe("08-validate");
     expect(STAGE_DIR_MAP["pr"]).toBe("09-pr");
   });
 });
@@ -151,7 +151,7 @@ describe("createRunState", () => {
     // defaults from DEFAULT_CONFIG
     expect(state.stages).toEqual([
       "questions", "research", "design", "structure", "plan",
-      "impl", "validate", "review", "pr",
+      "impl", "review", "validate", "pr",
     ]);
     expect(state.reviewAfter).toBe("design");
   });
@@ -314,7 +314,7 @@ describe("createPipeline", () => {
     writeFileSync(inboxPath, taskContent, "utf-8");
 
     const config = makeConfig();
-    const registry = createAgentRegistry(3, 1);
+    const registry = createAgentRegistry(3);
     const pipeline = createPipeline({
       config,
       registry,
@@ -352,7 +352,7 @@ describe("createPipeline", () => {
     writeFileSync(inboxPath, taskContent, "utf-8");
 
     const config = makeConfig();
-    const registry = createAgentRegistry(3, 1);
+    const registry = createAgentRegistry(3);
     const pipeline = createPipeline({
       config,
       registry,
@@ -384,7 +384,7 @@ describe("createPipeline", () => {
     writeFileSync(inboxPath, taskContent, "utf-8");
 
     const config = makeConfig();
-    const registry = createAgentRegistry(3, 1);
+    const registry = createAgentRegistry(3);
     const pipeline = createPipeline({
       config,
       registry,
@@ -424,7 +424,7 @@ describe("createPipeline", () => {
     writeFileSync(inboxPath, taskContent, "utf-8");
 
     const config = makeConfig();
-    const registry = createAgentRegistry(3, 1);
+    const registry = createAgentRegistry(3);
     const pipeline = createPipeline({
       config,
       registry,
@@ -447,7 +447,7 @@ describe("createPipeline", () => {
     createRuntimeDirs(TEST_DIR);
 
     const config = makeConfig();
-    const registry = createAgentRegistry(3, 1);
+    const registry = createAgentRegistry(3);
     const pipeline = createPipeline({
       config,
       registry,
@@ -492,7 +492,7 @@ describe("createPipeline", () => {
     };
 
     const config = makeConfig();
-    const registry = createAgentRegistry(3, 1);
+    const registry = createAgentRegistry(3);
     const invocationCwd = join(TEST_DIR, "invocation-dir");
     mkdirSync(invocationCwd, { recursive: true });
 
@@ -539,7 +539,7 @@ describe("createPipeline", () => {
     };
 
     const config = makeConfig({ repos: { root: reposRoot, aliases: {} } });
-    const registry = createAgentRegistry(3, 1);
+    const registry = createAgentRegistry(3);
     const pipeline = createPipeline({
       config, registry, runner: trackingRunner,
       logger: { info() {}, warn() {}, error() {} },
@@ -578,7 +578,7 @@ describe("createPipeline", () => {
     mkdirSync(invocationCwd, { recursive: true });
 
     const config = makeConfig();
-    const registry = createAgentRegistry(3, 1);
+    const registry = createAgentRegistry(3);
     const pipeline = createPipeline({
       config, registry, runner: stubRunner,
       logger: { info() {}, warn() {}, error() {} },
@@ -604,7 +604,7 @@ describe("createPipeline", () => {
     writeFileSync(inboxPath, taskContent, "utf-8");
 
     const config = makeConfig();
-    const registry = createAgentRegistry(3, 1);
+    const registry = createAgentRegistry(3);
     const pipeline = createPipeline({
       config,
       registry,
@@ -624,7 +624,7 @@ describe("createPipeline", () => {
 
 describe("pipeline retry integration", () => {
   function makeRetryTask(): string {
-    return makeSimpleTask("impl, validate, review, pr");
+    return makeSimpleTask("impl, review, validate, pr");
   }
 
   it("retries impl when validate returns NEEDS_FIXES (within maxRetries)", async () => {
@@ -673,7 +673,7 @@ describe("pipeline retry integration", () => {
     };
 
     const config = makeConfig();
-    const registry = createAgentRegistry(3, 1);
+    const registry = createAgentRegistry(3);
     const invCwd = join(TEST_DIR, "inv-cwd-retry");
     mkdirSync(invCwd, { recursive: true });
     const pipeline = createPipeline({
@@ -690,7 +690,7 @@ describe("pipeline retry integration", () => {
     expect(existsSync(completeDir)).toBe(true);
     const state = readRunState(completeDir);
     expect(state.status).toBe("complete");
-    expect(state.validateRetryCount).toBe(1);
+    expect(state.validateFailCount).toBe(1);
   });
 
   it("fails task when validate NEEDS_FIXES exceeds maxRetries", async () => {
@@ -719,7 +719,7 @@ describe("pipeline retry integration", () => {
 
     // maxValidateRetries=1 means 1 retry allowed (2 total validate runs)
     const config = makeConfig({ agents: { maxValidateRetries: 1 } });
-    const registry = createAgentRegistry(3, 1);
+    const registry = createAgentRegistry(3);
     const invCwd = join(TEST_DIR, "inv-cwd-exhaust");
     mkdirSync(invCwd, { recursive: true });
     const pipeline = createPipeline({
@@ -771,7 +771,7 @@ describe("pipeline retry integration", () => {
     };
 
     const config = makeConfig();
-    const registry = createAgentRegistry(3, 1);
+    const registry = createAgentRegistry(3);
     const invCwd = join(TEST_DIR, "inv-cwd-feedback");
     mkdirSync(invCwd, { recursive: true });
     const pipeline = createPipeline({
@@ -833,7 +833,7 @@ describe("pipeline retry integration", () => {
     };
 
     const config = makeConfig();
-    const registry = createAgentRegistry(3, 1);
+    const registry = createAgentRegistry(3);
     const invCwd = join(TEST_DIR, "inv-cwd-review-retry");
     mkdirSync(invCwd, { recursive: true });
     const pipeline = createPipeline({
@@ -849,5 +849,213 @@ describe("pipeline retry integration", () => {
     expect(existsSync(completeDir)).toBe(true);
     const state = readRunState(completeDir);
     expect(state.reviewRetryCount).toBe(1);
+  });
+});
+
+// ─── Spec 5a: review→validate flow, per-cycle suggestion budget ─────────────
+
+describe("Spec 5a pipeline behavior", () => {
+  function makeSpec5aTask(): string {
+    return makeSimpleTask("impl, review, validate, pr");
+  }
+
+  it("Test A: review retries once on HIGH_VALUE suggestion, then proceeds to validate → pr", async () => {
+    createRuntimeDirs(TEST_DIR);
+    const templatesDir = join(TEST_DIR, "templates");
+    mkdirSync(templatesDir, { recursive: true });
+    for (const s of ["impl", "review", "validate", "pr"]) {
+      writeFileSync(join(templatesDir, `prompt-${s}.md`), "template", "utf-8");
+    }
+
+    const taskContent = makeSpec5aTask();
+    const inboxPath = join(TEST_DIR, "00-inbox", "spec5a-test-a.task");
+    writeFileSync(inboxPath, taskContent, "utf-8");
+
+    let reviewCallCount = 0;
+    let validateCallCount = 0;
+    let implCallCount = 0;
+
+    const runner = async (options: AgentRunOptions): Promise<AgentRunResult> => {
+      if (options.outputPath) {
+        mkdirSync(dirname(options.outputPath), { recursive: true });
+      }
+      if (options.stage === "impl") {
+        implCallCount++;
+        if (options.outputPath) writeFileSync(options.outputPath, "impl done");
+        return { success: true, output: "impl done", costUsd: 0, turns: 1, inputTokens: 0, outputTokens: 0, durationMs: 10 };
+      }
+      if (options.stage === "review") {
+        reviewCallCount++;
+        if (reviewCallCount === 1) {
+          const out = "[R1] SUGGESTION(HIGH_VALUE): Consider extracting a helper function\n\n**Verdict:** APPROVED_WITH_SUGGESTIONS";
+          if (options.outputPath) writeFileSync(options.outputPath, out);
+          return { success: true, output: out, costUsd: 0, turns: 1, inputTokens: 0, outputTokens: 0, durationMs: 10 };
+        }
+        const out = "All good.\n\n**Verdict:** APPROVED";
+        if (options.outputPath) writeFileSync(options.outputPath, out);
+        return { success: true, output: out, costUsd: 0, turns: 1, inputTokens: 0, outputTokens: 0, durationMs: 10 };
+      }
+      if (options.stage === "validate") {
+        validateCallCount++;
+        const out = "Tests pass.\n\n**Verdict:** READY_FOR_REVIEW";
+        if (options.outputPath) writeFileSync(options.outputPath, out);
+        return { success: true, output: out, costUsd: 0, turns: 1, inputTokens: 0, outputTokens: 0, durationMs: 10 };
+      }
+      // pr
+      if (options.outputPath) writeFileSync(options.outputPath, "pr done");
+      return { success: true, output: "pr done", costUsd: 0, turns: 1, inputTokens: 0, outputTokens: 0, durationMs: 10 };
+    };
+
+    const config = makeConfig();
+    const registry = createAgentRegistry(3);
+    const invCwd = join(TEST_DIR, "inv-cwd-5a-a");
+    mkdirSync(invCwd, { recursive: true });
+    const pipeline = createPipeline({
+      config, registry, runner,
+      logger: { info() {}, warn() {}, error() {} },
+    });
+
+    await pipeline.startRun(inboxPath, invCwd);
+
+    // review called twice: first APPROVED_WITH_SUGGESTIONS triggers retry, second APPROVED
+    expect(reviewCallCount).toBe(2);
+    // impl called twice: once initially, once after suggestion retry
+    expect(implCallCount).toBe(2);
+    // validate called once after final review approval
+    expect(validateCallCount).toBe(1);
+
+    const completeDir = join(TEST_DIR, "10-complete", "spec5a-test-a");
+    expect(existsSync(completeDir)).toBe(true);
+    const state = readRunState(completeDir);
+    expect(state.status).toBe("complete");
+    expect(state.suggestionRetryUsed).toBe(true);
+  });
+
+  it("Test B: NITPICK-only suggestions do NOT trigger retry", async () => {
+    createRuntimeDirs(TEST_DIR);
+    const templatesDir = join(TEST_DIR, "templates");
+    mkdirSync(templatesDir, { recursive: true });
+    for (const s of ["impl", "review", "validate", "pr"]) {
+      writeFileSync(join(templatesDir, `prompt-${s}.md`), "template", "utf-8");
+    }
+
+    const taskContent = makeSpec5aTask();
+    const inboxPath = join(TEST_DIR, "00-inbox", "spec5a-test-b.task");
+    writeFileSync(inboxPath, taskContent, "utf-8");
+
+    let reviewCallCount = 0;
+
+    const runner = async (options: AgentRunOptions): Promise<AgentRunResult> => {
+      if (options.outputPath) {
+        mkdirSync(dirname(options.outputPath), { recursive: true });
+      }
+      if (options.stage === "impl") {
+        if (options.outputPath) writeFileSync(options.outputPath, "impl done");
+        return { success: true, output: "impl done", costUsd: 0, turns: 1, inputTokens: 0, outputTokens: 0, durationMs: 10 };
+      }
+      if (options.stage === "review") {
+        reviewCallCount++;
+        const out = "[R1] SUGGESTION(NITPICK): Minor style nit\n\n**Verdict:** APPROVED_WITH_SUGGESTIONS";
+        if (options.outputPath) writeFileSync(options.outputPath, out);
+        return { success: true, output: out, costUsd: 0, turns: 1, inputTokens: 0, outputTokens: 0, durationMs: 10 };
+      }
+      if (options.stage === "validate") {
+        const out = "Tests pass.\n\n**Verdict:** READY_FOR_REVIEW";
+        if (options.outputPath) writeFileSync(options.outputPath, out);
+        return { success: true, output: out, costUsd: 0, turns: 1, inputTokens: 0, outputTokens: 0, durationMs: 10 };
+      }
+      // pr
+      if (options.outputPath) writeFileSync(options.outputPath, "pr done");
+      return { success: true, output: "pr done", costUsd: 0, turns: 1, inputTokens: 0, outputTokens: 0, durationMs: 10 };
+    };
+
+    const config = makeConfig();
+    const registry = createAgentRegistry(3);
+    const invCwd = join(TEST_DIR, "inv-cwd-5a-b");
+    mkdirSync(invCwd, { recursive: true });
+    const pipeline = createPipeline({
+      config, registry, runner,
+      logger: { info() {}, warn() {}, error() {} },
+    });
+
+    await pipeline.startRun(inboxPath, invCwd);
+
+    // review called only once — NITPICK does not trigger retry
+    expect(reviewCallCount).toBe(1);
+
+    const completeDir = join(TEST_DIR, "10-complete", "spec5a-test-b");
+    expect(existsSync(completeDir)).toBe(true);
+    const state = readRunState(completeDir);
+    expect(state.status).toBe("complete");
+    expect(state.suggestionRetryUsed).toBe(false);
+  });
+
+  it("Test C: validate failure resets suggestion budget and loops back to impl", async () => {
+    createRuntimeDirs(TEST_DIR);
+    const templatesDir = join(TEST_DIR, "templates");
+    mkdirSync(templatesDir, { recursive: true });
+    for (const s of ["impl", "review", "validate", "pr"]) {
+      writeFileSync(join(templatesDir, `prompt-${s}.md`), "template", "utf-8");
+    }
+
+    const taskContent = makeSpec5aTask();
+    const inboxPath = join(TEST_DIR, "00-inbox", "spec5a-test-c.task");
+    writeFileSync(inboxPath, taskContent, "utf-8");
+
+    let implCallCount = 0;
+    let reviewCallCount = 0;
+    let validateCallCount = 0;
+
+    const runner = async (options: AgentRunOptions): Promise<AgentRunResult> => {
+      if (options.outputPath) {
+        mkdirSync(dirname(options.outputPath), { recursive: true });
+      }
+      if (options.stage === "impl") {
+        implCallCount++;
+        if (options.outputPath) writeFileSync(options.outputPath, "impl done");
+        return { success: true, output: "impl done", costUsd: 0, turns: 1, inputTokens: 0, outputTokens: 0, durationMs: 10 };
+      }
+      if (options.stage === "review") {
+        reviewCallCount++;
+        const out = "Looks good.\n\n**Verdict:** APPROVED";
+        if (options.outputPath) writeFileSync(options.outputPath, out);
+        return { success: true, output: out, costUsd: 0, turns: 1, inputTokens: 0, outputTokens: 0, durationMs: 10 };
+      }
+      if (options.stage === "validate") {
+        validateCallCount++;
+        // Fail first time, pass second time
+        const verdict = validateCallCount === 1 ? "NEEDS_FIXES" : "READY_FOR_REVIEW";
+        const out = `Build output.\n\n**Verdict:** ${verdict}`;
+        if (options.outputPath) writeFileSync(options.outputPath, out);
+        return { success: true, output: out, costUsd: 0, turns: 1, inputTokens: 0, outputTokens: 0, durationMs: 10 };
+      }
+      // pr
+      if (options.outputPath) writeFileSync(options.outputPath, "pr done");
+      return { success: true, output: "pr done", costUsd: 0, turns: 1, inputTokens: 0, outputTokens: 0, durationMs: 10 };
+    };
+
+    const config = makeConfig();
+    const registry = createAgentRegistry(3);
+    const invCwd = join(TEST_DIR, "inv-cwd-5a-c");
+    mkdirSync(invCwd, { recursive: true });
+    const pipeline = createPipeline({
+      config, registry, runner,
+      logger: { info() {}, warn() {}, error() {} },
+    });
+
+    await pipeline.startRun(inboxPath, invCwd);
+
+    // Full cycle runs twice: impl→review→validate (fail) → impl→review→validate (pass) → pr
+    expect(implCallCount).toBe(2);
+    expect(reviewCallCount).toBe(2);
+    expect(validateCallCount).toBe(2);
+
+    const completeDir = join(TEST_DIR, "10-complete", "spec5a-test-c");
+    expect(existsSync(completeDir)).toBe(true);
+    const state = readRunState(completeDir);
+    expect(state.status).toBe("complete");
+    expect(state.validateFailCount).toBe(1);
+    // suggestionRetryUsed should be false (reset on validate failure)
+    expect(state.suggestionRetryUsed).toBe(false);
   });
 });

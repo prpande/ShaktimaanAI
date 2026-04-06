@@ -6,7 +6,7 @@
 /** Ordered pipeline stage names. */
 export const PIPELINE_STAGES = [
   "questions", "research", "design", "structure", "plan",
-  "impl", "validate", "review", "pr",
+  "impl", "review", "validate", "pr",
 ] as const;
 
 export type PipelineStageName = (typeof PIPELINE_STAGES)[number];
@@ -19,8 +19,8 @@ export const STAGE_DIR_MAP: Record<string, string> = {
   structure: "04-structure",
   plan: "05-plan",
   impl: "06-impl",
-  validate: "07-validate",
-  review: "08-review",
+  review: "07-review",
+  validate: "08-validate",
   pr: "09-pr",
 };
 

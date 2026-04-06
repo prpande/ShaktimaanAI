@@ -85,7 +85,7 @@ describe("resolveConfig", () => {
     const resolved = resolveConfig(parsed);
     expect(resolved.agents.defaultStages).toEqual([
       "questions", "research", "design", "structure", "plan",
-      "impl", "validate", "review", "pr",
+      "impl", "review", "validate", "pr",
     ]);
     expect(resolved.agents.defaultReviewAfter).toBe("design");
   });

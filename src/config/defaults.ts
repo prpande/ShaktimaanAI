@@ -43,8 +43,8 @@ export const STAGE_CONTEXT_RULES: Record<string, {
   structure: { includeTaskContent: false, previousOutputLabel: "Design Document",          includeRepoContext: false },
   plan:      { includeTaskContent: false, previousOutputLabel: "Implementation Slices",    includeRepoContext: true },
   impl:      { includeTaskContent: true,  previousOutputLabel: "Implementation Plan",      includeRepoContext: true },
-  validate:  { includeTaskContent: false, previousOutputLabel: "Implementation Output",    includeRepoContext: true },
-  review:    { includeTaskContent: true,  previousOutputLabel: "Validation Report",        includeRepoContext: true },
+  review:    { includeTaskContent: true,  previousOutputLabel: "Implementation Output",   includeRepoContext: true },
+  validate:  { includeTaskContent: false, previousOutputLabel: "Review Output",            includeRepoContext: true },
   pr:        { includeTaskContent: true,  previousOutputLabel: "Review Output",            includeRepoContext: false },
   classify:  { includeTaskContent: true,  previousOutputLabel: null,                      includeRepoContext: false },
   quick:     { includeTaskContent: true,  previousOutputLabel: null,                      includeRepoContext: true },
@@ -85,13 +85,12 @@ export interface ShkmnConfig {
     defaultStages: string[];
     defaultReviewAfter: string;
     maxConcurrentTotal: number;
-    maxConcurrentValidate: number;
     maxTurns: Record<string, number>;
     timeoutsMinutes: Record<string, number>;
     heartbeatTimeoutMinutes: number;
     retryCount: number;
     maxValidateRetries: number;
-    maxReviewRecurrence: number;
+    maxSuggestionRetriesPerCycle: number;
     tools: Record<string, { allowed?: string[]; disallowed?: string[] }>;
   };
   schedule: {
@@ -144,11 +143,10 @@ export const DEFAULT_CONFIG: ShkmnConfig = {
     names: { ...DEFAULT_AGENT_NAMES },
     defaultStages: [
       "questions", "research", "design", "structure", "plan",
-      "impl", "validate", "review", "pr",
+      "impl", "review", "validate", "pr",
     ],
     defaultReviewAfter: "design",
     maxConcurrentTotal: 3,
-    maxConcurrentValidate: 1,
     maxTurns: {
       questions: 30,
       research: 60,
@@ -178,7 +176,7 @@ export const DEFAULT_CONFIG: ShkmnConfig = {
     heartbeatTimeoutMinutes: 10,
     retryCount: 1,
     maxValidateRetries: 2,
-    maxReviewRecurrence: 3,
+    maxSuggestionRetriesPerCycle: 1,
     tools: {},
   },
   schedule: {

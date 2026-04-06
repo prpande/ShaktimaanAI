@@ -57,6 +57,8 @@ export function createRunState(
     validateRetryCount: 0,
     reviewRetryCount: 0,
     reviewIssues: [],
+    suggestionRetryUsed: false,
+    validateFailCount: 0,
     stageHints: {},
     retryAttempts: {},
   };
@@ -487,7 +489,7 @@ export function createPipeline(options: PipelineOptions): Pipeline {
         if (stage === "validate") {
           decision = decideAfterValidate(
             outcome,
-            state.validateRetryCount,
+            state.validateFailCount,
             config.agents.maxValidateRetries,
           );
         } else {
@@ -495,7 +497,7 @@ export function createPipeline(options: PipelineOptions): Pipeline {
             outcome,
             state.reviewIssues,
             state.reviewRetryCount + 1,
-            config.agents.maxReviewRecurrence,
+            state.suggestionRetryUsed,
             config.review.enforceSuggestions,
           );
         }
@@ -521,7 +523,7 @@ export function createPipeline(options: PipelineOptions): Pipeline {
         if (decision.action === "retry") {
           // Write feedback artifact for impl to read
           const retryCount = stage === "validate"
-            ? state.validateRetryCount + 1
+            ? state.validateFailCount + 1
             : state.reviewRetryCount + 1;
           const feedbackFile = `retry-feedback-${stage}-${retryCount}.md`;
 
@@ -535,9 +537,13 @@ export function createPipeline(options: PipelineOptions): Pipeline {
 
           // Update retry counters and issue tracking
           if (stage === "validate") {
-            state.validateRetryCount += 1;
+            state.validateFailCount += 1;
+            state.suggestionRetryUsed = false; // reset suggestion budget for new cycle
           } else {
             state.reviewRetryCount += 1;
+            if (outcome.verdict === "APPROVED_WITH_SUGGESTIONS") {
+              state.suggestionRetryUsed = true;
+            }
             // Merge current findings into reviewIssues
             const currentFindings = parseReviewFindings(result.output);
             state.reviewIssues = mergeReviewIssues(
@@ -964,6 +970,8 @@ export function createPipeline(options: PipelineOptions): Pipeline {
         validateRetryCount: 0,
         reviewRetryCount: 0,
         reviewIssues: [],
+        suggestionRetryUsed: false,
+        validateFailCount: 0,
         stageHints: {},
         retryAttempts: {},
       };

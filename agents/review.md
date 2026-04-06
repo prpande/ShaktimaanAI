@@ -41,9 +41,17 @@ Number every finding sequentially as `[R{n}]`. The format MUST be:
 Where SEVERITY is one of:
 - `MUST_FIX` — blocks merge (incorrect behavior, test failures hidden, security issue, type `any` in core path)
 - `SHOULD_FIX` — important quality issue but not blocking (missing error handling, unclear naming, weak test coverage)
-- `SUGGESTION` — optional improvement (refactoring opportunity, minor style, extra test case)
+- `SUGGESTION(HIGH_VALUE)` — meaningful improvement worth fixing (naming inconsistencies within the same file, dead code, DRY violations, missing error handling on real paths, type safety gaps on public APIs)
+- `SUGGESTION(NITPICK)` — cosmetic or speculative (defensive guards for impossible inputs, style preferences, feature requests not in spec, test pattern preferences, display formatting)
+- `SUGGESTION` — use ONLY if you cannot confidently classify as HIGH_VALUE or NITPICK; the pipeline treats unclassified SUGGESTION as HIGH_VALUE
 
 The first sentence of the description (up to the first `.`, `!`, or `?`, or the `—` separator) is used by the pipeline for issue identity matching across retry iterations. **Be consistent in how you describe the same issue if it recurs.**
+
+**Classification guidance:**
+- If fixing it would prevent a real bug, confusion, or maintenance issue → HIGH_VALUE
+- If it's "nice to have" or "while we're here" → NITPICK
+- Feature requests (e.g. "add a --sort option") are always NITPICK
+- Edge case guards for inputs the caller controls are NITPICK
 
 ### Example Findings
 
@@ -54,8 +62,11 @@ The first sentence of the description (up to the first `.`, `!`, or `?`, or the 
 [R2] SHOULD_FIX: Variable name `x` is not descriptive — rename to `retryCount` or similar
   File: src/core/retry.ts:42
 
-[R3] SUGGESTION: Consider extracting the feedback-building logic into a separate helper function
-  File: src/core/retry.ts:95-110
+[R3] SUGGESTION(HIGH_VALUE): `_usage` naming inconsistent with `usage` on lines 259, 270 — rename for consistency
+  File: src/core/agent-runner.ts:235
+
+[R4] SUGGESTION(NITPICK): `formatDuration` could guard against negative input — caller always passes positive values
+  File: src/commands/stats.ts:189
 ```
 
 ---
@@ -71,13 +82,22 @@ If you are reviewing a retry iteration (previous review findings exist in the pi
 
 ---
 
+## Non-Coding Task Review
+
+When the stage sequence does NOT include `validate` (documentation, config, non-code tasks):
+- Do NOT flag missing test coverage as MUST_FIX or SHOULD_FIX
+- Focus review on: content accuracy, completeness, formatting, links, spelling
+- SUGGESTION criteria shift: structural improvements to docs, missing sections, unclear instructions are HIGH_VALUE; formatting nits are NITPICK
+
+---
+
 ## Verdict
 
 After all findings, end with the verdict line. This MUST be the last content in your output.
 
 Use:
-- `APPROVED` — no MUST_FIX or SHOULD_FIX findings
-- `APPROVED_WITH_SUGGESTIONS` — only SUGGESTION findings
+- `APPROVED` — no MUST_FIX, SHOULD_FIX, or HIGH_VALUE findings (NITPICK-only counts as APPROVED)
+- `APPROVED_WITH_SUGGESTIONS` — has SUGGESTION(HIGH_VALUE) or unclassified SUGGESTION findings, but no MUST_FIX/SHOULD_FIX
 - `CHANGES_REQUIRED` — any MUST_FIX or SHOULD_FIX findings present
 
 ```

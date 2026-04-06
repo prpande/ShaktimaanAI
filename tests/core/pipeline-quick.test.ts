@@ -86,7 +86,7 @@ describe("startQuickRun", () => {
     writeFileSync(taskFilePath, SAMPLE_QUICK_TASK, "utf-8");
 
     const config = makeConfig({ requireReview: false });
-    const registry = createAgentRegistry(3, 1);
+    const registry = createAgentRegistry(3);
     const pipeline = createPipeline({
       config,
       registry,
@@ -123,7 +123,7 @@ describe("startQuickRun", () => {
     writeFileSync(taskFilePath, SAMPLE_QUICK_TASK, "utf-8");
 
     const config = makeConfig({ requireReview: true });
-    const registry = createAgentRegistry(3, 1);
+    const registry = createAgentRegistry(3);
     const pipeline = createPipeline({
       config,
       registry,
@@ -160,7 +160,7 @@ describe("startQuickRun", () => {
     writeFileSync(taskFilePath, SAMPLE_QUICK_TASK, "utf-8");
 
     const config = makeConfig({ requireReview: false });
-    const registry = createAgentRegistry(3, 1);
+    const registry = createAgentRegistry(3);
     const pipeline = createPipeline({
       config,
       registry,
@@ -189,7 +189,7 @@ describe("startQuickRun", () => {
     writeFileSync(taskFilePath, SAMPLE_QUICK_TASK, "utf-8");
 
     const config = makeConfig({ requireReview: false });
-    const registry = createAgentRegistry(3, 1);
+    const registry = createAgentRegistry(3);
     const pipeline = createPipeline({
       config,
       registry,
@@ -215,7 +215,7 @@ describe("startQuickRun", () => {
     writeFileSync(taskFilePath, SAMPLE_QUICK_TASK, "utf-8");
 
     const config = makeConfig({ requireReview: true });
-    const registry = createAgentRegistry(3, 1);
+    const registry = createAgentRegistry(3);
     const pipeline = createPipeline({
       config,
       registry,
@@ -241,7 +241,7 @@ describe("startQuickRun", () => {
     writeFileSync(taskFilePath, SAMPLE_QUICK_TASK, "utf-8");
 
     const config = makeConfig({ requireReview: false });
-    const registry = createAgentRegistry(3, 1);
+    const registry = createAgentRegistry(3);
 
     const observedStages: string[] = [];
     const runner = async (options: AgentRunOptions): Promise<AgentRunResult> => {
@@ -271,7 +271,7 @@ describe("startQuickRun", () => {
     writeFileSync(taskFilePath, SAMPLE_QUICK_TASK, "utf-8");
 
     const config = makeConfig({ requireReview: false });
-    const registry = createAgentRegistry(3, 1);
+    const registry = createAgentRegistry(3);
 
     // Runner that does NOT write outputPath
     const runner = async (_options: AgentRunOptions): Promise<AgentRunResult> => {
