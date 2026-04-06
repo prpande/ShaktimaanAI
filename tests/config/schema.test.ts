@@ -57,6 +57,14 @@ describe("configSchema", () => {
     expect(result.success).toBe(false);
   });
 
+  it("accepts agents.models override", () => {
+    const result = configSchema.safeParse({
+      pipeline: { runtimeDir: "/tmp" },
+      agents: { models: { impl: "haiku", "slack-io": "opus" } },
+    });
+    expect(result.success).toBe(true);
+  });
+
   it("allows partial agent names (user overrides only some)", () => {
     const partial = {
       pipeline: { runtimeDir: "/tmp/shkmn" },

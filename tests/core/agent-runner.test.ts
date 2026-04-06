@@ -81,7 +81,7 @@ describe("buildSystemPrompt", () => {
 
   it("includes identity block with agent name", () => {
     const result = buildSystemPrompt(makeOptions({ stage: "questions" }));
-    expect(result).toContain("You are Narada, the questions agent");
+    expect(result).toContain("You are Gargi, the questions agent");
   });
 
   it("includes pipeline context section", () => {

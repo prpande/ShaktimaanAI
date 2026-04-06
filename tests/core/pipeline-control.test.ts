@@ -129,6 +129,63 @@ describe("cancel", () => {
   });
 });
 
+// ─── skip ──────────────────────────────────────────────────────────────────
+
+describe("skip", () => {
+  it("advances task to the next stage directory", async () => {
+    const slug = "skip-advance";
+    const stageDir = STAGE_DIR_MAP["questions"];
+    setupTaskInDir(slug, join(stageDir, "pending"), {
+      currentStage: "questions",
+      status: "running",
+      stages: ["questions", "research", "impl"],
+    });
+
+    const events: NotifyEvent[] = [];
+    const testNotifier: Notifier = {
+      async notify(event: NotifyEvent) { events.push(event); },
+    };
+
+    const config = makeConfig();
+    const registry = createAgentRegistry(5);
+    // runner that records calls but returns success immediately
+    const runnerCalls: string[] = [];
+    const trackingRunner = async (opts: AgentRunOptions): Promise<AgentRunResult> => {
+      runnerCalls.push(opts.stage);
+      return { success: true, output: "done", costUsd: 0, turns: 1, inputTokens: 0, outputTokens: 0, durationMs: 50 };
+    };
+    const pipeline = createPipeline({ config, registry, runner: trackingRunner, logger: noopLogger });
+    pipeline.addNotifier(testNotifier);
+
+    await pipeline.skip(slug);
+
+    // Task should have moved to research/pending (the next stage)
+    const researchDir = join(TEST_DIR, STAGE_DIR_MAP["research"], "pending", slug);
+    // It may have already advanced further since processStage resumes — check state
+    expect(events.some(e => e.type === "stage_skipped")).toBe(true);
+
+    // The runner should have been called for the next stage (research), not questions
+    expect(runnerCalls[0]).toBe("research");
+    expect(runnerCalls).not.toContain("questions");
+  });
+
+  it("throws when there is no next stage to skip to", async () => {
+    const slug = "skip-last";
+    const stageDir = STAGE_DIR_MAP["impl"];
+    setupTaskInDir(slug, join(stageDir, "pending"), {
+      currentStage: "impl",
+      status: "running",
+      stages: ["impl"],
+    });
+
+    const config = makeConfig();
+    const registry = createAgentRegistry(5);
+    const pipeline = createPipeline({ config, registry, runner: noopRunner, logger: noopLogger });
+
+    await expect(pipeline.skip(slug)).rejects.toThrow(/No stage after/);
+  });
+});
+
 // ─── pause ─────────────────────────────────────────────────────────────────
 
 describe("pause", () => {
@@ -267,6 +324,91 @@ describe("restartStage — unmapped stage guard", () => {
   });
 });
 
+describe("retry — versioned artifact naming", () => {
+  it("writes versioned feedback artifact and increments retryAttempts", async () => {
+    const slug = "retry-versioned";
+    setupTaskInDir(slug, "12-hold", {
+      currentStage: "research",
+      status: "hold",
+      stages: ["questions", "research", "impl"],
+      reviewAfter: "research",
+      retryAttempts: {},
+    });
+
+    const events: NotifyEvent[] = [];
+    const testNotifier: Notifier = {
+      async notify(event: NotifyEvent) { events.push(event); },
+    };
+
+    const config = makeConfig();
+    const registry = createAgentRegistry(5);
+    const pipeline = createPipeline({ config, registry, runner: noopRunner, logger: noopLogger });
+    pipeline.addNotifier(testNotifier);
+
+    await pipeline.retry(slug, "Please add more detail on the auth flow");
+
+    // stage_retried event should have been emitted with attempt=1
+    const retriedEvent = events.find(e => e.type === "stage_retried") as
+      { type: "stage_retried"; slug: string; stage: string; attempt: number; feedback: string } | undefined;
+    expect(retriedEvent).toBeDefined();
+    expect(retriedEvent!.stage).toBe("research");
+    expect(retriedEvent!.attempt).toBe(1);
+    expect(retriedEvent!.feedback).toBe("Please add more detail on the auth flow");
+
+    // After retry + processStage (noopRunner succeeds), the task advances through research
+    // and hits the review gate at "research", landing in 12-hold.
+    // The feedback artifact travels with the directory.
+    const holdDir = join(TEST_DIR, "12-hold", slug);
+    expect(existsSync(holdDir)).toBe(true);
+
+    const feedbackPath = join(holdDir, "artifacts", "retry-feedback-research-1.md");
+    expect(existsSync(feedbackPath)).toBe(true);
+    const feedbackContent = readFileSync(feedbackPath, "utf-8");
+    expect(feedbackContent).toBe("Please add more detail on the auth flow");
+
+    const state = readRunState(holdDir);
+    expect(state.retryAttempts["research"]).toBe(1);
+  });
+
+  it("increments retryAttempts on subsequent retries", async () => {
+    const slug = "retry-multi";
+    setupTaskInDir(slug, "12-hold", {
+      currentStage: "research",
+      status: "hold",
+      stages: ["questions", "research", "impl"],
+      reviewAfter: "research",
+      retryAttempts: { research: 2 },
+    });
+
+    const events: NotifyEvent[] = [];
+    const testNotifier: Notifier = {
+      async notify(event: NotifyEvent) { events.push(event); },
+    };
+
+    const config = makeConfig();
+    const registry = createAgentRegistry(5);
+    const pipeline = createPipeline({ config, registry, runner: noopRunner, logger: noopLogger });
+    pipeline.addNotifier(testNotifier);
+
+    await pipeline.retry(slug, "Third attempt feedback");
+
+    const retriedEvent = events.find(e => e.type === "stage_retried") as
+      { type: "stage_retried"; attempt: number } | undefined;
+    expect(retriedEvent).toBeDefined();
+    expect(retriedEvent!.attempt).toBe(3);
+
+    // Task advances through research and hits review gate, landing in hold
+    const holdDir = join(TEST_DIR, "12-hold", slug);
+    expect(existsSync(holdDir)).toBe(true);
+
+    const feedbackPath = join(holdDir, "artifacts", "retry-feedback-research-3.md");
+    expect(existsSync(feedbackPath)).toBe(true);
+
+    const state = readRunState(holdDir);
+    expect(state.retryAttempts["research"]).toBe(3);
+  });
+});
+
 describe("retry — unmapped stage guard", () => {
   it("throws a descriptive error when the current stage has no directory mapping", async () => {
     const slug = "retry-unmapped";
@@ -288,6 +430,39 @@ describe("retry — unmapped stage guard", () => {
     await expect(pipeline.retry(slug, "please fix the thing")).rejects.toThrow(
       /Cannot retry stage "quick" — no stage directory mapping exists/,
     );
+  });
+});
+
+// ─── approveAndResume ──────────────────────────────────────────────────────
+
+describe("approveAndResume", () => {
+  it("emits task_approved event", async () => {
+    const slug = "approve-notify";
+    setupTaskInDir(slug, "12-hold", {
+      currentStage: "questions",
+      status: "hold",
+      stages: ["questions", "research", "impl"],
+    });
+
+    const events: NotifyEvent[] = [];
+    const testNotifier: Notifier = {
+      async notify(event: NotifyEvent) { events.push(event); },
+    };
+
+    const config = makeConfig();
+    const registry = createAgentRegistry(5);
+    const pipeline = createPipeline({ config, registry, runner: noopRunner, logger: noopLogger });
+    pipeline.addNotifier(testNotifier);
+
+    await pipeline.approveAndResume(slug, "looks good");
+
+    expect(events.some(e => e.type === "task_approved")).toBe(true);
+    const approved = events.find(e => e.type === "task_approved")!;
+    expect(approved).toMatchObject({
+      type: "task_approved",
+      slug: "approve-notify",
+      approvedBy: "user",
+    });
   });
 });
 

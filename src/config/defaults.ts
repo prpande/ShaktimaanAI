@@ -1,5 +1,5 @@
 export const DEFAULT_AGENT_NAMES = {
-  questions: "Narada",
+  questions: "Gargi",
   research: "Chitragupta",
   design: "Vishwakarma",
   structure: "Vastu",
@@ -14,6 +14,7 @@ export const DEFAULT_AGENT_NAMES = {
   approvalHandler: "Indra",
   intentClassifier: "Sutradhaar",
   quick: "Astra",
+  slackIO: "Narada",
 } as const satisfies Record<string, string>;
 
 export type AgentRole = keyof typeof DEFAULT_AGENT_NAMES;
@@ -30,6 +31,7 @@ export const DEFAULT_STAGE_TOOLS: Record<string, { allowed: string[]; disallowed
   pr:         { allowed: ["Bash"], disallowed: ["Write","Edit","Read","Glob","Grep"] },
   classify:   { allowed: [], disallowed: ["Read","Write","Edit","Bash","Glob","Grep"] },
   quick:      { allowed: ["Read","Write","Edit","Bash","Glob","Grep","WebSearch","WebFetch"], disallowed: [] },
+  "slack-io":  { allowed: ["mcp__claude_ai_Slack__*","Read","Write"], disallowed: ["Edit","Bash","Glob","Grep"] },
 };
 
 export const STAGE_CONTEXT_RULES: Record<string, {
@@ -48,6 +50,7 @@ export const STAGE_CONTEXT_RULES: Record<string, {
   pr:        { includeTaskContent: true,  previousOutputLabel: "Review Output",            includeRepoContext: false },
   classify:  { includeTaskContent: true,  previousOutputLabel: null,                      includeRepoContext: false },
   quick:     { includeTaskContent: true,  previousOutputLabel: null,                      includeRepoContext: true },
+  "slack-io": { includeTaskContent: true, previousOutputLabel: null,                      includeRepoContext: false },
 };
 
 export interface ShkmnConfig {
@@ -75,6 +78,7 @@ export interface ShkmnConfig {
     allowDMs: boolean;
     requirePrefix: boolean;
     prefix: string;
+    dmUserIds: string[];
   };
   quickTask: {
     requireReview: boolean;
@@ -92,6 +96,7 @@ export interface ShkmnConfig {
     maxValidateRetries: number;
     maxSuggestionRetriesPerCycle: number;
     tools: Record<string, { allowed?: string[]; disallowed?: string[] }>;
+    models: Record<string, string>;
   };
   schedule: {
     rollupTime: string;
@@ -134,6 +139,7 @@ export const DEFAULT_CONFIG: ShkmnConfig = {
     allowDMs: false,
     requirePrefix: true,
     prefix: "shkmn",
+    dmUserIds: [],
   },
   quickTask: {
     requireReview: true,
@@ -159,6 +165,7 @@ export const DEFAULT_CONFIG: ShkmnConfig = {
       pr: 20,
       classify: 5,
       quick: 40,
+      "slack-io": 15,
     },
     timeoutsMinutes: {
       questions: 15,
@@ -172,12 +179,27 @@ export const DEFAULT_CONFIG: ShkmnConfig = {
       pr: 15,
       classify: 2,
       quick: 30,
+      "slack-io": 2,
     },
     heartbeatTimeoutMinutes: 10,
     retryCount: 1,
     maxValidateRetries: 2,
     maxSuggestionRetriesPerCycle: 1,
     tools: {},
+    models: {
+      questions: "sonnet",
+      research: "opus",
+      design: "opus",
+      structure: "sonnet",
+      plan: "opus",
+      impl: "opus",
+      review: "sonnet",
+      validate: "sonnet",
+      pr: "sonnet",
+      classify: "haiku",
+      "slack-io": "haiku",
+      quick: "sonnet",
+    },
   },
   schedule: {
     rollupTime: "23:55",

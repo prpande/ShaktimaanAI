@@ -12,7 +12,7 @@ interface EventBase {
 // ─── NotifyEvent discriminated union ─────────────────────────────────────────
 
 export type NotifyEvent =
-  | ({ type: "task_created";    title: string; source: string; stages: string[] } & EventBase)
+  | ({ type: "task_created";    title: string; source: string; stages: string[]; slackThread?: string } & EventBase)
   | ({ type: "stage_started";   stage: string } & EventBase)
   | ({ type: "stage_completed"; stage: string; artifactPath: string } & EventBase)
   | ({ type: "task_held";       stage: string; artifactUrl: string } & EventBase)

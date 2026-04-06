@@ -192,6 +192,7 @@ export async function runAgent(options: AgentRunOptions): Promise<AgentRunResult
   const maxTurns = resolveMaxTurns(stage, config);
   const timeoutMinutes = resolveTimeoutMinutes(stage, config);
   const timeoutMs = timeoutMinutes * 60 * 1000;
+  const model = config.agents.models?.[stage];
 
   // Use provided abortController or create our own
   const abortController = externalAbort ?? new AbortController();
@@ -213,6 +214,7 @@ export async function runAgent(options: AgentRunOptions): Promise<AgentRunResult
     const messages = query({
       prompt: systemPrompt,
       options: {
+        ...(model ? { model } : {}),
         allowedTools,
         disallowedTools,
         maxTurns,

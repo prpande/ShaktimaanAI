@@ -30,6 +30,7 @@ export const configSchema = z.object({
     allowDMs: z.boolean().optional().default(false),
     requirePrefix: z.boolean().optional().default(true),
     prefix: z.string().optional().default("shkmn"),
+    dmUserIds: z.array(z.string()).optional().default([]),
   }).optional().default({}),
   quickTask: z.object({
     requireReview: z.boolean().optional().default(true),
@@ -50,6 +51,7 @@ export const configSchema = z.object({
       allowed: z.array(z.string()).optional(),
       disallowed: z.array(z.string()).optional(),
     })).optional().default({}),
+    models: z.record(z.string(), z.string()).optional().default({}),
   }).optional().default({}),
   schedule: z.object({
     rollupTime: z.string().optional(),

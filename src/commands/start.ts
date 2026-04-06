@@ -73,13 +73,9 @@ export function registerStartCommand(program: Command): void {
         pipeline.addNotifier(createSlackNotifier({
           channelId: config.slack.channelId,
           notifyLevel: config.slack.notifyLevel,
-          sendMessage: async (params) => {
-            // Placeholder — actual Slack MCP wiring is a follow-up
-            logger.info(`[slack] ${params.channel}: ${params.text.slice(0, 120)}...`);
-            return { ts: String(Date.now() / 1000) };
-          },
+          runtimeDir: config.pipeline.runtimeDir,
         }));
-        logger.info("[start] SlackNotifier registered");
+        logger.info("[start] SlackNotifier registered (file-based outbox)");
       }
 
       // 7. Create and start watcher
@@ -88,6 +84,7 @@ export function registerStartCommand(program: Command): void {
         pipeline,
         logger,
         config,
+        runner: runAgent,
       });
       activeWatcher.start();
 

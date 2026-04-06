@@ -70,6 +70,7 @@ export function resolveConfig(parsed: ConfigParsed): ResolvedConfig {
       allowDMs: parsed.slack?.allowDMs ?? d.slack.allowDMs,
       requirePrefix: parsed.slack?.requirePrefix ?? d.slack.requirePrefix,
       prefix: parsed.slack?.prefix ?? d.slack.prefix,
+      dmUserIds: parsed.slack?.dmUserIds ?? d.slack.dmUserIds,
     },
     agents: {
       names: { ...DEFAULT_AGENT_NAMES, ...parsed.agents?.names },
@@ -83,6 +84,7 @@ export function resolveConfig(parsed: ConfigParsed): ResolvedConfig {
       maxValidateRetries: parsed.agents?.maxValidateRetries ?? da.maxValidateRetries,
       maxSuggestionRetriesPerCycle: parsed.agents?.maxSuggestionRetriesPerCycle ?? da.maxSuggestionRetriesPerCycle,
       tools: { ...da.tools, ...parsed.agents?.tools },
+      models: { ...da.models, ...parsed.agents?.models },
     },
     schedule: {
       rollupTime: parsed.schedule?.rollupTime ?? d.schedule.rollupTime,

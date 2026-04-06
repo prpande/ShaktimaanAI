@@ -1,12 +1,17 @@
 import chokidar, { type FSWatcher } from "chokidar";
 import { join } from "node:path";
-import { readFileSync, unlinkSync } from "node:fs";
+import { readFileSync, unlinkSync, writeFileSync, existsSync, readdirSync } from "node:fs";
 import { z } from "zod";
 import { parseTaskFile } from "../task/parser.js";
 
 import { type Pipeline } from "./pipeline.js";
 import { type TaskLogger } from "./logger.js";
 import { type ResolvedConfig } from "../config/loader.js";
+import { type AgentRunnerFn } from "./types.js";
+import { stripPrefix } from "../surfaces/slack-surface.js";
+import { classifyByKeywords } from "./intent-classifier.js";
+import { createTask } from "./task-creator.js";
+import { buildNaradaPayload, readInbox, clearInbox, readSentLog } from "./slack-queue.js";
 
 // ─── Control file schema ──────────────────────────────────────────────────────
 
@@ -34,16 +39,116 @@ export interface WatcherOptions {
   pipeline: Pipeline;
   logger: TaskLogger;
   config: ResolvedConfig;
+  runner?: AgentRunnerFn;
 }
 
 // ─── createWatcher ────────────────────────────────────────────────────────────
 
 export function createWatcher(options: WatcherOptions): Watcher {
-  const { runtimeDir, pipeline, logger, config } = options;
+  const { runtimeDir, pipeline, logger, config, runner } = options;
   let running = false;
   let fsWatcher: FSWatcher | null = null;
-  let slackInterval: ReturnType<typeof setInterval> | null = null;
   const processingFiles = new Set<string>();
+  let slackPollInProgress = false;
+  let slackInterval: ReturnType<typeof setInterval> | null = null;
+
+  async function pollSlack(): Promise<void> {
+    if (!runner) return;
+    slackPollInProgress = true;
+
+    try {
+      // Find held task slugs for approval checking
+      const holdDir = join(runtimeDir, "12-hold");
+      let heldSlugs: string[] = [];
+      try {
+        heldSlugs = readdirSync(holdDir).filter((f) => !f.startsWith("."));
+      } catch { /* no hold dir */ }
+
+      // Build Narada payload
+      const payload = buildNaradaPayload(runtimeDir, {
+        channelId: config.slack.channelId,
+        allowDMs: config.slack.allowDMs,
+        dmUserIds: config.slack.dmUserIds,
+        heldSlugs,
+      });
+
+      // Warn if DMs enabled but no user IDs
+      if (config.slack.allowDMs && config.slack.dmUserIds.length === 0) {
+        logger.warn("[watcher] Slack DM polling enabled but no dmUserIds configured — skipping DMs");
+      }
+
+      // Spawn Narada
+      const abortController = new AbortController();
+      await runner({
+        stage: "slack-io",
+        slug: "slack-io-poll",
+        taskContent: JSON.stringify(payload, null, 2),
+        previousOutput: "",
+        outputPath: join(runtimeDir, "slack-io-output.md"),
+        cwd: runtimeDir,
+        config,
+        abortController,
+        logger: { info() {}, warn() {}, error() {} },
+      });
+
+      // Post-process inbox
+      const inboxEntries = readInbox(runtimeDir);
+
+      for (const entry of inboxEntries) {
+        if (entry.isApproval && entry.slug) {
+          // Verify task is actually held
+          if (existsSync(join(runtimeDir, "12-hold", entry.slug))) {
+            const controlPath = join(runtimeDir, "00-inbox", `slack-approve-${entry.ts.replace(".", "-")}.control`);
+            writeFileSync(controlPath, JSON.stringify({
+              operation: "approve",
+              slug: entry.slug,
+              feedback: `Approved via Slack by ${entry.user}`,
+            }), "utf-8");
+            logger.info(`[watcher] Slack approval detected for ${entry.slug}`);
+          }
+        } else {
+          const text = config.slack.requirePrefix
+            ? stripPrefix(entry.text, config.slack.prefix)
+            : entry.text;
+
+          const classified = classifyByKeywords(text);
+          const intent = classified?.intent ?? "create_task";
+
+          if (intent === "create_task" || intent === "unknown") {
+            createTask(
+              { source: "slack", content: text, slackThread: entry.thread_ts ?? entry.ts },
+              runtimeDir,
+              config,
+            );
+            logger.info(`[watcher] Slack: created task from message ${entry.ts}`);
+          } else if (classified?.extractedSlug) {
+            const controlPayload: Record<string, unknown> = { operation: intent, slug: classified.extractedSlug };
+            if (classified.extractedFeedback) controlPayload.feedback = classified.extractedFeedback;
+            if (classified.extractedStages) controlPayload.stages = classified.extractedStages;
+
+            const controlPath = join(runtimeDir, "00-inbox", `slack-${entry.ts.replace(".", "-")}.control`);
+            writeFileSync(controlPath, JSON.stringify(controlPayload), "utf-8");
+            logger.info(`[watcher] Slack: wrote control file for ${intent} on ${classified.extractedSlug}`);
+          } else {
+            logger.warn(`[watcher] Slack: classified as "${intent}" but no slug extracted from: "${text}"`);
+          }
+        }
+      }
+
+      // Clear inbox after processing
+      if (inboxEntries.length > 0) {
+        clearInbox(runtimeDir);
+      }
+
+      // Log sent confirmations
+      const sentEntries = readSentLog(runtimeDir);
+      if (sentEntries.length > 0) {
+        logger.info(`[watcher] Slack: ${sentEntries.length} message(s) confirmed sent`);
+      }
+    } finally {
+      slackPollInProgress = false;
+    }
+  }
 
   async function handleControlFile(filePath: string): Promise<void> {
     const content = readFileSync(filePath, "utf-8");
@@ -143,10 +248,13 @@ export function createWatcher(options: WatcherOptions): Watcher {
         logger.info(`Watching inbox: ${inboxDir}`);
       });
 
-      if (config.slack.enabled) {
+      if (config.slack.enabled && config.slack.channelId && runner) {
         const pollMs = config.slack.pollIntervalSeconds * 1000;
         slackInterval = setInterval(() => {
-          logger.info("[watcher] Slack poll tick");
+          if (slackPollInProgress) return;
+          pollSlack().catch((err: unknown) => {
+            logger.error(`[watcher] Slack poll error: ${err instanceof Error ? err.message : String(err)}`);
+          });
         }, pollMs);
         logger.info(`[watcher] Slack polling enabled (${config.slack.pollIntervalSeconds}s interval)`);
       }
