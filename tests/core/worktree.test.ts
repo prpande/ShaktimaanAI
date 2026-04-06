@@ -16,7 +16,7 @@ import {
 
 // Git operations on Windows are slow — allow 60s per test and 30s for hooks
 const TEST_TIMEOUT = 60_000;
-const HOOK_TIMEOUT = 30_000;
+const HOOK_TIMEOUT = 120_000;
 
 let TEST_DIR: string;
 let REPO_DIR: string;

@@ -178,8 +178,13 @@ export function decideAfterReview(
   }
 
   if (outcome.verdict === "APPROVED_WITH_SUGGESTIONS") {
-    if (!enforceSuggestions) {
-      return { action: "continue", reason: "Review approved with suggestions (not enforced)" };
+    if (!enforceSuggestions || currentIteration >= maxRecurrence) {
+      return {
+        action: "continue",
+        reason: enforceSuggestions
+          ? `Review approved with suggestions — max recurrence (${maxRecurrence}) reached, continuing`
+          : "Review approved with suggestions (not enforced)",
+      };
     }
     const currentFindings = parseReviewFindings(outcome.output).map(f => ({
       ...f,

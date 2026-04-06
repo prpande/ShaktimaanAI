@@ -141,7 +141,10 @@ export async function runRecovery(
 
   const items = scanForRecovery(runtimeDir);
 
-  const RECOVERY_TIMEOUT_MS = 30_000; // 30 seconds per task
+  // Recovery timeout must be long enough for the agent to complete the current
+  // stage. Each stage has its own timeout (default 30-90 min in config), so
+  // recovery timeout should exceed the longest stage timeout. Using 2 hours.
+  const RECOVERY_TIMEOUT_MS = 2 * 60 * 60 * 1000; // 2 hours per task
 
   for (const item of items) {
     try {

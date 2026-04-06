@@ -7,7 +7,7 @@ import { gatherRepoContext } from "../../src/core/repo-context.js";
 const TEST_DIR = join(tmpdir(), "shkmn-test-repo-context-" + Date.now());
 
 beforeEach(() => mkdirSync(TEST_DIR, { recursive: true }));
-afterEach(() => rmSync(TEST_DIR, { recursive: true, force: true }));
+afterEach(() => rmSync(TEST_DIR, { recursive: true, force: true, maxRetries: 3, retryDelay: 200 }));
 
 // ─── empty / missing path ────────────────────────────────────────────────────
 

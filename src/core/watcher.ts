@@ -43,6 +43,7 @@ export function createWatcher(options: WatcherOptions): Watcher {
   let running = false;
   let fsWatcher: FSWatcher | null = null;
   let slackInterval: ReturnType<typeof setInterval> | null = null;
+  const processingFiles = new Set<string>();
 
   async function handleControlFile(filePath: string): Promise<void> {
     const content = readFileSync(filePath, "utf-8");
@@ -98,25 +99,37 @@ export function createWatcher(options: WatcherOptions): Watcher {
 
       fsWatcher.on("add", (filePath: string) => {
         if (filePath.endsWith(".task")) {
-          const taskContent = readFileSync(filePath, "utf-8");
-          const meta = parseTaskFile(taskContent);
-          if (meta.stages.length === 1 && meta.stages[0] === "quick") {
-            pipeline.startQuickRun(filePath, taskContent).catch((err: unknown) => {
-              logger.error(
-                `Failed to start quick run for "${filePath}": ${err instanceof Error ? err.message : String(err)}`,
-              );
-            });
-          } else {
-            pipeline.startRun(filePath).catch((err: unknown) => {
+          // Guard against duplicate chokidar events for the same file (common on Windows)
+          if (processingFiles.has(filePath)) return;
+          processingFiles.add(filePath);
+
+          const runTask = async () => {
+            try {
+              const taskContent = readFileSync(filePath, "utf-8");
+              const meta = parseTaskFile(taskContent);
+              if (meta.stages.length === 1 && meta.stages[0] === "quick") {
+                await pipeline.startQuickRun(filePath, taskContent);
+              } else {
+                await pipeline.startRun(filePath);
+              }
+            } catch (err: unknown) {
               logger.error(
                 `Failed to start run for "${filePath}": ${err instanceof Error ? err.message : String(err)}`,
               );
-            });
-          }
+            }
+            // Never remove task files from the set — each slug is unique, so
+            // duplicate chokidar events for the same file should always be ignored.
+          };
+          runTask();
         } else if (filePath.endsWith(".control")) {
-          handleControlFile(filePath).catch((err: unknown) => {
-            logger.error(`Failed to handle control "${filePath}": ${err instanceof Error ? err.message : String(err)}`);
-          });
+          if (processingFiles.has(filePath)) return;
+          processingFiles.add(filePath);
+
+          handleControlFile(filePath)
+            .catch((err: unknown) => {
+              logger.error(`Failed to handle control "${filePath}": ${err instanceof Error ? err.message : String(err)}`);
+            })
+            .finally(() => processingFiles.delete(filePath));
         }
       });
 
