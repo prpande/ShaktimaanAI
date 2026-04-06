@@ -2,8 +2,8 @@ import { describe, it, expect } from "vitest";
 import { DEFAULT_CONFIG, DEFAULT_AGENT_NAMES, DEFAULT_STAGE_TOOLS, STAGE_CONTEXT_RULES } from "../../src/config/defaults.js";
 
 describe("DEFAULT_AGENT_NAMES", () => {
-  it("has all 14 agent name entries", () => {
-    expect(Object.keys(DEFAULT_AGENT_NAMES)).toHaveLength(14);
+  it("has all 15 agent name entries", () => {
+    expect(Object.keys(DEFAULT_AGENT_NAMES)).toHaveLength(15);
   });
 
   it("includes all expected agent roles", () => {

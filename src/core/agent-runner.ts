@@ -103,7 +103,22 @@ export function buildSystemPrompt(options: AgentRunOptions): string {
   sections.push(`# Identity\n\nYou are ${agentName}, the ${stage} agent in the ShaktimaanAI pipeline.`);
 
   // Pipeline context
-  sections.push(`## Pipeline Context\n\nPipeline: ShaktimaanAI | Task: ${slug} | Stage: ${stage}\nStage sequence for this task: ${stageList}`);
+  const EXECUTION_STAGES = new Set(["impl", "validate", "review", "pr"]);
+  const isExecStage = EXECUTION_STAGES.has(stage);
+  let pipelineCtx = `## Pipeline Context\n\nPipeline: ShaktimaanAI | Task: ${slug} | Stage: ${stage}\nStage sequence for this task: ${stageList}`;
+  if (taskMeta.repo) {
+    if (isExecStage && options.cwd !== taskMeta.repo) {
+      // Execution stages run in a git worktree — direct all file operations there
+      pipelineCtx += `\nTarget repository (original): ${taskMeta.repo}`;
+      pipelineCtx += `\nWorking directory (YOUR worktree copy): ${options.cwd}`;
+      pipelineCtx += `\nCRITICAL: You are working in a git worktree. ALL file reads, writes, and edits MUST use paths under your working directory (${options.cwd}), NOT the original repo path. The worktree is a full copy of the repo.`;
+    } else {
+      pipelineCtx += `\nTarget repository: ${taskMeta.repo}`;
+      pipelineCtx += `\nIMPORTANT: Your working directory is NOT the repo root. Use absolute paths when reading repo files.`;
+    }
+    pipelineCtx += `\nIMPORTANT: On Windows, use forward slashes or escaped backslashes in paths. Do NOT use /c/Users/... paths in Node.js — use C:/Users/... instead.`;
+  }
+  sections.push(pipelineCtx);
 
   // Task content (conditional)
   if (rules.includeTaskContent) {
@@ -139,8 +154,20 @@ export function buildSystemPrompt(options: AgentRunOptions): string {
   // Agent instructions
   sections.push(`---\n\n${agentInstructions}`);
 
-  // Output path
-  sections.push(`---\n\nWrite your output to: ${outputPath}`);
+  // Output instructions — agents with Write access write directly;
+  // agents without Write access produce text output that the pipeline captures.
+  const { disallowed } = resolveToolPermissions(stage, config);
+  const canWrite = !disallowed.includes("Write");
+  if (canWrite) {
+    sections.push(`---\n\nWrite your output to: ${outputPath}`);
+  } else {
+    sections.push(
+      `---\n\n## Output Instructions\n\n` +
+      `Output your complete response as text. Do NOT attempt to write files — ` +
+      `the pipeline will capture your text output automatically. ` +
+      `Do NOT use Bash to write files (echo, cat heredoc, python, etc.).`,
+    );
+  }
 
   return sections.join("\n\n");
 }
@@ -179,21 +206,25 @@ export async function runAgent(options: AgentRunOptions): Promise<AgentRunResult
     let output = "";
     let costUsd = 0;
     let turns = 0;
+    let inputTokens = 0;
+    let outputTokens = 0;
     let receivedResult = false;
 
     const messages = query({
       prompt: systemPrompt,
-      allowedTools,
-      disallowedTools,
-      maxTurns,
-      cwd,
-      abortController,
-      // The Agent SDK requires bypassPermissions for non-interactive (headless)
-      // agent runs. Per-stage tool restrictions are enforced via allowedTools /
-      // disallowedTools above — the SDK's own permission UI is designed for
-      // interactive CLI use and cannot be used in a pipeline context.
-      permissionMode: "bypassPermissions" as const,
-      allowDangerouslySkipPermissions: true,
+      options: {
+        allowedTools,
+        disallowedTools,
+        maxTurns,
+        cwd,
+        abortController,
+        // The Agent SDK requires bypassPermissions for non-interactive (headless)
+        // agent runs. Per-stage tool restrictions are enforced via allowedTools /
+        // disallowedTools above — the SDK's own permission UI is designed for
+        // interactive CLI use and cannot be used in a pipeline context.
+        permissionMode: "bypassPermissions" as const,
+        allowDangerouslySkipPermissions: true,
+      },
     });
 
     for await (const message of messages) {
@@ -201,11 +232,14 @@ export async function runAgent(options: AgentRunOptions): Promise<AgentRunResult
       try {
         if (message.type === "result") {
           const msg = message as Record<string, unknown>;
+          const usageLog = msg.usage as Record<string, unknown> | undefined;
           streamLogger.log({
             type: message.type,
             subtype: msg.subtype,
             costUsd: msg.total_cost_usd,
             turns: msg.num_turns,
+            inputTokens: typeof usageLog?.input_tokens === "number" ? usageLog.input_tokens : 0,
+            outputTokens: typeof usageLog?.output_tokens === "number" ? usageLog.output_tokens : 0,
           });
         } else {
           const { type, ...rest } = message as Record<string, unknown>;
@@ -222,8 +256,26 @@ export async function runAgent(options: AgentRunOptions): Promise<AgentRunResult
           output = typeof msg.result === "string" ? msg.result : "";
           costUsd = typeof msg.total_cost_usd === "number" ? msg.total_cost_usd : 0;
           turns = typeof msg.num_turns === "number" ? msg.num_turns : 0;
+          const usage = msg.usage as Record<string, unknown> | undefined;
+          inputTokens = typeof usage?.input_tokens === "number" ? usage.input_tokens : 0;
+          outputTokens = typeof usage?.output_tokens === "number" ? usage.output_tokens : 0;
+        } else if (message.subtype === "error_max_turns") {
+          // Agent hit turn limit but may have produced useful partial output.
+          // Capture the output and cost, mark as success so the pipeline can
+          // decide whether the partial output is sufficient for the stage.
+          const msg = message as Record<string, unknown>;
+          output = typeof msg.result === "string" ? msg.result : "";
+          costUsd = typeof msg.total_cost_usd === "number" ? msg.total_cost_usd : 0;
+          turns = typeof msg.num_turns === "number" ? msg.num_turns : 0;
+          const usage = msg.usage as Record<string, unknown> | undefined;
+          inputTokens = typeof usage?.input_tokens === "number" ? usage.input_tokens : 0;
+          outputTokens = typeof usage?.output_tokens === "number" ? usage.output_tokens : 0;
+          logger.warn(
+            `[agent-runner] Stage "${stage}" hit max turns (${turns}) — using partial output (${output.length} chars)`,
+          );
+          break; // Stop reading stream after max turns to avoid wasted tokens
         } else {
-          // error subtype
+          // Hard error subtype (abort, timeout, etc.)
           const msg = message as Record<string, unknown>;
           const errors = Array.isArray(msg.errors) ? (msg.errors as string[]) : [];
           return {
@@ -231,6 +283,8 @@ export async function runAgent(options: AgentRunOptions): Promise<AgentRunResult
             output: "",
             costUsd: 0,
             turns: 0,
+            inputTokens: 0,
+            outputTokens: 0,
             durationMs: Date.now() - startMs,
             error: errors.join("; ") || "Agent returned error result",
           };
@@ -244,6 +298,8 @@ export async function runAgent(options: AgentRunOptions): Promise<AgentRunResult
         output: "",
         costUsd: 0,
         turns: 0,
+        inputTokens: 0,
+        outputTokens: 0,
         durationMs: Date.now() - startMs,
         error: "No result message received from agent — stream completed without a result",
       };
@@ -254,6 +310,8 @@ export async function runAgent(options: AgentRunOptions): Promise<AgentRunResult
       output,
       costUsd,
       turns,
+      inputTokens,
+      outputTokens,
       durationMs: Date.now() - startMs,
       streamLogPath,
     };
@@ -265,6 +323,8 @@ export async function runAgent(options: AgentRunOptions): Promise<AgentRunResult
       output: "",
       costUsd: 0,
       turns: 0,
+      inputTokens: 0,
+      outputTokens: 0,
       durationMs: Date.now() - startMs,
       error: message,
     };

@@ -534,7 +534,7 @@ describe("createPipeline", () => {
         output: options.stage === "validate"
           ? "**Verdict:** READY_FOR_REVIEW"
           : "done",
-        costUsd: 0, turns: 1, durationMs: 10,
+        costUsd: 0, turns: 1, inputTokens: 0, outputTokens: 0, durationMs: 10,
       };
     };
 
@@ -570,7 +570,7 @@ describe("createPipeline", () => {
       return {
         success: true,
         output: "**Verdict:** READY_FOR_REVIEW",
-        costUsd: 0, turns: 1, durationMs: 10,
+        costUsd: 0, turns: 1, inputTokens: 0, outputTokens: 0, durationMs: 10,
       };
     };
 
@@ -650,7 +650,7 @@ describe("pipeline retry integration", () => {
       if (options.stage === "impl") {
         implCallCount++;
         if (options.outputPath) writeFileSync(options.outputPath, "impl output");
-        return { success: true, output: "impl done", costUsd: 0, turns: 1, durationMs: 10 };
+        return { success: true, output: "impl done", costUsd: 0, turns: 1, inputTokens: 0, outputTokens: 0, durationMs: 10 };
       }
 
       if (options.stage === "validate") {
@@ -659,17 +659,17 @@ describe("pipeline retry integration", () => {
         const verdict = validateCallCount === 1 ? "NEEDS_FIXES" : "READY_FOR_REVIEW";
         const output = `Build output.\n\n**Verdict:** ${verdict}`;
         if (options.outputPath) writeFileSync(options.outputPath, output);
-        return { success: true, output, costUsd: 0, turns: 1, durationMs: 10 };
+        return { success: true, output, costUsd: 0, turns: 1, inputTokens: 0, outputTokens: 0, durationMs: 10 };
       }
 
       if (options.stage === "review") {
         const output = "Looks good.\n\n**Verdict:** APPROVED";
         if (options.outputPath) writeFileSync(options.outputPath, output);
-        return { success: true, output, costUsd: 0, turns: 1, durationMs: 10 };
+        return { success: true, output, costUsd: 0, turns: 1, inputTokens: 0, outputTokens: 0, durationMs: 10 };
       }
 
       if (options.outputPath) writeFileSync(options.outputPath, "pr done");
-      return { success: true, output: "pr done", costUsd: 0, turns: 1, durationMs: 10 };
+      return { success: true, output: "pr done", costUsd: 0, turns: 1, inputTokens: 0, outputTokens: 0, durationMs: 10 };
     };
 
     const config = makeConfig();
@@ -713,7 +713,7 @@ describe("pipeline retry integration", () => {
       return {
         success: true,
         output: "Build failed.\n\n**Verdict:** NEEDS_FIXES",
-        costUsd: 0, turns: 1, durationMs: 10,
+        costUsd: 0, turns: 1, inputTokens: 0, outputTokens: 0, durationMs: 10,
       };
     };
 
@@ -756,18 +756,18 @@ describe("pipeline retry integration", () => {
       }
       if (options.stage === "impl") {
         if (options.outputPath) writeFileSync(options.outputPath, "impl done");
-        return { success: true, output: "impl done", costUsd: 0, turns: 1, durationMs: 10 };
+        return { success: true, output: "impl done", costUsd: 0, turns: 1, inputTokens: 0, outputTokens: 0, durationMs: 10 };
       }
       validateRunCount++;
       if (validateRunCount === 1) {
         const out = "TypeScript error TS2345\n\n**Verdict:** NEEDS_FIXES";
         if (options.outputPath) writeFileSync(options.outputPath, out);
-        return { success: true, output: out, costUsd: 0, turns: 1, durationMs: 10 };
+        return { success: true, output: out, costUsd: 0, turns: 1, inputTokens: 0, outputTokens: 0, durationMs: 10 };
       }
       // Second validate passes
       const out = "All clear.\n\n**Verdict:** READY_FOR_REVIEW";
       if (options.outputPath) writeFileSync(options.outputPath, out);
-      return { success: true, output: out, costUsd: 0, turns: 1, durationMs: 10 };
+      return { success: true, output: out, costUsd: 0, turns: 1, inputTokens: 0, outputTokens: 0, durationMs: 10 };
     };
 
     const config = makeConfig();
@@ -810,26 +810,26 @@ describe("pipeline retry integration", () => {
       }
       if (options.stage === "impl") {
         if (options.outputPath) writeFileSync(options.outputPath, "impl done");
-        return { success: true, output: "impl done", costUsd: 0, turns: 1, durationMs: 10 };
+        return { success: true, output: "impl done", costUsd: 0, turns: 1, inputTokens: 0, outputTokens: 0, durationMs: 10 };
       }
       if (options.stage === "validate") {
         const out = "Tests pass.\n\n**Verdict:** READY_FOR_REVIEW";
         if (options.outputPath) writeFileSync(options.outputPath, out);
-        return { success: true, output: out, costUsd: 0, turns: 1, durationMs: 10 };
+        return { success: true, output: out, costUsd: 0, turns: 1, inputTokens: 0, outputTokens: 0, durationMs: 10 };
       }
       if (options.stage === "review") {
         reviewCallCount++;
         if (reviewCallCount === 1) {
           const out = "[R1] MUST_FIX: Missing error handling in fetchData\n\n**Verdict:** CHANGES_REQUIRED";
           if (options.outputPath) writeFileSync(options.outputPath, out);
-          return { success: true, output: out, costUsd: 0, turns: 1, durationMs: 10 };
+          return { success: true, output: out, costUsd: 0, turns: 1, inputTokens: 0, outputTokens: 0, durationMs: 10 };
         }
         const out = "All issues resolved.\n\n**Verdict:** APPROVED";
         if (options.outputPath) writeFileSync(options.outputPath, out);
-        return { success: true, output: out, costUsd: 0, turns: 1, durationMs: 10 };
+        return { success: true, output: out, costUsd: 0, turns: 1, inputTokens: 0, outputTokens: 0, durationMs: 10 };
       }
       if (options.outputPath) writeFileSync(options.outputPath, "pr done");
-      return { success: true, output: "pr done", costUsd: 0, turns: 1, durationMs: 10 };
+      return { success: true, output: "pr done", costUsd: 0, turns: 1, inputTokens: 0, outputTokens: 0, durationMs: 10 };
     };
 
     const config = makeConfig();

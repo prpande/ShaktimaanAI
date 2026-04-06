@@ -1,4 +1,4 @@
-import { mkdirSync, existsSync, readFileSync, appendFileSync } from "fs";
+import { mkdirSync, existsSync, readFileSync, appendFileSync, readdirSync } from "fs";
 import { join } from "path";
 
 // ---------------------------------------------------------------------------
@@ -101,4 +101,55 @@ export function readDailyLog(dir: string, date: string): DailyLogEntry[] {
     .split("\n")
     .filter((line) => line.trim().length > 0)
     .map((line) => JSON.parse(line) as DailyLogEntry);
+}
+
+// ---------------------------------------------------------------------------
+// readAllDailyLogs
+// ---------------------------------------------------------------------------
+
+/**
+ * Reads all JSONL daily log files from dir, optionally filtered by date range.
+ * Returns entries sorted by timestamp ascending. Skips malformed lines with
+ * a stderr warning. Returns [] if the directory doesn't exist or has no files.
+ */
+export function readAllDailyLogs(
+  dir: string,
+  options?: { from?: string; to?: string },
+): DailyLogEntry[] {
+  if (!existsSync(dir)) return [];
+
+  const DATE_JSONL_RE = /^\d{4}-\d{2}-\d{2}\.jsonl$/;
+  const files = readdirSync(dir)
+    .filter((f) => DATE_JSONL_RE.test(f))
+    .sort(); // alphabetical = chronological for YYYY-MM-DD.jsonl
+
+  const entries: DailyLogEntry[] = [];
+
+  for (const file of files) {
+    // Extract date from filename (e.g., "2026-04-01.jsonl" → "2026-04-01")
+    const date = file.replace(/\.jsonl$/, "");
+
+    // Apply date range filter at the file level
+    if (options?.from && date < options.from) continue;
+    if (options?.to && date > options.to) continue;
+
+    const filePath = join(dir, file);
+    const raw = readFileSync(filePath, "utf8");
+    const lines = raw.split("\n").filter((line) => line.trim().length > 0);
+
+    for (const line of lines) {
+      try {
+        entries.push(JSON.parse(line) as DailyLogEntry);
+      } catch {
+        process.stderr.write(
+          `Warning: skipping malformed line in ${file}: ${line.slice(0, 80)}\n`,
+        );
+      }
+    }
+  }
+
+  // Sort by timestamp ascending
+  entries.sort((a, b) => a.timestamp.localeCompare(b.timestamp));
+
+  return entries;
 }

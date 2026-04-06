@@ -1,4 +1,4 @@
-import { mkdirSync, readFileSync, writeFileSync, copyFileSync, renameSync, existsSync, unlinkSync, readdirSync } from "node:fs";
+import { mkdirSync, readFileSync, writeFileSync, copyFileSync, renameSync, existsSync, unlinkSync, readdirSync, cpSync, rmSync } from "node:fs";
 import { join, basename, dirname } from "node:path";
 
 import { parseTaskFile, type TaskMeta } from "../task/parser.js";
@@ -108,13 +108,42 @@ export function moveTaskDir(
   const destParent = join(runtimeDir, toSubdir);
   mkdirSync(destParent, { recursive: true });
   const dest = join(destParent, slug);
-  try {
-    renameSync(src, dest);
-  } catch (err) {
-    throw new Error(
-      `Failed to move task "${slug}" from "${fromSubdir}" to "${toSubdir}": ` +
-      `${err instanceof Error ? err.message : String(err)}`,
-    );
+
+  // Retry with backoff for Windows EBUSY/EPERM file locking issues.
+  // renameSync fails on Windows when files inside the directory have open handles.
+  const maxRetries = 5;
+  for (let attempt = 0; attempt <= maxRetries; attempt++) {
+    try {
+      renameSync(src, dest);
+      return dest;
+    } catch (err) {
+      const code = (err as NodeJS.ErrnoException).code;
+      if ((code === "EBUSY" || code === "EPERM") && attempt < maxRetries) {
+        // Wait for file handles to be released (100ms, 200ms, 400ms, 800ms, 1600ms)
+        const delayMs = 100 * Math.pow(2, attempt);
+        const start = Date.now();
+        while (Date.now() - start < delayMs) { /* spin wait — sync context */ }
+        continue;
+      }
+      // If retries exhausted or different error, fall back to copy+delete
+      if (code === "EBUSY" || code === "EPERM") {
+        try {
+          cpSync(src, dest, { recursive: true });
+          rmSync(src, { recursive: true, force: true });
+          return dest;
+        } catch (copyErr) {
+          throw new Error(
+            `Failed to move task "${slug}" from "${fromSubdir}" to "${toSubdir}": ` +
+            `rename failed (${(err as Error).message}), copy fallback also failed: ` +
+            `${copyErr instanceof Error ? copyErr.message : String(copyErr)}`,
+          );
+        }
+      }
+      throw new Error(
+        `Failed to move task "${slug}" from "${fromSubdir}" to "${toSubdir}": ` +
+        `${err instanceof Error ? err.message : String(err)}`,
+      );
+    }
   }
   return dest;
 }
@@ -519,7 +548,9 @@ export function createPipeline(options: PipelineOptions): Pipeline {
           stage,
           agentName: config.agents.names[stage] ?? stage,
           durationSeconds: Math.round(result.durationMs / 1000),
-          tokensUsed: result.costUsd,
+          costUsd: result.costUsd,
+          inputTokens: result.inputTokens,
+          outputTokens: result.outputTokens,
           artifactPath: `${stage}-output${outputSuffix}.md`,
           agentStreamLog: result.streamLogPath ?? "",
           success: true,

@@ -69,6 +69,8 @@ export interface AgentRunResult {
   costUsd: number;
   turns: number;
   durationMs: number;
+  inputTokens: number;
+  outputTokens: number;
   error?: string;
   streamLogPath?: string;
 }
