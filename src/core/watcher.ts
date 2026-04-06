@@ -39,10 +39,9 @@ export interface WatcherOptions {
 // ─── createWatcher ────────────────────────────────────────────────────────────
 
 export function createWatcher(options: WatcherOptions): Watcher {
-  const { runtimeDir, pipeline, logger, config } = options;
+  const { runtimeDir, pipeline, logger } = options;
   let running = false;
   let fsWatcher: FSWatcher | null = null;
-  let slackInterval: ReturnType<typeof setInterval> | null = null;
   const processingFiles = new Set<string>();
 
   async function handleControlFile(filePath: string): Promise<void> {
@@ -143,22 +142,10 @@ export function createWatcher(options: WatcherOptions): Watcher {
         logger.info(`Watching inbox: ${inboxDir}`);
       });
 
-      if (config.slack.enabled) {
-        const pollMs = config.slack.pollIntervalSeconds * 1000;
-        slackInterval = setInterval(() => {
-          logger.info("[watcher] Slack poll tick");
-        }, pollMs);
-        logger.info(`[watcher] Slack polling enabled (${config.slack.pollIntervalSeconds}s interval)`);
-      }
-
       running = true;
     },
 
     async stop(): Promise<void> {
-      if (slackInterval) {
-        clearInterval(slackInterval);
-        slackInterval = null;
-      }
       if (fsWatcher) {
         await fsWatcher.close();
         fsWatcher = null;
