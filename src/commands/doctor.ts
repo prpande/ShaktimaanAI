@@ -226,10 +226,6 @@ export function fixMissingConfigDefaults(configPath: string): FixResult {
 
 /**
  * Recursively merge defaults into target. Only adds keys that are missing
- * in target. Never overwrites existing values.
- */
-/**
- * Recursively merge defaults into target. Only adds keys that are missing
  * in target. Never overwrites existing values. Skips empty-string defaults
  * to avoid blanking out user values with placeholder defaults.
  */
