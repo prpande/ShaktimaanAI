@@ -57,6 +57,8 @@ function makeRunState(slug: string, overrides: Partial<RunState> = {}): RunState
     validateRetryCount: 0,
     reviewRetryCount: 0,
     reviewIssues: [],
+    suggestionRetryUsed: false,
+    validateFailCount: 0,
     stageHints: {},
     retryAttempts: {},
     ...overrides,
@@ -94,7 +96,7 @@ describe("cancel", () => {
     });
 
     const config = makeConfig();
-    const registry = createAgentRegistry(5, 2);
+    const registry = createAgentRegistry(5);
     const pipeline = createPipeline({ config, registry, runner: noopRunner, logger: noopLogger });
 
     await pipeline.cancel(slug);
@@ -114,7 +116,7 @@ describe("cancel", () => {
     });
 
     const config = makeConfig();
-    const registry = createAgentRegistry(5, 2);
+    const registry = createAgentRegistry(5);
     const pipeline = createPipeline({ config, registry, runner: noopRunner, logger: noopLogger });
 
     await pipeline.cancel(slug);
@@ -139,7 +141,7 @@ describe("pause", () => {
     });
 
     const config = makeConfig();
-    const registry = createAgentRegistry(5, 2);
+    const registry = createAgentRegistry(5);
     const pipeline = createPipeline({ config, registry, runner: noopRunner, logger: noopLogger });
 
     await pipeline.pause(slug);
@@ -165,7 +167,7 @@ describe("modifyStages", () => {
     });
 
     const config = makeConfig();
-    const registry = createAgentRegistry(5, 2);
+    const registry = createAgentRegistry(5);
     const pipeline = createPipeline({ config, registry, runner: noopRunner, logger: noopLogger });
 
     await pipeline.modifyStages(slug, ["questions", "impl", "pr"]);
@@ -183,7 +185,7 @@ describe("modifyStages", () => {
     });
 
     const config = makeConfig();
-    const registry = createAgentRegistry(5, 2);
+    const registry = createAgentRegistry(5);
     const pipeline = createPipeline({ config, registry, runner: noopRunner, logger: noopLogger });
 
     await expect(pipeline.modifyStages(slug, [])).rejects.toThrow("Cannot set empty stage list");
@@ -198,7 +200,7 @@ describe("modifyStages", () => {
     });
 
     const config = makeConfig();
-    const registry = createAgentRegistry(5, 2);
+    const registry = createAgentRegistry(5);
     const pipeline = createPipeline({ config, registry, runner: noopRunner, logger: noopLogger });
 
     await expect(pipeline.modifyStages(slug, ["questions", "bogus", "notastage"])).rejects.toThrow(
@@ -215,7 +217,7 @@ describe("modifyStages", () => {
     });
 
     const config = makeConfig();
-    const registry = createAgentRegistry(5, 2);
+    const registry = createAgentRegistry(5);
     const pipeline = createPipeline({ config, registry, runner: noopRunner, logger: noopLogger });
 
     await expect(pipeline.modifyStages(slug, ["questions", "impl", "impl"])).rejects.toThrow(
@@ -236,7 +238,7 @@ describe("resume", () => {
     });
 
     const config = makeConfig();
-    const registry = createAgentRegistry(5, 2);
+    const registry = createAgentRegistry(5);
     const pipeline = createPipeline({ config, registry, runner: noopRunner, logger: noopLogger });
 
     await expect(pipeline.resume(slug)).rejects.toThrow("use approve");
@@ -256,7 +258,7 @@ describe("restartStage — unmapped stage guard", () => {
     });
 
     const config = makeConfig();
-    const registry = createAgentRegistry(5, 2);
+    const registry = createAgentRegistry(5);
     const pipeline = createPipeline({ config, registry, runner: noopRunner, logger: noopLogger });
 
     await expect(pipeline.restartStage(slug)).rejects.toThrow(
@@ -280,7 +282,7 @@ describe("retry — unmapped stage guard", () => {
     writeRunState(holdTaskDir, state);
 
     const config = makeConfig();
-    const registry = createAgentRegistry(5, 2);
+    const registry = createAgentRegistry(5);
     const pipeline = createPipeline({ config, registry, runner: noopRunner, logger: noopLogger });
 
     await expect(pipeline.retry(slug, "please fix the thing")).rejects.toThrow(
@@ -306,7 +308,7 @@ describe("addNotifier", () => {
     };
 
     const config = makeConfig();
-    const registry = createAgentRegistry(5, 2);
+    const registry = createAgentRegistry(5);
     const pipeline = createPipeline({ config, registry, runner: noopRunner, logger: noopLogger });
     pipeline.addNotifier(testNotifier);
 
