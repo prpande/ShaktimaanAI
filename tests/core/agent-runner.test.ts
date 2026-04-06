@@ -114,8 +114,8 @@ describe("buildSystemPrompt", () => {
 
   it("omits previous output section when label is null (questions — first stage)", () => {
     const result = buildSystemPrompt(makeOptions({ stage: "questions" }));
-    // Should not have any previous output heading
-    expect(result).not.toMatch(/## .*(?:Previous|Output|Questions)/);
+    // Should not have any previous output heading (Output Instructions is fine — that's the capture directive)
+    expect(result).not.toMatch(/## .*(?:Previous|Questions to Investigate)/);
   });
 
   it("omits repo context for stages that don't need it (classify)", () => {
@@ -128,9 +128,10 @@ describe("buildSystemPrompt", () => {
     expect(result).toContain("Ask good questions.");
   });
 
-  it("includes output path directive at the end", () => {
+  it("includes output instructions at the end", () => {
     const result = buildSystemPrompt(makeOptions({ stage: "questions" }));
-    expect(result).toContain("Write your output to: /tmp/output/questions.md");
+    // Read-only agents get text-capture instructions instead of file-write directives
+    expect(result).toContain("## Output Instructions");
   });
 
   it("uses custom agent name from config override", () => {
@@ -257,10 +258,10 @@ describe("resolveToolPermissions", () => {
 // ─── resolveMaxTurns (2 params) ──────────────────────────────────────────────
 
 describe("resolveMaxTurns", () => {
-  it("prefers config value over default (questions -> 15)", () => {
+  it("prefers config value over default (questions -> 30)", () => {
     const config = makeConfig();
     const result = resolveMaxTurns("questions", config);
-    expect(result).toBe(15);
+    expect(result).toBe(30);
   });
 
   it("falls back to 30 for unknown stage", () => {
