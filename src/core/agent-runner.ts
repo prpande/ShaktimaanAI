@@ -206,6 +206,8 @@ export async function runAgent(options: AgentRunOptions): Promise<AgentRunResult
     let output = "";
     let costUsd = 0;
     let turns = 0;
+    let inputTokens = 0;
+    let outputTokens = 0;
     let receivedResult = false;
 
     const messages = query({
@@ -230,11 +232,14 @@ export async function runAgent(options: AgentRunOptions): Promise<AgentRunResult
       try {
         if (message.type === "result") {
           const msg = message as Record<string, unknown>;
+          const usageLog = msg.usage as Record<string, unknown> | undefined;
           streamLogger.log({
             type: message.type,
             subtype: msg.subtype,
             costUsd: msg.total_cost_usd,
             turns: msg.num_turns,
+            inputTokens: typeof usageLog?.input_tokens === "number" ? usageLog.input_tokens : 0,
+            outputTokens: typeof usageLog?.output_tokens === "number" ? usageLog.output_tokens : 0,
           });
         } else {
           const { type, ...rest } = message as Record<string, unknown>;
@@ -251,6 +256,9 @@ export async function runAgent(options: AgentRunOptions): Promise<AgentRunResult
           output = typeof msg.result === "string" ? msg.result : "";
           costUsd = typeof msg.total_cost_usd === "number" ? msg.total_cost_usd : 0;
           turns = typeof msg.num_turns === "number" ? msg.num_turns : 0;
+          const usage = msg.usage as Record<string, unknown> | undefined;
+          inputTokens = typeof usage?.input_tokens === "number" ? usage.input_tokens : 0;
+          outputTokens = typeof usage?.output_tokens === "number" ? usage.output_tokens : 0;
         } else if (message.subtype === "error_max_turns") {
           // Agent hit turn limit but may have produced useful partial output.
           // Capture the output and cost, mark as success so the pipeline can
@@ -259,6 +267,9 @@ export async function runAgent(options: AgentRunOptions): Promise<AgentRunResult
           output = typeof msg.result === "string" ? msg.result : "";
           costUsd = typeof msg.total_cost_usd === "number" ? msg.total_cost_usd : 0;
           turns = typeof msg.num_turns === "number" ? msg.num_turns : 0;
+          const usage = msg.usage as Record<string, unknown> | undefined;
+          inputTokens = typeof usage?.input_tokens === "number" ? usage.input_tokens : 0;
+          outputTokens = typeof usage?.output_tokens === "number" ? usage.output_tokens : 0;
           logger.warn(
             `[agent-runner] Stage "${stage}" hit max turns (${turns}) — using partial output (${output.length} chars)`,
           );
@@ -272,6 +283,8 @@ export async function runAgent(options: AgentRunOptions): Promise<AgentRunResult
             output: "",
             costUsd: 0,
             turns: 0,
+            inputTokens: 0,
+            outputTokens: 0,
             durationMs: Date.now() - startMs,
             error: errors.join("; ") || "Agent returned error result",
           };
@@ -285,6 +298,8 @@ export async function runAgent(options: AgentRunOptions): Promise<AgentRunResult
         output: "",
         costUsd: 0,
         turns: 0,
+        inputTokens: 0,
+        outputTokens: 0,
         durationMs: Date.now() - startMs,
         error: "No result message received from agent — stream completed without a result",
       };
@@ -295,6 +310,8 @@ export async function runAgent(options: AgentRunOptions): Promise<AgentRunResult
       output,
       costUsd,
       turns,
+      inputTokens,
+      outputTokens,
       durationMs: Date.now() - startMs,
       streamLogPath,
     };
@@ -306,6 +323,8 @@ export async function runAgent(options: AgentRunOptions): Promise<AgentRunResult
       output: "",
       costUsd: 0,
       turns: 0,
+      inputTokens: 0,
+      outputTokens: 0,
       durationMs: Date.now() - startMs,
       error: message,
     };

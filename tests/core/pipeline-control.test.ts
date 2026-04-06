@@ -32,6 +32,8 @@ const noopRunner = async (_opts: AgentRunOptions): Promise<AgentRunResult> => ({
   output: "done",
   costUsd: 0,
   turns: 1,
+  inputTokens: 0,
+  outputTokens: 0,
   durationMs: 100,
 });
 

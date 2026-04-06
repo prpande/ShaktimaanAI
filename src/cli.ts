@@ -17,6 +17,8 @@ import { registerResumeCommand } from "./commands/resume.js";
 import { registerModifyStagesCommand } from "./commands/modify-stages.js";
 import { registerRestartStageCommand } from "./commands/restart-stage.js";
 import { registerRetryCommand } from "./commands/retry.js";
+import { registerDoctorCommand } from "./commands/doctor.js";
+import { registerStatsCommand } from "./commands/stats.js";
 
 const program = new Command();
 
@@ -80,5 +82,7 @@ registerResumeCommand(program);
 registerModifyStagesCommand(program);
 registerRestartStageCommand(program);
 registerRetryCommand(program);
+registerDoctorCommand(program);
+registerStatsCommand(program);
 
 program.parse();
