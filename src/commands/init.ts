@@ -48,7 +48,6 @@ export function writeInitConfig(dir: string, answers: InitAnswers): void {
       defaultStages: [...d.agents.defaultStages],
       defaultReviewAfter: d.agents.defaultReviewAfter,
       maxConcurrentTotal: d.agents.maxConcurrentTotal,
-      maxConcurrentValidate: d.agents.maxConcurrentValidate,
       maxTurns: { ...d.agents.maxTurns },
       timeoutsMinutes: { ...d.agents.timeoutsMinutes },
       heartbeatTimeoutMinutes: d.agents.heartbeatTimeoutMinutes,
