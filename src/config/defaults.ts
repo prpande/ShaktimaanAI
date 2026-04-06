@@ -1,5 +1,5 @@
 export const DEFAULT_AGENT_NAMES = {
-  questions: "Narada",
+  questions: "Gargi",
   research: "Chitragupta",
   design: "Vishwakarma",
   structure: "Vastu",
@@ -14,6 +14,7 @@ export const DEFAULT_AGENT_NAMES = {
   approvalHandler: "Indra",
   intentClassifier: "Sutradhaar",
   quick: "Astra",
+  slackIO: "Narada",
 } as const satisfies Record<string, string>;
 
 export type AgentRole = keyof typeof DEFAULT_AGENT_NAMES;

@@ -34,7 +34,7 @@ describe("writeInitConfig", () => {
     expect(config.pipeline.runtimeDir).toBe("/home/user/.shkmn/runtime");
     expect(config.pipeline.dashboardRepoUrl).toBe("https://github.com/user/dash.git");
     expect(config.ado.org).toBe("https://dev.azure.com/myorg");
-    expect(config.agents.names.questions).toBe("Narada");
+    expect(config.agents.names.questions).toBe("Gargi");
   });
 
   it("writes valid JSON that passes config loader validation", () => {

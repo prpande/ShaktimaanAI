@@ -2,8 +2,8 @@ import { describe, it, expect } from "vitest";
 import { DEFAULT_CONFIG, DEFAULT_AGENT_NAMES, DEFAULT_STAGE_TOOLS, STAGE_CONTEXT_RULES } from "../../src/config/defaults.js";
 
 describe("DEFAULT_AGENT_NAMES", () => {
-  it("has all 15 agent name entries", () => {
-    expect(Object.keys(DEFAULT_AGENT_NAMES)).toHaveLength(15);
+  it("has all 16 agent name entries", () => {
+    expect(Object.keys(DEFAULT_AGENT_NAMES)).toHaveLength(16);
   });
 
   it("includes all expected agent roles", () => {
@@ -11,14 +11,19 @@ describe("DEFAULT_AGENT_NAMES", () => {
       "questions", "research", "design", "structure", "plan",
       "workTree", "impl", "validate", "review", "pr",
       "watcher", "taskCreator", "approvalHandler", "intentClassifier",
+      "slackIO",
     ];
     for (const role of roles) {
       expect(DEFAULT_AGENT_NAMES).toHaveProperty(role);
     }
   });
 
-  it("maps questions to Narada", () => {
-    expect(DEFAULT_AGENT_NAMES.questions).toBe("Narada");
+  it("maps questions to Gargi", () => {
+    expect(DEFAULT_AGENT_NAMES.questions).toBe("Gargi");
+  });
+
+  it("maps slackIO to Narada", () => {
+    expect(DEFAULT_AGENT_NAMES.slackIO).toBe("Narada");
   });
 
   it("maps watcher to Heimdall", () => {
