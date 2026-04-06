@@ -22,7 +22,6 @@ describe("configSchema", () => {
         defaultStages: ["research", "impl"],
         defaultReviewAfter: "research",
         maxConcurrentTotal: 2,
-        maxConcurrentValidate: 1,
         maxTurns: { research: 20 },
         timeoutsMinutes: { research: 30 },
         heartbeatTimeoutMinutes: 5,
