@@ -241,7 +241,7 @@ shkmn approve <slug>  →  .control file written to 00-inbox/
                          Watcher picks up → pipeline resumes:
                            structure (Vastu)
                              → plan (Chanakya)
-                               → impl (Karigar)
+                               → impl (Hanuman sets up worktree → Karigar implements)
                                  → validate (Dharma)
                                    → review (Drona)
                                      → pr (Garuda) → PR created on shkmn/{slug}
@@ -303,6 +303,8 @@ Just run `shkmn start` again. The recovery system automatically:
 - Processes unhandled `.task` files from the inbox
 
 **Edge case:** If `run-state.json` inside a task directory is corrupted (e.g., due to a hard crash mid-write), the recovery system logs an error but continues with other tasks. To fix: delete the affected task directory from the runtime folder and re-submit the task.
+
+> **Note:** Recovery has a 2-hour timeout per task. If a task was mid-execution in a very long stage when the crash happened, recovery may time out — in that case, re-submit the task with `shkmn task`.
 
 ---
 
