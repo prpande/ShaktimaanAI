@@ -242,7 +242,7 @@ shkmn approve <slug>  →  .control file written to 00-inbox/
                            structure (Vastu)
                              → plan (Chanakya)
                                → impl (Hanuman sets up worktree → Karigar implements)
-                                 → validate (Dharma)
+                                 → validate (Dharma verifies)
                                    → review (Drona)
                                      → pr (Garuda) → PR created on shkmn/{slug}
 ```

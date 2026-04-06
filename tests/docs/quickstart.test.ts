@@ -8,6 +8,11 @@ describe("QUICKSTART.md", () => {
   let content: string;
 
   beforeAll(() => {
+    if (!existsSync(QUICKSTART_PATH)) {
+      throw new Error(
+        `QUICKSTART.md not found at ${QUICKSTART_PATH} — file must exist before tests can run`
+      );
+    }
     content = readFileSync(QUICKSTART_PATH, "utf-8");
   });
 
