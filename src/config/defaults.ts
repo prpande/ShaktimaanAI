@@ -93,6 +93,7 @@ export interface ShkmnConfig {
     maxValidateRetries: number;
     maxSuggestionRetriesPerCycle: number;
     tools: Record<string, { allowed?: string[]; disallowed?: string[] }>;
+    models: Record<string, string>;
   };
   schedule: {
     rollupTime: string;
@@ -179,6 +180,20 @@ export const DEFAULT_CONFIG: ShkmnConfig = {
     maxValidateRetries: 2,
     maxSuggestionRetriesPerCycle: 1,
     tools: {},
+    models: {
+      questions: "sonnet",
+      research: "opus",
+      design: "opus",
+      structure: "sonnet",
+      plan: "opus",
+      impl: "opus",
+      review: "sonnet",
+      validate: "sonnet",
+      pr: "sonnet",
+      classify: "haiku",
+      "slack-io": "haiku",
+      quick: "sonnet",
+    },
   },
   schedule: {
     rollupTime: "23:55",

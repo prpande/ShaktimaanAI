@@ -62,6 +62,14 @@ describe("DEFAULT_CONFIG", () => {
     ]);
     expect(DEFAULT_CONFIG.agents.defaultReviewAfter).toBe("design");
   });
+
+  it("has agents.models with per-stage model assignments", () => {
+    expect(DEFAULT_CONFIG.agents.models).toBeDefined();
+    expect(DEFAULT_CONFIG.agents.models["slack-io"]).toBe("haiku");
+    expect(DEFAULT_CONFIG.agents.models.classify).toBe("haiku");
+    expect(DEFAULT_CONFIG.agents.models.impl).toBe("opus");
+    expect(DEFAULT_CONFIG.agents.models.questions).toBe("sonnet");
+  });
 });
 
 describe("DEFAULT_STAGE_TOOLS", () => {

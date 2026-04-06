@@ -83,6 +83,7 @@ export function resolveConfig(parsed: ConfigParsed): ResolvedConfig {
       maxValidateRetries: parsed.agents?.maxValidateRetries ?? da.maxValidateRetries,
       maxSuggestionRetriesPerCycle: parsed.agents?.maxSuggestionRetriesPerCycle ?? da.maxSuggestionRetriesPerCycle,
       tools: { ...da.tools, ...parsed.agents?.tools },
+      models: { ...da.models, ...parsed.agents?.models },
     },
     schedule: {
       rollupTime: parsed.schedule?.rollupTime ?? d.schedule.rollupTime,

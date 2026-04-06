@@ -50,6 +50,7 @@ export const configSchema = z.object({
       allowed: z.array(z.string()).optional(),
       disallowed: z.array(z.string()).optional(),
     })).optional().default({}),
+    models: z.record(z.string(), z.string()).optional().default({}),
   }).optional().default({}),
   schedule: z.object({
     rollupTime: z.string().optional(),
