@@ -2,7 +2,7 @@ import type { ResolvedConfig } from "../config/loader.js";
 
 export type PipelineStage =
   | "questions" | "research" | "design" | "structure" | "plan"
-  | "impl" | "validate" | "review" | "pr";
+  | "impl" | "review" | "validate" | "pr";
 
 export type RunStatus = "running" | "hold" | "complete" | "failed";
 
@@ -40,9 +40,11 @@ export interface RunState {
   invocationCwd?: string;
 
   // Retry counters
-  validateRetryCount: number;
+  validateRetryCount?: number;
   reviewRetryCount: number;
   reviewIssues: ReviewIssue[];
+  suggestionRetryUsed: boolean;   // NEW — resets each impl cycle
+  validateFailCount: number;      // NEW — tracks post-review validate failures
 
   // Spec 3 fields
   stageHints: Record<string, string[]>;
