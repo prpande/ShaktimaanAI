@@ -14,13 +14,12 @@ export interface AgentRegistry {
   unregister(id: string): void;
   getActive(): AgentEntry[];
   getActiveCount(): number;
-  getActiveValidateCount(): number;
   canStartAgent(stage: string): boolean;
   abortAll(): void;
   abortBySlug(slug: string): boolean;
 }
 
-export function createAgentRegistry(maxConcurrentTotal: number, maxConcurrentValidate: number): AgentRegistry {
+export function createAgentRegistry(maxConcurrentTotal: number): AgentRegistry {
   const agents = new Map<string, AgentEntry>();
 
   return {
@@ -49,20 +48,8 @@ export function createAgentRegistry(maxConcurrentTotal: number, maxConcurrentVal
       return agents.size;
     },
 
-    getActiveValidateCount() {
-      let count = 0;
-      for (const entry of agents.values()) {
-        if (entry.stage === "validate") count++;
-      }
-      return count;
-    },
-
-    canStartAgent(stage) {
-      if (agents.size >= maxConcurrentTotal) return false;
-      if (stage === "validate" && this.getActiveValidateCount() >= maxConcurrentValidate) {
-        return false;
-      }
-      return true;
+    canStartAgent(_stage: string) {
+      return agents.size < maxConcurrentTotal;
     },
 
     abortAll() {

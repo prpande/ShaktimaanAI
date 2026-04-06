@@ -43,10 +43,7 @@ export function registerStartCommand(program: Command): void {
       // 3. Create system logger and agent registry
       const logDir = join(config.pipeline.runtimeDir, "logs");
       const logger = createSystemLogger(logDir);
-      const registry = createAgentRegistry(
-        config.agents.maxConcurrentTotal,
-        config.agents.maxConcurrentValidate,
-      );
+      const registry = createAgentRegistry(config.agents.maxConcurrentTotal);
 
       // 4. Run worktree cleanup on startup if enabled
       if (config.worktree.cleanupOnStartup) {

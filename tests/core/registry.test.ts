@@ -5,14 +5,14 @@ import { createAgentRegistry } from "../../src/core/registry.js";
 
 describe("register", () => {
   it("returns a non-empty id string", () => {
-    const registry = createAgentRegistry(5, 2);
+    const registry = createAgentRegistry(5);
     const id = registry.register("my-slug", "questions", "Narada", new AbortController());
     expect(typeof id).toBe("string");
     expect(id.length).toBeGreaterThan(0);
   });
 
   it("increments active count after each registration", () => {
-    const registry = createAgentRegistry(5, 2);
+    const registry = createAgentRegistry(5);
     expect(registry.getActiveCount()).toBe(0);
     registry.register("slug-1", "questions", "Narada", new AbortController());
     expect(registry.getActiveCount()).toBe(1);
@@ -21,14 +21,14 @@ describe("register", () => {
   });
 
   it("returns unique ids for each registration", () => {
-    const registry = createAgentRegistry(5, 2);
+    const registry = createAgentRegistry(5);
     const id1 = registry.register("slug-1", "questions", "Narada", new AbortController());
     const id2 = registry.register("slug-2", "impl", "Parashurama", new AbortController());
     expect(id1).not.toBe(id2);
   });
 
   it("stores agent details accessible via getActive()", () => {
-    const registry = createAgentRegistry(5, 2);
+    const registry = createAgentRegistry(5);
     const beforeRegister = new Date().toISOString();
     const ctrl = new AbortController();
     const id = registry.register("feature-slug", "validate", "Chitragupta", ctrl);
@@ -54,7 +54,7 @@ describe("register", () => {
 
 describe("unregister", () => {
   it("removes an agent by id", () => {
-    const registry = createAgentRegistry(5, 2);
+    const registry = createAgentRegistry(5);
     const id = registry.register("slug-1", "questions", "Narada", new AbortController());
     expect(registry.getActiveCount()).toBe(1);
     registry.unregister(id);
@@ -62,14 +62,14 @@ describe("unregister", () => {
   });
 
   it("is a no-op for unknown ids", () => {
-    const registry = createAgentRegistry(5, 2);
+    const registry = createAgentRegistry(5);
     registry.register("slug-1", "questions", "Narada", new AbortController());
     expect(() => registry.unregister("non-existent-id")).not.toThrow();
     expect(registry.getActiveCount()).toBe(1);
   });
 
   it("only removes the specified agent, leaving others intact", () => {
-    const registry = createAgentRegistry(5, 2);
+    const registry = createAgentRegistry(5);
     const id1 = registry.register("slug-1", "questions", "Narada", new AbortController());
     const id2 = registry.register("slug-2", "impl", "Parashurama", new AbortController());
     registry.unregister(id1);
@@ -80,55 +80,29 @@ describe("unregister", () => {
   });
 });
 
-// ─── getActiveValidateCount ───────────────────────────────────────────────────
-
-describe("getActiveValidateCount", () => {
-  it("returns 0 when no agents are registered", () => {
-    const registry = createAgentRegistry(5, 2);
-    expect(registry.getActiveValidateCount()).toBe(0);
-  });
-
-  it("counts only validate-stage agents", () => {
-    const registry = createAgentRegistry(10, 5);
-    registry.register("slug-1", "validate", "Chitragupta", new AbortController());
-    registry.register("slug-2", "questions", "Narada", new AbortController());
-    registry.register("slug-3", "validate", "Chitragupta", new AbortController());
-    expect(registry.getActiveValidateCount()).toBe(2);
-  });
-
-  it("updates count after unregister", () => {
-    const registry = createAgentRegistry(10, 5);
-    const id = registry.register("slug-1", "validate", "Chitragupta", new AbortController());
-    registry.register("slug-2", "validate", "Chitragupta", new AbortController());
-    expect(registry.getActiveValidateCount()).toBe(2);
-    registry.unregister(id);
-    expect(registry.getActiveValidateCount()).toBe(1);
-  });
-});
-
 // ─── canStartAgent ───────────────────────────────────────────────────────────
 
 describe("canStartAgent", () => {
   it("returns true when no agents are running", () => {
-    const registry = createAgentRegistry(2, 1);
+    const registry = createAgentRegistry(2);
     expect(registry.canStartAgent("questions")).toBe(true);
   });
 
   it("returns true when under total limit", () => {
-    const registry = createAgentRegistry(3, 2);
+    const registry = createAgentRegistry(3);
     registry.register("slug-1", "questions", "Narada", new AbortController());
     expect(registry.canStartAgent("impl")).toBe(true);
   });
 
   it("returns false when at total limit (2 agents, limit 2)", () => {
-    const registry = createAgentRegistry(2, 1);
+    const registry = createAgentRegistry(2);
     registry.register("slug-1", "questions", "Narada", new AbortController());
     registry.register("slug-2", "impl", "Parashurama", new AbortController());
     expect(registry.canStartAgent("questions")).toBe(false);
   });
 
   it("returns true again after unregistering one agent below total limit", () => {
-    const registry = createAgentRegistry(2, 1);
+    const registry = createAgentRegistry(2);
     const id1 = registry.register("slug-1", "questions", "Narada", new AbortController());
     registry.register("slug-2", "impl", "Parashurama", new AbortController());
     expect(registry.canStartAgent("questions")).toBe(false);
@@ -136,30 +110,12 @@ describe("canStartAgent", () => {
     expect(registry.canStartAgent("questions")).toBe(true);
   });
 
-  it("returns false when validate limit reached, even if total limit not reached", () => {
-    const registry = createAgentRegistry(5, 1);
-    registry.register("slug-1", "validate", "Chitragupta", new AbortController());
-    expect(registry.canStartAgent("validate")).toBe(false);
-  });
-
-  it("allows a non-validate agent when validate limit is reached but total is not", () => {
-    const registry = createAgentRegistry(5, 1);
-    registry.register("slug-1", "validate", "Chitragupta", new AbortController());
-    expect(registry.canStartAgent("questions")).toBe(true);
-  });
-
-  it("allows validate when under both limits", () => {
-    const registry = createAgentRegistry(5, 2);
-    registry.register("slug-1", "validate", "Chitragupta", new AbortController());
-    expect(registry.canStartAgent("validate")).toBe(true);
-  });
-
-  it("blocks validate when exactly at validate limit with maxConcurrentValidate=2", () => {
-    const registry = createAgentRegistry(10, 2);
-    registry.register("slug-1", "validate", "Chitragupta", new AbortController());
-    registry.register("slug-2", "validate", "Chitragupta", new AbortController());
-    expect(registry.canStartAgent("validate")).toBe(false);
-    expect(registry.canStartAgent("questions")).toBe(true);
+  it("allows multiple validate agents up to maxConcurrentTotal", () => {
+    const registry = createAgentRegistry(3);
+    registry.register("task-1", "validate", "Dharma", new AbortController());
+    registry.register("task-2", "validate", "Dharma", new AbortController());
+    registry.register("task-3", "validate", "Dharma", new AbortController());
+    expect(registry.canStartAgent("validate")).toBe(false); // at total limit, not validate limit
   });
 });
 
@@ -167,7 +123,7 @@ describe("canStartAgent", () => {
 
 describe("abortAll", () => {
   it("calls abort() on all registered controllers", () => {
-    const registry = createAgentRegistry(5, 2);
+    const registry = createAgentRegistry(5);
     const ctrl1 = new AbortController();
     const ctrl2 = new AbortController();
     const ctrl3 = new AbortController();
@@ -184,7 +140,7 @@ describe("abortAll", () => {
   });
 
   it("clears the registry after aborting", () => {
-    const registry = createAgentRegistry(5, 2);
+    const registry = createAgentRegistry(5);
     registry.register("slug-1", "questions", "Narada", new AbortController());
     registry.register("slug-2", "impl", "Parashurama", new AbortController());
 
@@ -195,13 +151,13 @@ describe("abortAll", () => {
   });
 
   it("is a no-op when registry is empty", () => {
-    const registry = createAgentRegistry(5, 2);
+    const registry = createAgentRegistry(5);
     expect(() => registry.abortAll()).not.toThrow();
     expect(registry.getActiveCount()).toBe(0);
   });
 
   it("allows new registrations after abortAll", () => {
-    const registry = createAgentRegistry(5, 2);
+    const registry = createAgentRegistry(5);
     registry.register("slug-1", "questions", "Narada", new AbortController());
     registry.abortAll();
 
@@ -215,7 +171,7 @@ describe("abortAll", () => {
 
 describe("abortBySlug", () => {
   it("aborts the agent matching the slug and removes it", () => {
-    const registry = createAgentRegistry(5, 2);
+    const registry = createAgentRegistry(5);
     const ac = new AbortController();
     registry.register("target-slug", "impl", "Karigar", ac);
     registry.register("other-slug", "research", "Chitragupta", new AbortController());
@@ -226,13 +182,13 @@ describe("abortBySlug", () => {
   });
 
   it("returns false if slug not found", () => {
-    const registry = createAgentRegistry(5, 2);
+    const registry = createAgentRegistry(5);
     const aborted = registry.abortBySlug("nonexistent");
     expect(aborted).toBe(false);
   });
 
   it("does not abort other agents", () => {
-    const registry = createAgentRegistry(5, 2);
+    const registry = createAgentRegistry(5);
     const ac1 = new AbortController();
     const ac2 = new AbortController();
     registry.register("slug-1", "impl", "Karigar", ac1);
