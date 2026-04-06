@@ -56,8 +56,8 @@ The pipeline asks questions, researches the codebase, designs a solution, decomp
 | 1. Questions | **Narada** | The eternal questioner sage | Generates targeted technical questions to clarify requirements and surface ambiguity |
 | 2. Research | **Chitragupta** | Divine scribe who records facts | Investigates the codebase, reads docs, and gathers evidence to answer the questions |
 | 3. Design | **Vishwakarma** | Architect of the gods | Designs the solution architecture with component interactions and error handling |
-| 4. Structure | **Vastu** | Science of structure and harmony | Decomposes the design into vertical implementation slices with acceptance criteria |
-| 5. Plan | **Chanakya** | Master strategist and kingmaker | Writes a step-by-step execution plan with exact file paths, code, and TDD sequences |
+| 4. Structure | **Vastu** | Science of structure | Decomposes the design into vertical implementation slices with acceptance criteria |
+| 5. Plan | **Chanakya** | Master strategist | Writes a step-by-step execution plan with exact file paths, code, and TDD sequences |
 
 ### Execution (Stages 6-9)
 
@@ -66,9 +66,9 @@ The pipeline implements code in TDD cycles, validates correctness, reviews quali
 | Stage | Agent | Named After | What It Does |
 |-------|-------|-------------|--------------|
 | 6. Implement | **Karigar** | Hindi for skilled craftsman | Writes code following the plan — test first, then implementation, slice by slice |
-| 7. Validate | **Dharma** | Cosmic law of righteous order | Runs all tests and checks that acceptance criteria are met; loops back to Karigar if not |
-| 8. Review | **Drona** | The master teacher of warriors | Reviews code for quality, patterns, and correctness; requests changes if needed |
-| 9. PR | **Garuda** | Divine eagle, king of birds | Creates the pull request with a structured description and links to the task |
+| 7. Validate | **Dharma** | Impartial judge | Runs all tests and checks that acceptance criteria are met; loops back to Karigar if not |
+| 8. Review | **Drona** | Strict guru | Reviews code for quality, patterns, and correctness; requests changes if needed |
+| 9. PR | **Garuda** | Swift divine messenger | Creates the pull request with a structured description and links to the task |
 
 > ⚡ **Worktree isolation**: Between Plan and Implement, **Hanuman** (named after the breaker of mountains) sets up an isolated Git worktree so execution happens in a clean branch without affecting your working directory. Hanuman is a pipeline agent, not a separate stage — it runs automatically as part of the handoff from alignment to execution.
 
@@ -97,7 +97,7 @@ The pipeline implements code in TDD cycles, validates correctness, reviews quali
 | **TypeScript** | Primary language — strict mode, ES2022 target |
 | **Claude Agent SDK** | Powers all 10 pipeline agents via Anthropic's agent framework |
 | **Commander.js** | CLI framework for the `shkmn` command interface |
-| **Vitest** | Test runner — 482 tests across 34 files |
+| **Vitest** | Test runner and assertion framework |
 
 ### Also Uses
 
@@ -153,7 +153,7 @@ The pipeline was validated end-to-end across two phases — a clean run and a ch
 |--------|---------------------|---------------------|
 | **Total API Cost** | $16.32 | $11.84 |
 | **Normalized Cost** | ~$8 (without infinite loop bug) | $11.84 |
-| **Tests Written** | 482 across 34 files | Maintained |
+| **Tests Written** | 482 across 34 files (at time of validation) | Maintained |
 | **PR Created** | Yes | Yes |
 | **Recovery Tested** | — | Process kills, stage timeouts, network interrupts |
 
