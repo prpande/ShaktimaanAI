@@ -202,6 +202,42 @@ export function createPipeline(options: PipelineOptions): Pipeline {
     }
   }
 
+  // ─── failTask: mark a task as failed and move to 11-failed ─────────────────
+  function failTask(
+    slug: string,
+    stage: string,
+    taskDir: string,
+    state: RunState,
+    errorMsg: string,
+    fromSubdir: string,
+  ): void {
+    state.status = "failed";
+    state.error = errorMsg;
+    writeRunState(taskDir, state);
+    try {
+      moveTaskDir(runtimeDir, slug, fromSubdir, "11-failed");
+    } catch (moveErr) {
+      logger.error(
+        `[pipeline] Failed to move task "${slug}" to 11-failed: ` +
+        `${moveErr instanceof Error ? moveErr.message : String(moveErr)}. ` +
+        `Original error: ${state.error}`,
+      );
+    }
+    emitNotify({ type: "task_failed", slug, stage, error: state.error, timestamp: new Date().toISOString() });
+    try {
+      appendDailyLogEntry(interactionsDir, {
+        timestamp: new Date().toISOString(),
+        type: "agent_failed",
+        slug,
+        stage,
+        agentName: config.agents.names[stage] ?? stage,
+        error: state.error ?? "Unknown error",
+        success: false,
+      });
+    } catch { /* swallow */ }
+    activeRuns.delete(slug);
+  }
+
   // ─── retryDeferredTasks: called after an agent finishes to unblock waiting tasks
   function retryDeferredTasks(): void {
     if (deferredTasks.length === 0) return;
@@ -399,36 +435,8 @@ export function createPipeline(options: PipelineOptions): Pipeline {
       } catch (err) {
         registry.unregister(agentId);
         retryDeferredTasks();
-        state.status = "failed";
-        state.error = err instanceof Error ? err.message : String(err);
-        writeRunState(currentTaskDir, state);
+        failTask(slug, stage, currentTaskDir, state, err instanceof Error ? err.message : String(err), join(STAGE_DIR_MAP[stage], "pending"));
         recordCompletionIfWorktree(state);
-        try {
-          moveTaskDir(
-            runtimeDir, slug,
-            join(STAGE_DIR_MAP[stage], "pending"),
-            "11-failed",
-          );
-        } catch (moveErr) {
-          logger.error(
-            `[pipeline] Failed to move task "${slug}" to 11-failed: ` +
-            `${moveErr instanceof Error ? moveErr.message : String(moveErr)}. ` +
-            `Original error: ${state.error}`,
-          );
-        }
-        emitNotify({ type: "task_failed", slug, stage, error: state.error, timestamp: new Date().toISOString() });
-        try {
-          appendDailyLogEntry(interactionsDir, {
-            timestamp: new Date().toISOString(),
-            type: "agent_failed",
-            slug,
-            stage,
-            agentName: config.agents.names[stage] ?? stage,
-            error: state.error ?? "Unknown error",
-            success: false,
-          });
-        } catch { /* swallow */ }
-        activeRuns.delete(slug);
         return;
       }
 
@@ -436,36 +444,8 @@ export function createPipeline(options: PipelineOptions): Pipeline {
       retryDeferredTasks();
 
       if (!result.success) {
-        state.status = "failed";
-        state.error = result.error ?? "Agent failed";
-        writeRunState(currentTaskDir, state);
+        failTask(slug, stage, currentTaskDir, state, result.error ?? "Agent failed", join(STAGE_DIR_MAP[stage], "pending"));
         recordCompletionIfWorktree(state);
-        try {
-          moveTaskDir(
-            runtimeDir, slug,
-            join(STAGE_DIR_MAP[stage], "pending"),
-            "11-failed",
-          );
-        } catch (moveErr) {
-          logger.error(
-            `[pipeline] Failed to move task "${slug}" to 11-failed: ` +
-            `${moveErr instanceof Error ? moveErr.message : String(moveErr)}. ` +
-            `Original error: ${state.error}`,
-          );
-        }
-        emitNotify({ type: "task_failed", slug, stage, error: state.error, timestamp: new Date().toISOString() });
-        try {
-          appendDailyLogEntry(interactionsDir, {
-            timestamp: new Date().toISOString(),
-            type: "agent_failed",
-            slug,
-            stage,
-            agentName: config.agents.names[stage] ?? stage,
-            error: state.error ?? "Unknown error",
-            success: false,
-          });
-        } catch { /* swallow */ }
-        activeRuns.delete(slug);
         return;
       }
 
@@ -734,6 +714,13 @@ export function createPipeline(options: PipelineOptions): Pipeline {
       }
 
       writeRunState(holdDir, state);
+      emitNotify({
+        type: "task_approved",
+        slug,
+        approvedBy: "user",
+        feedback: feedback ?? "",
+        timestamp: new Date().toISOString(),
+      });
       const nextTaskDir = moveTaskDir(
         runtimeDir, slug,
         "12-hold",
@@ -1010,20 +997,7 @@ export function createPipeline(options: PipelineOptions): Pipeline {
       } catch (err) {
         registry.unregister(agentId);
         retryDeferredTasks();
-        state.status = "failed";
-        state.error = err instanceof Error ? err.message : String(err);
-        writeRunState(destDir, state);
-        // Move to 11-failed from wherever we put it
-        try {
-          moveTaskDir(runtimeDir, slug, destTopDir, "11-failed");
-        } catch (moveErr) {
-          logger.error(
-            `[pipeline] Failed to move quick task "${slug}" to 11-failed: ` +
-            `${moveErr instanceof Error ? moveErr.message : String(moveErr)}`,
-          );
-        }
-        emitNotify({ type: "task_failed", slug, stage: "quick", error: state.error, timestamp: new Date().toISOString() });
-        activeRuns.delete(slug);
+        failTask(slug, "quick", destDir, state, err instanceof Error ? err.message : String(err), destTopDir);
         return;
       }
 
@@ -1031,19 +1005,7 @@ export function createPipeline(options: PipelineOptions): Pipeline {
       retryDeferredTasks();
 
       if (!result.success) {
-        state.status = "failed";
-        state.error = result.error ?? "Quick agent failed";
-        writeRunState(destDir, state);
-        try {
-          moveTaskDir(runtimeDir, slug, destTopDir, "11-failed");
-        } catch (moveErr) {
-          logger.error(
-            `[pipeline] Failed to move quick task "${slug}" to 11-failed: ` +
-            `${moveErr instanceof Error ? moveErr.message : String(moveErr)}`,
-          );
-        }
-        emitNotify({ type: "task_failed", slug, stage: "quick", error: state.error, timestamp: new Date().toISOString() });
-        activeRuns.delete(slug);
+        failTask(slug, "quick", destDir, state, result.error ?? "Quick agent failed", destTopDir);
         return;
       }
 
