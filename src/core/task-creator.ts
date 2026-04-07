@@ -64,6 +64,8 @@ export function generateSlug(title: string): string {
 export function buildTaskFileContent(
   input: CreateTaskInput,
   config: ResolvedConfig,
+  enrichedContext?: string,
+  repoSummary?: string,
 ): string {
   const title = extractTitle(input.content);
   const stages =
@@ -110,6 +112,17 @@ export function buildTaskFileContent(
     lines.push("");
   }
 
+  if (enrichedContext) {
+    lines.push("## Astra Context");
+    lines.push(enrichedContext);
+    lines.push("");
+  }
+  if (repoSummary) {
+    lines.push("## Repo Summary");
+    lines.push(repoSummary);
+    lines.push("");
+  }
+
   return lines.join("\n");
 }
 
@@ -121,10 +134,12 @@ export function createTask(
   input: CreateTaskInput,
   runtimeDir: string,
   config: ResolvedConfig,
+  enrichedContext?: string,
+  repoSummary?: string,
 ): string {
   const title = extractTitle(input.content);
   const slug = generateSlug(title);
-  const content = buildTaskFileContent(input, config);
+  const content = buildTaskFileContent(input, config, enrichedContext, repoSummary);
   const filePath = join(runtimeDir, "00-inbox", `${slug}.task`);
   mkdirSync(dirname(filePath), { recursive: true });
   writeFileSync(filePath, content, "utf-8");
