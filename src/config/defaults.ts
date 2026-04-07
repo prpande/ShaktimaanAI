@@ -12,7 +12,6 @@ export const DEFAULT_AGENT_NAMES = {
   watcher: "Heimdall",
   taskCreator: "Brahma",
   approvalHandler: "Indra",
-  intentClassifier: "Sutradhaar",
   quick: "Astra",
   slackIO: "Narada",
 } as const satisfies Record<string, string>;
@@ -29,8 +28,8 @@ export const DEFAULT_STAGE_TOOLS: Record<string, { allowed: string[]; disallowed
   validate:   { allowed: ["Read","Bash","Glob","Grep"], disallowed: ["Write","Edit"] },
   review:     { allowed: ["Read","Glob","Grep"], disallowed: ["Write","Edit","Bash"] },
   pr:         { allowed: ["Bash"], disallowed: ["Write","Edit","Read","Glob","Grep"] },
-  classify:   { allowed: [], disallowed: ["Read","Write","Edit","Bash","Glob","Grep"] },
-  quick:      { allowed: ["Read","Write","Edit","Bash","Glob","Grep","WebSearch","WebFetch"], disallowed: [] },
+  quick:      { allowed: ["Read","Glob","Grep","Bash","WebSearch","WebFetch","mcp__plugin_notion_notion__*","mcp__claude_ai_Slack__slack_read_*"], disallowed: ["Write","Edit"] },
+  "quick-execute": { allowed: ["Read","Write","Edit","Bash","Glob","Grep","WebSearch","WebFetch","mcp__plugin_notion_notion__*","mcp__claude_ai_Slack__*"], disallowed: [] },
   "slack-io":  { allowed: ["mcp__claude_ai_Slack__*","Read","Write"], disallowed: ["Edit","Bash","Glob","Grep"] },
 };
 
@@ -48,8 +47,8 @@ export const STAGE_CONTEXT_RULES: Record<string, {
   review:    { includeTaskContent: true,  previousOutputLabel: "Implementation Output",   includeRepoContext: true },
   validate:  { includeTaskContent: false, previousOutputLabel: "Review Output",            includeRepoContext: true },
   pr:        { includeTaskContent: true,  previousOutputLabel: "Review Output",            includeRepoContext: false },
-  classify:  { includeTaskContent: true,  previousOutputLabel: null,                      includeRepoContext: false },
   quick:     { includeTaskContent: true,  previousOutputLabel: null,                      includeRepoContext: true },
+  "quick-execute": { includeTaskContent: true, previousOutputLabel: null,                includeRepoContext: true },
   "slack-io": { includeTaskContent: true, previousOutputLabel: null,                      includeRepoContext: false },
 };
 
@@ -73,7 +72,8 @@ export interface ShkmnConfig {
     enabled: boolean;
     channel: string;
     channelId: string;
-    pollIntervalSeconds: number;
+    pollIntervalActiveSec: number;
+    pollIntervalIdleSec: number;
     notifyLevel: "minimal" | "bookends" | "stages";
     allowDMs: boolean;
     requirePrefix: boolean;
@@ -82,7 +82,6 @@ export interface ShkmnConfig {
   };
   quickTask: {
     requireReview: boolean;
-    complexityThreshold: number;
   };
   agents: {
     names: Record<string, string>;
@@ -134,7 +133,8 @@ export const DEFAULT_CONFIG: ShkmnConfig = {
     enabled: false,
     channel: "#agent-pipeline",
     channelId: "",
-    pollIntervalSeconds: 30,
+    pollIntervalActiveSec: 300,
+    pollIntervalIdleSec: 45,
     notifyLevel: "bookends",
     allowDMs: false,
     requirePrefix: true,
@@ -143,7 +143,6 @@ export const DEFAULT_CONFIG: ShkmnConfig = {
   },
   quickTask: {
     requireReview: true,
-    complexityThreshold: 0.8,
   },
   agents: {
     names: { ...DEFAULT_AGENT_NAMES },
@@ -163,8 +162,9 @@ export const DEFAULT_CONFIG: ShkmnConfig = {
       validate: 15,
       review: 40,
       pr: 20,
-      classify: 5,
-      quick: 40,
+      "quick-triage": 5,
+      quick: 5,
+      "quick-execute": 40,
       "slack-io": 15,
     },
     timeoutsMinutes: {
@@ -177,8 +177,9 @@ export const DEFAULT_CONFIG: ShkmnConfig = {
       validate: 30,
       review: 45,
       pr: 15,
-      classify: 2,
-      quick: 30,
+      "quick-triage": 2,
+      quick: 2,
+      "quick-execute": 30,
       "slack-io": 2,
     },
     heartbeatTimeoutMinutes: 10,
@@ -196,9 +197,10 @@ export const DEFAULT_CONFIG: ShkmnConfig = {
       review: "sonnet",
       validate: "sonnet",
       pr: "sonnet",
-      classify: "haiku",
+      "quick-triage": "haiku",
+      quick: "haiku",
+      "quick-execute": "sonnet",
       "slack-io": "haiku",
-      quick: "sonnet",
     },
   },
   schedule: {

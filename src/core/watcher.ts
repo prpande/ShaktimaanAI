@@ -1,15 +1,15 @@
 import chokidar, { type FSWatcher } from "chokidar";
 import { join } from "node:path";
-import { readFileSync, unlinkSync, writeFileSync, existsSync, readdirSync } from "node:fs";
+import { readFileSync, unlinkSync, writeFileSync, existsSync, readdirSync, appendFileSync, mkdirSync } from "node:fs";
+import { randomUUID } from "node:crypto";
 import { z } from "zod";
-import { parseTaskFile } from "../task/parser.js";
 
 import { type Pipeline } from "./pipeline.js";
 import { type TaskLogger } from "./logger.js";
 import { type ResolvedConfig } from "../config/loader.js";
 import { type AgentRunnerFn } from "./types.js";
 import { stripPrefix } from "../surfaces/slack-surface.js";
-import { classifyByKeywords } from "./intent-classifier.js";
+import { runAstraTriage, type AstraInput } from "./astra-triage.js";
 import { createTask } from "./task-creator.js";
 import { buildNaradaPayload, readInbox, clearInbox, readSentLog } from "./slack-queue.js";
 
@@ -50,13 +50,64 @@ export function createWatcher(options: WatcherOptions): Watcher {
   let fsWatcher: FSWatcher | null = null;
   const processingFiles = new Set<string>();
   let slackPollInProgress = false;
-  let slackInterval: ReturnType<typeof setInterval> | null = null;
+  let slackInterval: ReturnType<typeof setTimeout> | null = null;
+
+  function ensureSlackFiles(): void {
+    const files = [
+      { name: "slack-outbox.jsonl", content: "" },
+      { name: "slack-inbox.jsonl", content: "" },
+      { name: "slack-sent.jsonl", content: "" },
+      { name: "slack-threads.json", content: "{}" },
+      { name: "slack-cursor.json", content: JSON.stringify({ channelTs: String(Date.now() / 1000), dmTs: String(Date.now() / 1000) }) },
+    ];
+    for (const f of files) {
+      const p = join(runtimeDir, f.name);
+      if (!existsSync(p)) {
+        writeFileSync(p, f.content, "utf-8");
+      }
+    }
+    const responsesDir = join(runtimeDir, "astra-responses");
+    if (!existsSync(responsesDir)) {
+      mkdirSync(responsesDir, { recursive: true });
+    }
+  }
+
+  function writeOutboxEntry(channel: string, text: string, threadTs: string | null): void {
+    const entry: import("./slack-queue.js").OutboxEntry = {
+      id: randomUUID(),
+      slug: "astra-response",
+      type: "astra_reply",
+      channel,
+      text,
+      thread_ts: threadTs,
+      addedAt: new Date().toISOString(),
+    };
+    const outboxPath = join(runtimeDir, "slack-outbox.jsonl");
+    appendFileSync(outboxPath, JSON.stringify(entry) + "\n", "utf-8");
+  }
+
+  function notifySlackError(channel: string, threadTs: string | null, message: string): void {
+    writeOutboxEntry(channel, message, threadTs);
+    triggerNaradaSend().catch((err: unknown) => {
+      logger.error(`[watcher] Failed to trigger Narada send for error notification: ${err instanceof Error ? err.message : String(err)}`);
+    });
+  }
+
+  async function triggerNaradaSend(): Promise<void> {
+    if (!runner) return;
+    // Reuse pollSlack which handles both outbox sends and inbox reads
+    if (slackPollInProgress) return;
+    await pollSlack();
+  }
 
   async function pollSlack(): Promise<void> {
     if (!runner) return;
     slackPollInProgress = true;
 
     try {
+      // Ensure queue files exist before spawning Narada
+      ensureSlackFiles();
+
       // Find held task slugs for approval checking
       const holdDir = join(runtimeDir, "12-hold");
       let heldSlugs: string[] = [];
@@ -95,8 +146,8 @@ export function createWatcher(options: WatcherOptions): Watcher {
       const inboxEntries = readInbox(runtimeDir);
 
       for (const entry of inboxEntries) {
+        // Handle Slack approvals (unchanged)
         if (entry.isApproval && entry.slug) {
-          // Verify task is actually held
           if (existsSync(join(runtimeDir, "12-hold", entry.slug))) {
             const controlPath = join(runtimeDir, "00-inbox", `slack-approve-${entry.ts.replace(".", "-")}.control`);
             writeFileSync(controlPath, JSON.stringify({
@@ -106,31 +157,114 @@ export function createWatcher(options: WatcherOptions): Watcher {
             }), "utf-8");
             logger.info(`[watcher] Slack approval detected for ${entry.slug}`);
           }
-        } else {
-          const text = config.slack.requirePrefix
-            ? stripPrefix(entry.text, config.slack.prefix)
-            : entry.text;
+          continue;
+        }
 
-          const classified = classifyByKeywords(text);
-          const intent = classified?.intent ?? "create_task";
+        const text = config.slack.requirePrefix
+          ? stripPrefix(entry.text, config.slack.prefix)
+          : entry.text;
 
-          if (intent === "create_task" || intent === "unknown") {
+        // Call Astra triage instead of keyword classification
+        const astraInput: AstraInput = {
+          message: text,
+          threadTs: entry.thread_ts ?? entry.ts,
+          channelId: entry.channel,
+          userId: entry.user,
+          source: "slack",
+        };
+
+        const triageResult = await runAstraTriage(astraInput, runner, config, logger);
+
+        if (!triageResult) {
+          notifySlackError(
+            entry.channel,
+            entry.thread_ts ?? entry.ts,
+            "I couldn't process your message — could you rephrase?",
+          );
+          logger.warn(`[watcher] Astra triage failed for message ${entry.ts}`);
+          continue;
+        }
+
+        switch (triageResult.action) {
+          case "control_command": {
+            if (triageResult.controlOp && triageResult.extractedSlug) {
+              const controlPayload: Record<string, unknown> = {
+                operation: triageResult.controlOp,
+                slug: triageResult.extractedSlug,
+              };
+              const controlPath = join(runtimeDir, "00-inbox", `slack-${entry.ts.replace(".", "-")}.control`);
+              writeFileSync(controlPath, JSON.stringify(controlPayload), "utf-8");
+              logger.info(`[watcher] Astra: control command ${triageResult.controlOp} for ${triageResult.extractedSlug}`);
+            } else if (triageResult.controlOp && !triageResult.extractedSlug) {
+              notifySlackError(
+                entry.channel,
+                entry.thread_ts ?? entry.ts,
+                "I couldn't find an active task matching that command. Which task did you mean?",
+              );
+              logger.warn(`[watcher] Astra: control command ${triageResult.controlOp} but no slug extracted`);
+            }
+            break;
+          }
+
+          case "answer": {
+            try {
+              const outputDir = join(runtimeDir, "astra-responses");
+              mkdirSync(outputDir, { recursive: true });
+              const executeResult = await runner({
+                stage: "quick-execute",
+                slug: `astra-exec-${entry.ts.replace(".", "-")}`,
+                taskContent: astraInput.message,
+                previousOutput: triageResult.enrichedContext ?? "",
+                outputPath: join(outputDir, `${entry.ts.replace(".", "-")}.md`),
+                cwd: process.cwd(),
+                config,
+                logger: { info() {}, warn() {}, error() {} },
+              });
+
+              if (executeResult.success && executeResult.output) {
+                writeOutboxEntry(
+                  entry.channel,
+                  executeResult.output,
+                  entry.thread_ts ?? entry.ts,
+                );
+                triggerNaradaSend().catch((err: unknown) => {
+                  logger.error(`[watcher] Failed to trigger Narada send: ${err instanceof Error ? err.message : String(err)}`);
+                });
+              } else {
+                notifySlackError(
+                  entry.channel,
+                  entry.thread_ts ?? entry.ts,
+                  `I ran into a problem while working on that — ${executeResult.error ?? "unknown error"}. Let me know if you'd like me to try again.`,
+                );
+              }
+              logger.info(`[watcher] Astra: answered message ${entry.ts} directly`);
+            } catch (err: unknown) {
+              notifySlackError(
+                entry.channel,
+                entry.thread_ts ?? entry.ts,
+                `I ran into a problem — ${err instanceof Error ? err.message : String(err)}. Let me know if you'd like me to try again.`,
+              );
+              logger.error(`[watcher] Astra execute failed: ${err instanceof Error ? err.message : String(err)}`);
+            }
+            break;
+          }
+
+          case "route_pipeline": {
             createTask(
-              { source: "slack", content: text, slackThread: entry.thread_ts ?? entry.ts },
+              {
+                source: "slack",
+                content: text,
+                slackThread: entry.thread_ts ?? entry.ts,
+                stages: triageResult.recommendedStages,
+                stageHints: triageResult.stageHints ?? undefined,
+              },
               runtimeDir,
               config,
+              triageResult.enrichedContext,
+              triageResult.repoSummary,
             );
-            logger.info(`[watcher] Slack: created task from message ${entry.ts}`);
-          } else if (classified?.extractedSlug) {
-            const controlPayload: Record<string, unknown> = { operation: intent, slug: classified.extractedSlug };
-            if (classified.extractedFeedback) controlPayload.feedback = classified.extractedFeedback;
-            if (classified.extractedStages) controlPayload.stages = classified.extractedStages;
-
-            const controlPath = join(runtimeDir, "00-inbox", `slack-${entry.ts.replace(".", "-")}.control`);
-            writeFileSync(controlPath, JSON.stringify(controlPayload), "utf-8");
-            logger.info(`[watcher] Slack: wrote control file for ${intent} on ${classified.extractedSlug}`);
-          } else {
-            logger.warn(`[watcher] Slack: classified as "${intent}" but no slug extracted from: "${text}"`);
+            logger.info(`[watcher] Astra: routed message ${entry.ts} to pipeline`);
+            break;
           }
         }
       }
@@ -210,13 +344,7 @@ export function createWatcher(options: WatcherOptions): Watcher {
 
           const runTask = async () => {
             try {
-              const taskContent = readFileSync(filePath, "utf-8");
-              const meta = parseTaskFile(taskContent);
-              if (meta.stages.length === 1 && meta.stages[0] === "quick") {
-                await pipeline.startQuickRun(filePath, taskContent);
-              } else {
-                await pipeline.startRun(filePath);
-              }
+              await pipeline.startRun(filePath);
             } catch (err: unknown) {
               logger.error(
                 `Failed to start run for "${filePath}": ${err instanceof Error ? err.message : String(err)}`,
@@ -249,14 +377,31 @@ export function createWatcher(options: WatcherOptions): Watcher {
       });
 
       if (config.slack.enabled && config.slack.channelId && runner) {
-        const pollMs = config.slack.pollIntervalSeconds * 1000;
-        slackInterval = setInterval(() => {
-          if (slackPollInProgress) return;
-          pollSlack().catch((err: unknown) => {
-            logger.error(`[watcher] Slack poll error: ${err instanceof Error ? err.message : String(err)}`);
-          });
-        }, pollMs);
-        logger.info(`[watcher] Slack polling enabled (${config.slack.pollIntervalSeconds}s interval)`);
+        const getInterval = () => {
+          const hasActiveTasks = pipeline.getActiveRuns().length > 0;
+          return (hasActiveTasks ? config.slack.pollIntervalActiveSec : config.slack.pollIntervalIdleSec) * 1000;
+        };
+
+        const schedulePoll = () => {
+          slackInterval = setTimeout(() => {
+            if (slackPollInProgress) {
+              schedulePoll();
+              return;
+            }
+            slackPollInProgress = true;
+            pollSlack()
+              .catch((err: unknown) => {
+                logger.error(`[watcher] Slack poll error: ${err instanceof Error ? err.message : String(err)}`);
+              })
+              .finally(() => {
+                slackPollInProgress = false;
+                schedulePoll();
+              });
+          }, getInterval());
+        };
+
+        schedulePoll();
+        logger.info(`[watcher] Slack adaptive polling enabled (active: ${config.slack.pollIntervalActiveSec}s, idle: ${config.slack.pollIntervalIdleSec}s)`);
       }
 
       running = true;
@@ -264,7 +409,7 @@ export function createWatcher(options: WatcherOptions): Watcher {
 
     async stop(): Promise<void> {
       if (slackInterval) {
-        clearInterval(slackInterval);
+        clearTimeout(slackInterval);
         slackInterval = null;
       }
       if (fsWatcher) {

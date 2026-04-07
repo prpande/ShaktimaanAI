@@ -104,12 +104,13 @@ export function buildNaradaPayload(
   const outbox = readOutbox(runtimeDir);
   const threadMap = loadThreadMap(runtimeDir);
 
-  let channelTs = "now";
-  let dmTs = "now";
+  const nowTs = String(Date.now() / 1000);
+  let channelTs = nowTs;
+  let dmTs = nowTs;
   try {
     const cursor = JSON.parse(readFileSync(join(runtimeDir, "slack-cursor.json"), "utf-8"));
-    channelTs = cursor.channelTs ?? "now";
-    dmTs = cursor.dmTs ?? "now";
+    channelTs = cursor.channelTs === "now" ? nowTs : (cursor.channelTs ?? nowTs);
+    dmTs = cursor.dmTs === "now" ? nowTs : (cursor.dmTs ?? nowTs);
   } catch { /* use defaults */ }
 
   const approvalChecks: Array<{ slug: string; thread_ts: string }> = [];

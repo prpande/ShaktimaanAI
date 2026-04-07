@@ -25,7 +25,8 @@ export const configSchema = z.object({
     enabled: z.boolean().optional().default(false),
     channel: z.string().optional().default("#agent-pipeline"),
     channelId: z.string().optional().default(""),
-    pollIntervalSeconds: z.number().optional().default(30),
+    pollIntervalActiveSec: z.number().optional().default(300),
+    pollIntervalIdleSec: z.number().optional().default(45),
     notifyLevel: z.enum(["minimal", "bookends", "stages"]).optional().default("bookends"),
     allowDMs: z.boolean().optional().default(false),
     requirePrefix: z.boolean().optional().default(true),
@@ -34,7 +35,6 @@ export const configSchema = z.object({
   }).optional().default({}),
   quickTask: z.object({
     requireReview: z.boolean().optional().default(true),
-    complexityThreshold: z.number().min(0).max(1).optional().default(0.8),
   }).optional().default({}),
   agents: z.object({
     names: z.record(z.string(), z.string()).optional().default({}),

@@ -78,3 +78,22 @@ export interface AgentRunResult {
 }
 
 export type AgentRunnerFn = (options: AgentRunOptions) => Promise<AgentRunResult>;
+
+export interface AstraTriageResult {
+  action: "answer" | "route_pipeline" | "control_command";
+
+  // Control command path
+  controlOp?: "approve" | "cancel" | "skip" | "pause" |
+              "resume" | "modify_stages" | "restart_stage" | "retry";
+  extractedSlug?: string;
+
+  // Pipeline routing path
+  recommendedStages?: string[];
+  stageHints?: Record<string, string>;
+  enrichedContext?: string;
+  repoSummary?: string;
+
+  // Metadata
+  confidence: number;
+  reasoning: string;
+}
