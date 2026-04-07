@@ -12,6 +12,9 @@ export interface CompletedStage {
   outputFile?: string;
   costUsd?: number;
   turns?: number;
+  inputTokens?: number;
+  outputTokens?: number;
+  model?: string;
 }
 
 export interface ReviewIssue {
@@ -50,6 +53,8 @@ export interface RunState {
   stageHints: Record<string, string[]>;
   retryAttempts: Record<string, number>;
   pausedAtStage?: string;
+  holdReason?: "budget_exhausted" | "approval_required" | "user_paused";
+  holdDetail?: string;
 }
 
 export interface AgentRunOptions {
@@ -63,6 +68,7 @@ export interface AgentRunOptions {
   abortController?: AbortController;
   logger: { info(msg: string): void; warn(msg: string): void; error(msg: string): void };
   stageHints?: Record<string, string[]>;
+  model?: string;
 }
 
 export interface AgentRunResult {
@@ -84,14 +90,14 @@ export interface AstraTriageResult {
 
   // Control command path
   controlOp?: "approve" | "cancel" | "skip" | "pause" |
-              "resume" | "modify_stages" | "restart_stage" | "retry";
-  extractedSlug?: string;
+              "resume" | "modify_stages" | "restart_stage" | "retry" | null;
+  extractedSlug?: string | null;
 
   // Pipeline routing path
-  recommendedStages?: string[];
-  stageHints?: Record<string, string>;
-  enrichedContext?: string;
-  repoSummary?: string;
+  recommendedStages?: string[] | null;
+  stageHints?: Record<string, string> | null;
+  enrichedContext?: string | null;
+  repoSummary?: string | null;
 
   // Metadata
   confidence: number;

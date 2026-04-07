@@ -1,3 +1,5 @@
+import type { BudgetConfig } from "./budget-schema.js";
+
 export const DEFAULT_AGENT_NAMES = {
   questions: "Gargi",
   research: "Chitragupta",
@@ -29,6 +31,7 @@ export const DEFAULT_STAGE_TOOLS: Record<string, { allowed: string[]; disallowed
   review:     { allowed: ["Read","Glob","Grep"], disallowed: ["Write","Edit","Bash"] },
   pr:         { allowed: ["Bash"], disallowed: ["Write","Edit","Read","Glob","Grep"] },
   quick:      { allowed: ["Read","Glob","Grep","Bash","WebSearch","WebFetch","mcp__plugin_notion_notion__*","mcp__claude_ai_Slack__slack_read_*"], disallowed: ["Write","Edit"] },
+  "quick-triage": { allowed: ["Read","Glob","Grep","Bash","WebSearch","WebFetch","mcp__plugin_notion_notion__*","mcp__claude_ai_Slack__slack_read_*"], disallowed: ["Write","Edit"] },
   "quick-execute": { allowed: ["Read","Write","Edit","Bash","Glob","Grep","WebSearch","WebFetch","mcp__plugin_notion_notion__*","mcp__claude_ai_Slack__*"], disallowed: [] },
   "slack-io":  { allowed: ["mcp__claude_ai_Slack__*","Read","Write"], disallowed: ["Edit","Bash","Glob","Grep"] },
 };
@@ -48,6 +51,7 @@ export const STAGE_CONTEXT_RULES: Record<string, {
   validate:  { includeTaskContent: false, previousOutputLabel: "Review Output",            includeRepoContext: true },
   pr:        { includeTaskContent: true,  previousOutputLabel: "Review Output",            includeRepoContext: false },
   quick:     { includeTaskContent: true,  previousOutputLabel: null,                      includeRepoContext: true },
+  "quick-triage": { includeTaskContent: true, previousOutputLabel: null,                 includeRepoContext: true },
   "quick-execute": { includeTaskContent: true, previousOutputLabel: null,                includeRepoContext: true },
   "slack-io": { includeTaskContent: true, previousOutputLabel: null,                      includeRepoContext: false },
 };
@@ -217,4 +221,27 @@ export const DEFAULT_CONFIG: ShkmnConfig = {
   review: {
     enforceSuggestions: true,
   },
+};
+
+export const DEFAULT_BUDGET_CONFIG: BudgetConfig = {
+  model_budgets: {
+    sonnet: {
+      weekly_token_limit: 15_000_000,
+      daily_token_limit: 3_000_000,
+      session_token_limit: 800_000,
+      per_task_token_limit: 200_000,
+    },
+    opus: {
+      weekly_token_limit: 5_000_000,
+      daily_token_limit: 1_000_000,
+      session_token_limit: 300_000,
+      per_task_token_limit: 100_000,
+    },
+  },
+  peak_hours: {
+    start_utc: "12:00",
+    end_utc: "18:00",
+    multiplier: 0.5,
+  },
+  safety_margin: 0.15,
 };
