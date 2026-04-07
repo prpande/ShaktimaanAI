@@ -132,6 +132,33 @@ describe("buildNaradaPayload", () => {
     expect(payload.inbound.dmOldest).toBe("50.0");
   });
 
+  it("includes outboundPrefix in payload when provided", () => {
+    writeFileSync(join(TEST_DIR, "slack-cursor.json"), '{"channelTs":"1.0","dmTs":"1.0"}');
+
+    const payload = buildNaradaPayload(TEST_DIR, {
+      channelId: "C1",
+      allowDMs: false,
+      dmUserIds: [],
+      heldSlugs: [],
+      outboundPrefix: "🤖 [TestBot]",
+    });
+
+    expect(payload.outboundPrefix).toBe("🤖 [TestBot]");
+  });
+
+  it("uses default outboundPrefix when not provided", () => {
+    writeFileSync(join(TEST_DIR, "slack-cursor.json"), '{"channelTs":"1.0","dmTs":"1.0"}');
+
+    const payload = buildNaradaPayload(TEST_DIR, {
+      channelId: "C1",
+      allowDMs: false,
+      dmUserIds: [],
+      heldSlugs: [],
+    });
+
+    expect(payload.outboundPrefix).toBe("🤖 [ShaktimaanAI]");
+  });
+
   it("includes file paths in payload", () => {
     writeFileSync(join(TEST_DIR, "slack-cursor.json"), '{"channelTs":"1.0","dmTs":"1.0"}');
 

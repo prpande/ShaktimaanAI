@@ -142,6 +142,7 @@ export function createWatcher(options: WatcherOptions): Watcher {
         allowDMs: config.slack.allowDMs,
         dmUserIds: config.slack.dmUserIds,
         heldSlugs,
+        outboundPrefix: config.slack.outboundPrefix,
       });
 
       // Warn if DMs enabled but no user IDs
