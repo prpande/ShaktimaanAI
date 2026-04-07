@@ -54,6 +54,25 @@ export function createWatcher(options: WatcherOptions): Watcher {
   let slackPollInProgress = false;
   let slackInterval: ReturnType<typeof setTimeout> | null = null;
 
+  // Deduplication: track processed Slack message timestamps
+  const processedTsPath = join(runtimeDir, "slack-processed.json");
+  let processedTs: Set<string>;
+  try {
+    const raw = readFileSync(processedTsPath, "utf-8");
+    processedTs = new Set(JSON.parse(raw) as string[]);
+  } catch {
+    processedTs = new Set();
+  }
+  function markProcessed(ts: string): void {
+    processedTs.add(ts);
+    // Keep only the last 500 entries to avoid unbounded growth
+    if (processedTs.size > 500) {
+      const arr = Array.from(processedTs);
+      processedTs = new Set(arr.slice(arr.length - 500));
+    }
+    writeFileSync(processedTsPath, JSON.stringify(Array.from(processedTs)), "utf-8");
+  }
+
   function ensureSlackFiles(): void {
     const files = [
       { name: "slack-outbox.jsonl", content: "" },
@@ -152,6 +171,12 @@ export function createWatcher(options: WatcherOptions): Watcher {
         if (!entry.text || !entry.user || !entry.channel) {
           continue;
         }
+
+        // Skip already-processed messages (prevents duplicate task creation)
+        if (processedTs.has(entry.ts)) {
+          continue;
+        }
+        markProcessed(entry.ts);
 
         // Handle Slack approvals (unchanged)
         if (entry.isApproval && entry.slug) {
@@ -261,6 +286,7 @@ export function createWatcher(options: WatcherOptions): Watcher {
               {
                 source: "slack",
                 content: text,
+                repo: process.cwd(),
                 slackThread: entry.thread_ts ?? entry.ts,
                 stages: triageResult.recommendedStages ?? undefined,
                 stageHints: triageResult.stageHints ?? undefined,
