@@ -32,6 +32,8 @@ export interface Watcher {
   start(): void;
   stop(): Promise<void>;
   isRunning(): boolean;
+  /** Triggers an immediate Narada send cycle (outbox flush + inbox read). */
+  triggerSlackSend(): void;
 }
 
 export interface WatcherOptions {
@@ -146,6 +148,11 @@ export function createWatcher(options: WatcherOptions): Watcher {
       const inboxEntries = readInbox(runtimeDir);
 
       for (const entry of inboxEntries) {
+        // Skip malformed entries (e.g., sent log entries written to inbox by mistake)
+        if (!entry.text || !entry.user || !entry.channel) {
+          continue;
+        }
+
         // Handle Slack approvals (unchanged)
         if (entry.isApproval && entry.slug) {
           if (existsSync(join(runtimeDir, "12-hold", entry.slug))) {
@@ -255,13 +262,13 @@ export function createWatcher(options: WatcherOptions): Watcher {
                 source: "slack",
                 content: text,
                 slackThread: entry.thread_ts ?? entry.ts,
-                stages: triageResult.recommendedStages,
+                stages: triageResult.recommendedStages ?? undefined,
                 stageHints: triageResult.stageHints ?? undefined,
               },
               runtimeDir,
               config,
-              triageResult.enrichedContext,
-              triageResult.repoSummary,
+              triageResult.enrichedContext ?? undefined,
+              triageResult.repoSummary ?? undefined,
             );
             logger.info(`[watcher] Astra: routed message ${entry.ts} to pipeline`);
             break;
@@ -421,6 +428,12 @@ export function createWatcher(options: WatcherOptions): Watcher {
 
     isRunning(): boolean {
       return running;
+    },
+
+    triggerSlackSend(): void {
+      triggerNaradaSend().catch((err: unknown) => {
+        logger.error(`[watcher] triggerSlackSend failed: ${err instanceof Error ? err.message : String(err)}`);
+      });
     },
   };
 }

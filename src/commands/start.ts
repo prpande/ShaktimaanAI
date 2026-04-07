@@ -65,7 +65,16 @@ export function registerStartCommand(program: Command): void {
       // 6. Run crash recovery
       await runRecovery(config.pipeline.runtimeDir, pipeline, logger);
 
-      // 6b. Register notifiers
+      // 6b. Create watcher (before notifiers so we can wire triggerSlackSend)
+      activeWatcher = createWatcher({
+        runtimeDir: config.pipeline.runtimeDir,
+        pipeline,
+        logger,
+        config,
+        runner: runAgent,
+      });
+
+      // 6c. Register notifiers
       pipeline.addNotifier(createConsoleNotifier());
 
       if (config.slack.enabled && config.slack.channelId) {
@@ -74,18 +83,12 @@ export function registerStartCommand(program: Command): void {
           channelId: config.slack.channelId,
           notifyLevel: config.slack.notifyLevel,
           runtimeDir: config.pipeline.runtimeDir,
+          onOutboxWrite: () => activeWatcher?.triggerSlackSend(),
         }));
-        logger.info("[start] SlackNotifier registered (file-based outbox)");
+        logger.info("[start] SlackNotifier registered (file-based outbox, on-demand send)");
       }
 
-      // 7. Create and start watcher
-      activeWatcher = createWatcher({
-        runtimeDir: config.pipeline.runtimeDir,
-        pipeline,
-        logger,
-        config,
-        runner: runAgent,
-      });
+      // 7. Start watcher
       activeWatcher.start();
 
       // 8. Write PID file

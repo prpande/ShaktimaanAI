@@ -1,4 +1,5 @@
 import { describe, it, expect, expectTypeOf } from "vitest";
+import { tmpdir } from "node:os";
 import type { AstraTriageResult } from "../../src/core/types.js";
 import { parseTriageResult, runAstraTriage, type AstraInput } from "../../src/core/astra-triage.js";
 import type { AgentRunOptions, AgentRunResult } from "../../src/core/types.js";
@@ -112,6 +113,7 @@ describe("parseTriageResult", () => {
 
 describe("runAstraTriage", () => {
   const noopLogger = { info() {}, warn() {}, error() {} };
+  const mockConfig = { pipeline: { runtimeDir: tmpdir() } } as any;
   const mockInput: AstraInput = {
     message: "what stages are running?",
     channelId: "C12345",
@@ -126,7 +128,7 @@ describe("runAstraTriage", () => {
       costUsd: 0.001, turns: 2, durationMs: 1500, inputTokens: 500, outputTokens: 100,
     });
 
-    const result = await runAstraTriage(mockInput, mockRunner, {} as any, noopLogger);
+    const result = await runAstraTriage(mockInput, mockRunner, mockConfig, noopLogger);
     expect(result).not.toBeNull();
     expect(result!.action).toBe("answer");
   });
@@ -136,7 +138,7 @@ describe("runAstraTriage", () => {
       success: false, output: "", costUsd: 0, turns: 0, durationMs: 0, inputTokens: 0, outputTokens: 0, error: "boom",
     });
 
-    const result = await runAstraTriage(mockInput, failRunner, {} as any, noopLogger);
+    const result = await runAstraTriage(mockInput, failRunner, mockConfig, noopLogger);
     expect(result).toBeNull();
   });
 
@@ -145,14 +147,14 @@ describe("runAstraTriage", () => {
       success: true, output: "not json", costUsd: 0, turns: 1, durationMs: 100, inputTokens: 0, outputTokens: 0,
     });
 
-    const result = await runAstraTriage(mockInput, badRunner, {} as any, noopLogger);
+    const result = await runAstraTriage(mockInput, badRunner, mockConfig, noopLogger);
     expect(result).toBeNull();
   });
 
   it("returns null when runner throws", async () => {
     const throwRunner = async (): Promise<AgentRunResult> => { throw new Error("connection failed"); };
 
-    const result = await runAstraTriage(mockInput, throwRunner, {} as any, noopLogger);
+    const result = await runAstraTriage(mockInput, throwRunner, mockConfig, noopLogger);
     expect(result).toBeNull();
   });
 
@@ -167,9 +169,9 @@ describe("runAstraTriage", () => {
       };
     };
 
-    await runAstraTriage(mockInput, trackingRunner, {} as any, noopLogger);
+    await runAstraTriage(mockInput, trackingRunner, mockConfig, noopLogger);
     expect(capturedOpts).not.toBeNull();
-    expect(capturedOpts!.stage).toBe("quick");
+    expect(capturedOpts!.stage).toBe("quick-triage");
     expect(capturedOpts!.slug).toBe("astra-triage");
     expect(capturedOpts!.taskContent).toContain("what stages are running?");
   });
@@ -185,7 +187,7 @@ describe("runAstraTriage", () => {
       };
     };
 
-    await runAstraTriage({ ...mockInput, threadTs: "1234.5678" }, trackingRunner, {} as any, noopLogger);
+    await runAstraTriage({ ...mockInput, threadTs: "1234.5678" }, trackingRunner, mockConfig, noopLogger);
     expect(capturedContent).toContain("Thread: 1234.5678");
   });
 });

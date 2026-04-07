@@ -42,7 +42,9 @@ export const REQUIRED_ENV_KEYS = [
 /** Expected agent prompt files (derived from pipeline stages + utility agents). */
 export const EXPECTED_AGENT_FILES = [
   "agent-template.md",
-  "classify.md",
+  "quick-triage.md",
+  "quick-execute.md",
+  "slack-io.md",
   "questions.md",
   "research.md",
   "design.md",
@@ -52,7 +54,6 @@ export const EXPECTED_AGENT_FILES = [
   "validate.md",
   "review.md",
   "pr.md",
-  "quick.md",
 ] as const;
 
 // ── Auth Checks ───────────────────────────────────────────────────────
