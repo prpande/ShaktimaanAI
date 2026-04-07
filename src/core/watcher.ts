@@ -3,7 +3,6 @@ import { join } from "node:path";
 import { readFileSync, unlinkSync, writeFileSync, existsSync, readdirSync, appendFileSync, mkdirSync } from "node:fs";
 import { randomUUID } from "node:crypto";
 import { z } from "zod";
-import { parseTaskFile } from "../task/parser.js";
 
 import { type Pipeline } from "./pipeline.js";
 import { type TaskLogger } from "./logger.js";
@@ -345,13 +344,7 @@ export function createWatcher(options: WatcherOptions): Watcher {
 
           const runTask = async () => {
             try {
-              const taskContent = readFileSync(filePath, "utf-8");
-              const meta = parseTaskFile(taskContent);
-              if (meta.stages.length === 1 && meta.stages[0] === "quick") {
-                await pipeline.startQuickRun(filePath, taskContent);
-              } else {
-                await pipeline.startRun(filePath);
-              }
+              await pipeline.startRun(filePath);
             } catch (err: unknown) {
               logger.error(
                 `Failed to start run for "${filePath}": ${err instanceof Error ? err.message : String(err)}`,

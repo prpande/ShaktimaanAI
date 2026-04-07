@@ -39,7 +39,6 @@ function makeMockPipeline(): Pipeline {
     async modifyStages() {},
     async restartStage() {},
     async retry() {},
-    async startQuickRun() {},
     addNotifier() {},
   };
 }
