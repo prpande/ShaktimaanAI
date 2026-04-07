@@ -1,5 +1,7 @@
-import { describe, it, expectTypeOf } from "vitest";
+import { describe, it, expect, expectTypeOf } from "vitest";
 import type { AstraTriageResult } from "../../src/core/types.js";
+import { parseTriageResult, runAstraTriage, type AstraInput } from "../../src/core/astra-triage.js";
+import type { AgentRunOptions, AgentRunResult } from "../../src/core/types.js";
 
 describe("AstraTriageResult", () => {
   it("accepts action=answer shape", () => {
@@ -55,5 +57,135 @@ describe("AstraTriageResult", () => {
   it("requires confidence and reasoning on all shapes", () => {
     expectTypeOf<AstraTriageResult>().toHaveProperty("confidence");
     expectTypeOf<AstraTriageResult>().toHaveProperty("reasoning");
+  });
+});
+
+describe("parseTriageResult", () => {
+  it("parses valid answer action", () => {
+    const json = JSON.stringify({ action: "answer", confidence: 0.95, reasoning: "Simple question" });
+    const result = parseTriageResult(json);
+    expect(result).not.toBeNull();
+    expect(result!.action).toBe("answer");
+  });
+
+  it("parses valid route_pipeline action with stages", () => {
+    const json = JSON.stringify({
+      action: "route_pipeline", confidence: 0.9, reasoning: "Needs design",
+      recommendedStages: ["design", "plan", "impl", "review", "pr"],
+      enrichedContext: "Found retry logic", repoSummary: "TS project",
+    });
+    const result = parseTriageResult(json);
+    expect(result).not.toBeNull();
+    expect(result!.recommendedStages).toEqual(["design", "plan", "impl", "review", "pr"]);
+    expect(result!.enrichedContext).toBe("Found retry logic");
+  });
+
+  it("parses valid control_command action", () => {
+    const json = JSON.stringify({
+      action: "control_command", controlOp: "cancel",
+      extractedSlug: "fix-auth-bug-20260404103000", confidence: 0.99, reasoning: "Cancel",
+    });
+    const result = parseTriageResult(json);
+    expect(result!.controlOp).toBe("cancel");
+    expect(result!.extractedSlug).toBe("fix-auth-bug-20260404103000");
+  });
+
+  it("strips markdown code fences", () => {
+    const json = "```json\n" + JSON.stringify({ action: "answer", confidence: 0.8, reasoning: "test" }) + "\n```";
+    expect(parseTriageResult(json)).not.toBeNull();
+  });
+
+  it("returns null for invalid JSON", () => {
+    expect(parseTriageResult("not json")).toBeNull();
+  });
+
+  it("returns null for invalid action value", () => {
+    expect(parseTriageResult(JSON.stringify({ action: "bad", confidence: 0.5, reasoning: "x" }))).toBeNull();
+  });
+
+  it("defaults optional fields to undefined", () => {
+    const result = parseTriageResult(JSON.stringify({ action: "answer", confidence: 0.8, reasoning: "simple" }));
+    expect(result!.controlOp).toBeUndefined();
+    expect(result!.recommendedStages).toBeUndefined();
+  });
+});
+
+describe("runAstraTriage", () => {
+  const noopLogger = { info() {}, warn() {}, error() {} };
+  const mockInput: AstraInput = {
+    message: "what stages are running?",
+    channelId: "C12345",
+    userId: "U12345",
+    source: "slack",
+  };
+
+  it("returns parsed result on success", async () => {
+    const mockRunner = async (_opts: AgentRunOptions): Promise<AgentRunResult> => ({
+      success: true,
+      output: JSON.stringify({ action: "answer", confidence: 0.95, reasoning: "Status question" }),
+      costUsd: 0.001, turns: 2, durationMs: 1500, inputTokens: 500, outputTokens: 100,
+    });
+
+    const result = await runAstraTriage(mockInput, mockRunner, {} as any, noopLogger);
+    expect(result).not.toBeNull();
+    expect(result!.action).toBe("answer");
+  });
+
+  it("returns null when runner fails", async () => {
+    const failRunner = async (): Promise<AgentRunResult> => ({
+      success: false, output: "", costUsd: 0, turns: 0, durationMs: 0, inputTokens: 0, outputTokens: 0, error: "boom",
+    });
+
+    const result = await runAstraTriage(mockInput, failRunner, {} as any, noopLogger);
+    expect(result).toBeNull();
+  });
+
+  it("returns null when runner returns invalid JSON", async () => {
+    const badRunner = async (): Promise<AgentRunResult> => ({
+      success: true, output: "not json", costUsd: 0, turns: 1, durationMs: 100, inputTokens: 0, outputTokens: 0,
+    });
+
+    const result = await runAstraTriage(mockInput, badRunner, {} as any, noopLogger);
+    expect(result).toBeNull();
+  });
+
+  it("returns null when runner throws", async () => {
+    const throwRunner = async (): Promise<AgentRunResult> => { throw new Error("connection failed"); };
+
+    const result = await runAstraTriage(mockInput, throwRunner, {} as any, noopLogger);
+    expect(result).toBeNull();
+  });
+
+  it("passes stage=quick and slug=astra-triage to runner", async () => {
+    let capturedOpts: AgentRunOptions | null = null;
+    const trackingRunner = async (opts: AgentRunOptions): Promise<AgentRunResult> => {
+      capturedOpts = opts;
+      return {
+        success: true,
+        output: JSON.stringify({ action: "answer", confidence: 0.9, reasoning: "test" }),
+        costUsd: 0, turns: 1, durationMs: 50, inputTokens: 0, outputTokens: 0,
+      };
+    };
+
+    await runAstraTriage(mockInput, trackingRunner, {} as any, noopLogger);
+    expect(capturedOpts).not.toBeNull();
+    expect(capturedOpts!.stage).toBe("quick");
+    expect(capturedOpts!.slug).toBe("astra-triage");
+    expect(capturedOpts!.taskContent).toContain("what stages are running?");
+  });
+
+  it("includes threadTs in taskContent when provided", async () => {
+    let capturedContent = "";
+    const trackingRunner = async (opts: AgentRunOptions): Promise<AgentRunResult> => {
+      capturedContent = opts.taskContent;
+      return {
+        success: true,
+        output: JSON.stringify({ action: "answer", confidence: 0.9, reasoning: "test" }),
+        costUsd: 0, turns: 1, durationMs: 50, inputTokens: 0, outputTokens: 0,
+      };
+    };
+
+    await runAstraTriage({ ...mockInput, threadTs: "1234.5678" }, trackingRunner, {} as any, noopLogger);
+    expect(capturedContent).toContain("Thread: 1234.5678");
   });
 });
