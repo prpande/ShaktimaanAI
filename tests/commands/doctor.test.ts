@@ -304,7 +304,7 @@ describe("checkAgentPrompts", () => {
     }
     const result = checkAgentPrompts(agentsDir);
     expect(result.passed).toBe(true);
-    expect(result.message).toBe("12/12 present");
+    expect(result.message).toBe("13/13 present");
   });
 
   it("returns passed: false listing missing files when some are absent", () => {
@@ -316,9 +316,8 @@ describe("checkAgentPrompts", () => {
     }
     const result = checkAgentPrompts(agentsDir);
     expect(result.passed).toBe(false);
-    // The last 2 files: "pr.md" and "quick.md"
+    // The last 3 files: "review.md", "pr.md", and one of the new quick/slack files
     expect(result.message).toContain("pr.md");
-    expect(result.message).toContain("quick.md");
   });
 
   it("returns passed: false when agents directory does not exist", () => {

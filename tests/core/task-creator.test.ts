@@ -11,6 +11,7 @@ import {
   generateSlug,
   buildTaskFileContent,
   createTask,
+  normalizeStages,
 } from "../../src/core/task-creator.js";
 
 // ─── test setup ─────────────────────────────────────────────────────────────
@@ -153,7 +154,7 @@ describe("buildTaskFileContent", () => {
     expect(content).toContain("## Slack Thread");
     expect(content).toContain("1234567890.123456");
     expect(content).toContain("## Pipeline Config");
-    expect(content).toContain("stages: research, impl, pr");
+    expect(content).toContain("stages: research, design, plan, impl, review, validate, pr");
     expect(content).toContain("review_after: impl");
   });
 
@@ -355,5 +356,44 @@ describe("createTask", () => {
     expect(fileContent).toContain("# Task: Fix the login bug");
     // The full content should still be in the body
     expect(fileContent).toContain("Additional context about the bug here.");
+  });
+});
+
+describe("normalizeStages", () => {
+  it("sorts stages into canonical order and adds impl prerequisites", () => {
+    expect(normalizeStages(["impl", "design", "pr", "plan"])).toEqual([
+      "design", "plan", "impl", "review", "validate", "pr",
+    ]);
+  });
+
+  it("adds design, plan, review, validate when impl is present", () => {
+    expect(normalizeStages(["impl", "pr"])).toEqual([
+      "design", "plan", "impl", "review", "validate", "pr",
+    ]);
+  });
+
+  it("preserves review before validate order", () => {
+    const result = normalizeStages(["impl", "validate", "review"]);
+    const reviewIdx = result.indexOf("review");
+    const validateIdx = result.indexOf("validate");
+    expect(reviewIdx).toBeLessThan(validateIdx);
+  });
+
+  it("does not add prerequisites when impl is absent", () => {
+    expect(normalizeStages(["questions", "research"])).toEqual([
+      "questions", "research",
+    ]);
+  });
+
+  it("drops unknown stage names", () => {
+    expect(normalizeStages(["design", "unknown", "plan"])).toEqual([
+      "design", "plan",
+    ]);
+  });
+
+  it("deduplicates stages", () => {
+    expect(normalizeStages(["design", "design", "plan"])).toEqual([
+      "design", "plan",
+    ]);
   });
 });

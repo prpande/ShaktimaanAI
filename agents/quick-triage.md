@@ -51,7 +51,7 @@ Required fields:
 - `action` — `"answer"`, `"route_pipeline"`, or `"control_command"`
 - `controlOp` — one of `"approve"`, `"cancel"`, `"skip"`, `"pause"`, `"resume"`, `"modify_stages"`, `"restart_stage"`, `"retry"`, or `null`
 - `extractedSlug` — kebab-case slug with 14-digit timestamp suffix, or `null`
-- `recommendedStages` — array of stage names, or `null`. Valid stages: questions, research, design, structure, plan, impl, validate, review, pr
+- `recommendedStages` — array of stage names, or `null`. Valid stages in order: questions, research, design, structure, plan, impl, review, validate, pr
 - `stageHints` — object mapping stage name to instruction override, or `null`. Use key `"*"` to apply a hint to all stages
 - `enrichedContext` — summary of what you discovered during triage, or `null`
 - `repoSummary` — repo structure overview for downstream agents, or `null`
@@ -62,4 +62,7 @@ Required fields:
 
 - **Never default to route_pipeline on ambiguity.** If unsure, choose "answer" and ask the user a clarifying question.
 - When choosing route_pipeline, recommend only the stages actually needed — not all 9 by default.
+- **Always preserve the canonical stage order:** questions → research → design → structure → plan → impl → review → validate → pr. Never reorder stages (e.g., never put validate before review).
+- **When a spec or design document is referenced**, always include `research` so the pipeline pre-reads and summarizes the document for downstream stages. Without research, later stages must rediscover the spec contents from scratch.
+- **When `impl` is included**, always include at least `design` and `plan` before it, and `review` and `validate` after it. The pipeline needs design→plan to produce actionable implementation slices, and review→validate to verify the output.
 - Include `enrichedContext` and `repoSummary` whenever you gathered useful context during triage — this avoids duplicate work by downstream agents.

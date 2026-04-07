@@ -80,7 +80,7 @@ describe("Astra end-to-end flow", () => {
     expect(existsSync(taskFile)).toBe(true);
 
     const content = readFileSync(taskFile, "utf-8");
-    expect(content).toContain("stages: design, plan, impl, validate, review, pr");
+    expect(content).toContain("stages: design, plan, impl, review, validate, pr");
     expect(content).toContain("## Astra Context");
     expect(content).toContain("retry.ts has linear backoff");
     expect(content).toContain("## Repo Summary");
@@ -129,7 +129,7 @@ describe("Astra end-to-end flow", () => {
 
     const taskFile = join(TEST_DIR, "00-inbox", `${slug}.task`);
     const content = readFileSync(taskFile, "utf-8");
-    expect(content).toContain("stages: impl, review, pr");
+    expect(content).toContain("stages: design, plan, impl, review, validate, pr");
     expect(content).not.toContain("## Astra Context");
     expect(content).not.toContain("## Repo Summary");
   });

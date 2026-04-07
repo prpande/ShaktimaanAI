@@ -32,6 +32,8 @@ export interface Watcher {
   start(): void;
   stop(): Promise<void>;
   isRunning(): boolean;
+  /** Triggers an immediate Narada send cycle (outbox flush + inbox read). */
+  triggerSlackSend(): void;
 }
 
 export interface WatcherOptions {
@@ -51,6 +53,25 @@ export function createWatcher(options: WatcherOptions): Watcher {
   const processingFiles = new Set<string>();
   let slackPollInProgress = false;
   let slackInterval: ReturnType<typeof setTimeout> | null = null;
+
+  // Deduplication: track processed Slack message timestamps
+  const processedTsPath = join(runtimeDir, "slack-processed.json");
+  let processedTs: Set<string>;
+  try {
+    const raw = readFileSync(processedTsPath, "utf-8");
+    processedTs = new Set(JSON.parse(raw) as string[]);
+  } catch {
+    processedTs = new Set();
+  }
+  function markProcessed(ts: string): void {
+    processedTs.add(ts);
+    // Keep only the last 500 entries to avoid unbounded growth
+    if (processedTs.size > 500) {
+      const arr = Array.from(processedTs);
+      processedTs = new Set(arr.slice(arr.length - 500));
+    }
+    writeFileSync(processedTsPath, JSON.stringify(Array.from(processedTs)), "utf-8");
+  }
 
   function ensureSlackFiles(): void {
     const files = [
@@ -121,6 +142,7 @@ export function createWatcher(options: WatcherOptions): Watcher {
         allowDMs: config.slack.allowDMs,
         dmUserIds: config.slack.dmUserIds,
         heldSlugs,
+        outboundPrefix: config.slack.outboundPrefix,
       });
 
       // Warn if DMs enabled but no user IDs
@@ -146,6 +168,17 @@ export function createWatcher(options: WatcherOptions): Watcher {
       const inboxEntries = readInbox(runtimeDir);
 
       for (const entry of inboxEntries) {
+        // Skip malformed entries (e.g., sent log entries written to inbox by mistake)
+        if (!entry.text || !entry.user || !entry.channel) {
+          continue;
+        }
+
+        // Skip already-processed messages (prevents duplicate task creation)
+        if (processedTs.has(entry.ts)) {
+          continue;
+        }
+        markProcessed(entry.ts);
+
         // Handle Slack approvals (unchanged)
         if (entry.isApproval && entry.slug) {
           if (existsSync(join(runtimeDir, "12-hold", entry.slug))) {
@@ -254,14 +287,15 @@ export function createWatcher(options: WatcherOptions): Watcher {
               {
                 source: "slack",
                 content: text,
+                repo: process.cwd(),
                 slackThread: entry.thread_ts ?? entry.ts,
-                stages: triageResult.recommendedStages,
+                stages: triageResult.recommendedStages ?? undefined,
                 stageHints: triageResult.stageHints ?? undefined,
               },
               runtimeDir,
               config,
-              triageResult.enrichedContext,
-              triageResult.repoSummary,
+              triageResult.enrichedContext ?? undefined,
+              triageResult.repoSummary ?? undefined,
             );
             logger.info(`[watcher] Astra: routed message ${entry.ts} to pipeline`);
             break;
@@ -421,6 +455,12 @@ export function createWatcher(options: WatcherOptions): Watcher {
 
     isRunning(): boolean {
       return running;
+    },
+
+    triggerSlackSend(): void {
+      triggerNaradaSend().catch((err: unknown) => {
+        logger.error(`[watcher] triggerSlackSend failed: ${err instanceof Error ? err.message : String(err)}`);
+      });
     },
   };
 }

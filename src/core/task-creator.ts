@@ -59,6 +59,35 @@ export function generateSlug(title: string): string {
 }
 
 /**
+ * Canonical stage order — stages must always appear in this sequence.
+ */
+const CANONICAL_ORDER = [
+  "questions", "research", "design", "structure", "plan",
+  "impl", "review", "validate", "pr",
+] as const;
+
+/**
+ * Normalizes a stage list:
+ * 1. Sorts stages into canonical order
+ * 2. When `impl` is present, ensures `design` and `plan` precede it,
+ *    and `review` and `validate` follow it
+ */
+export function normalizeStages(stages: string[]): string[] {
+  const stageSet = new Set(stages);
+
+  // Enforce prerequisites when impl is present
+  if (stageSet.has("impl")) {
+    if (!stageSet.has("design")) stageSet.add("design");
+    if (!stageSet.has("plan")) stageSet.add("plan");
+    if (!stageSet.has("review")) stageSet.add("review");
+    if (!stageSet.has("validate")) stageSet.add("validate");
+  }
+
+  // Sort into canonical order, drop any unknown stages
+  return CANONICAL_ORDER.filter((s) => stageSet.has(s));
+}
+
+/**
  * Builds the markdown content for a .task file from the given input and config.
  */
 export function buildTaskFileContent(
@@ -70,7 +99,7 @@ export function buildTaskFileContent(
   const title = extractTitle(input.content);
   const stages =
     input.stages && input.stages.length > 0
-      ? input.stages.join(", ")
+      ? normalizeStages(input.stages).join(", ")
       : config.agents.defaultStages.join(", ");
   const reviewAfter = input.reviewAfter ?? config.agents.defaultReviewAfter;
 

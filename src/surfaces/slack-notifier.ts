@@ -10,6 +10,8 @@ export interface SlackNotifierOptions {
   channelId: string;
   notifyLevel: NotifyLevel;
   runtimeDir: string;
+  /** Called after writing to outbox — wire to triggerNaradaSend for immediate delivery. */
+  onOutboxWrite?: () => void;
 }
 
 // ─── formatEvent ─────────────────────────────────────────────────────────────
@@ -64,7 +66,7 @@ function loadThreadMap(runtimeDir: string): Record<string, string> {
 // ─── createSlackNotifier ──────────────────────────────────────────────────────
 
 export function createSlackNotifier(options: SlackNotifierOptions): Notifier {
-  const { channelId, notifyLevel, runtimeDir } = options;
+  const { channelId, notifyLevel, runtimeDir, onOutboxWrite } = options;
   const outboxPath = join(runtimeDir, "slack-outbox.jsonl");
 
   return {
@@ -95,6 +97,7 @@ export function createSlackNotifier(options: SlackNotifierOptions): Notifier {
       try {
         mkdirSync(dirname(outboxPath), { recursive: true });
         appendFileSync(outboxPath, JSON.stringify(entry) + "\n", "utf-8");
+        onOutboxWrite?.();
       } catch {
         // swallow errors silently — never crash the pipeline
       }

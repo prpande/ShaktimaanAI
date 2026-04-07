@@ -39,6 +39,7 @@ export interface NaradaPayload {
     dmOldest: string;
   };
   approvalChecks: Array<{ slug: string; thread_ts: string }>;
+  outboundPrefix: string;
   files: {
     outbox: string;
     inbox: string;
@@ -99,6 +100,7 @@ export function buildNaradaPayload(
     allowDMs: boolean;
     dmUserIds: string[];
     heldSlugs: string[];
+    outboundPrefix?: string;
   },
 ): NaradaPayload {
   const outbox = readOutbox(runtimeDir);
@@ -129,6 +131,7 @@ export function buildNaradaPayload(
       dmOldest: dmTs,
     },
     approvalChecks,
+    outboundPrefix: opts.outboundPrefix ?? "🤖 [ShaktimaanAI]",
     files: {
       outbox: join(runtimeDir, "slack-outbox.jsonl"),
       inbox: join(runtimeDir, "slack-inbox.jsonl"),
