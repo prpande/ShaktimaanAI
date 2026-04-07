@@ -11,6 +11,10 @@ import { type Notifier, type NotifyEvent } from "../surfaces/types.js";
 import { parseAgentVerdict, parseReviewFindings, decideAfterValidate, decideAfterReview } from "./retry.js";
 import { createWorktree, recordWorktreeCompletion } from "./worktree.js";
 import { appendDailyLogEntry, appendInteraction } from "./interactions.js";
+import { createSessionTracker, resolveModelForStage, checkBudget, type BudgetCheckContext } from "./budget.js";
+import { loadBudgetConfig } from "../config/loader.js";
+import { DEFAULT_BUDGET_CONFIG } from "../config/defaults.js";
+import type { BudgetConfig } from "../config/budget-schema.js";
 
 // Re-export for backwards compatibility
 export { STAGE_DIR_MAP, DIR_STAGE_MAP };
@@ -187,6 +191,15 @@ export function createPipeline(options: PipelineOptions): Pipeline {
   const interactionsDir = join(runtimeDir, "interactions");
   const activeRuns = new Map<string, RunState>();
   const deferredTasks: { slug: string; taskDir: string }[] = [];
+  const sessionTracker = createSessionTracker();
+  const budgetConfig: BudgetConfig = (() => {
+    try {
+      return loadBudgetConfig(runtimeDir);
+    } catch (err) {
+      logger.error(`[pipeline] Failed to load budget config: ${err instanceof Error ? err.message : String(err)}`);
+      return DEFAULT_BUDGET_CONFIG;
+    }
+  })();
 
   const EXECUTION_STAGES = new Set(["impl", "validate", "review", "pr"]);
 
@@ -426,6 +439,53 @@ export function createPipeline(options: PipelineOptions): Pipeline {
         logger: taskLogger,
       };
 
+      // ─── Pre-stage budget check ──────────────────────────────────────────
+      const budgetContext: BudgetCheckContext = {
+        interactionsDir,
+        sessionTracker,
+        taskCompletedStages: state.completedStages,
+        today: new Date(),
+      };
+      const modelResolution = resolveModelForStage(stage, config, budgetConfig, budgetContext);
+
+      if (modelResolution.action === "hold") {
+        registry.unregister(agentId);
+        retryDeferredTasks();
+        state.status = "hold";
+        state.holdReason = "budget_exhausted";
+        state.holdDetail = modelResolution.reason;
+        state.pausedAtStage = stage;
+        writeRunState(currentTaskDir, state);
+        try {
+          moveTaskDir(runtimeDir, slug, join(STAGE_DIR_MAP[stage], "pending"), "12-hold");
+        } catch (moveErr) {
+          logger.error(
+            `[pipeline] Failed to move budget-held task "${slug}" to 12-hold: ` +
+            `${moveErr instanceof Error ? moveErr.message : String(moveErr)}`,
+          );
+        }
+        activeRuns.set(slug, readRunState(join(runtimeDir, "12-hold", slug)));
+        emitNotify({ type: "task_held", slug, stage, artifactUrl: "", timestamp: new Date().toISOString() });
+        logger.warn(`[pipeline] Budget exhausted for "${slug}" at stage "${stage}": ${modelResolution.reason}`);
+        try {
+          appendDailyLogEntry(interactionsDir, {
+            timestamp: new Date().toISOString(),
+            type: "budget_hold",
+            slug,
+            stage,
+            reason: modelResolution.reason,
+          });
+        } catch { /* swallow */ }
+        return;
+      }
+
+      if (modelResolution.action === "downgrade") {
+        logger.warn(
+          `[pipeline] Downgraded "${slug}" stage "${stage}" from ${config.agents.models?.[stage] ?? "unknown"} to ${modelResolution.model}: ${modelResolution.reason}`,
+        );
+      }
+      runOptions.model = modelResolution.model;
+
       let result;
       try {
         result = await runner(runOptions);
@@ -548,13 +608,39 @@ export function createPipeline(options: PipelineOptions): Pipeline {
 
       // Add completed stage
       const outputFileName = `${stage}-output${outputSuffix}.md`;
+      const resolvedModel = runOptions.model ?? config.agents.models?.[stage];
       state.completedStages.push({
         stage,
         completedAt: new Date().toISOString(),
         outputFile: outputFileName,
         costUsd: result.costUsd,
         turns: result.turns,
+        inputTokens: result.inputTokens,
+        outputTokens: result.outputTokens,
+        model: resolvedModel,
       });
+
+      // Track session-level token usage
+      const totalTokens = (result.inputTokens ?? 0) + (result.outputTokens ?? 0);
+      if (resolvedModel) {
+        sessionTracker.addUsage(resolvedModel, totalTokens);
+      }
+
+      // Post-stage budget warning (informational only — completed work is never rolled back)
+      try {
+        const postStatus = checkBudget(resolvedModel ?? "sonnet", budgetConfig, {
+          interactionsDir,
+          sessionTracker,
+          taskCompletedStages: state.completedStages,
+          today: new Date(),
+        });
+        if (postStatus.isOverLimit) {
+          logger.warn(
+            `[pipeline] Budget warning after "${stage}" for "${slug}": ${resolvedModel} ${postStatus.limitBreached} limit now exceeded`,
+          );
+        }
+      } catch { /* swallow — post-stage warning is non-critical */ }
+
       emitNotify({ type: "stage_completed", slug, stage, artifactPath: outputPath, timestamp: new Date().toISOString() });
       try {
         appendDailyLogEntry(interactionsDir, {
@@ -563,6 +649,7 @@ export function createPipeline(options: PipelineOptions): Pipeline {
           slug,
           stage,
           agentName: config.agents.names[stage] ?? stage,
+          model: resolvedModel ?? "",
           durationSeconds: Math.round(result.durationMs / 1000),
           costUsd: result.costUsd,
           inputTokens: result.inputTokens,
@@ -813,6 +900,26 @@ export function createPipeline(options: PipelineOptions): Pipeline {
       const state = readRunState(holdDir);
       if (!state.pausedAtStage) throw new Error(`Task "${slug}" was not paused — use approve instead`);
       const resumeStage = state.pausedAtStage;
+
+      // Budget-aware resume: re-check budget before allowing resume
+      if (state.holdReason === "budget_exhausted") {
+        const budgetCtx: BudgetCheckContext = {
+          interactionsDir,
+          sessionTracker,
+          taskCompletedStages: state.completedStages,
+          today: new Date(),
+        };
+        const resolution = resolveModelForStage(resumeStage, config, budgetConfig, budgetCtx);
+        if (resolution.action === "hold") {
+          state.holdDetail = resolution.reason;
+          writeRunState(holdDir, state);
+          throw new Error(`Budget still exhausted for "${slug}": ${resolution.reason}`);
+        }
+        // Budget is now OK — clear hold fields
+        delete state.holdReason;
+        delete state.holdDetail;
+      }
+
       state.status = "running";
       state.currentStage = resumeStage;
       delete state.pausedAtStage;
