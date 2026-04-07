@@ -75,7 +75,7 @@ describe("buildSystemPrompt", () => {
     // Write agent MD files used across tests (plain instructions, no frontmatter)
     writeAgentMd("questions", "Ask good questions.");
     writeAgentMd("research", "Investigate the codebase thoroughly.");
-    writeAgentMd("classify", "Classify the intent.");
+    writeAgentMd("pr", "Open the pull request.");
     writeAgentMd("impl", "Implement the feature.");
   });
 
@@ -118,8 +118,8 @@ describe("buildSystemPrompt", () => {
     expect(result).not.toMatch(/## .*(?:Previous|Questions to Investigate)/);
   });
 
-  it("omits repo context for stages that don't need it (classify)", () => {
-    const result = buildSystemPrompt(makeOptions({ stage: "classify" }));
+  it("omits repo context for stages that don't need it (pr)", () => {
+    const result = buildSystemPrompt(makeOptions({ stage: "pr" }));
     expect(result).not.toContain("## Repo Context");
   });
 

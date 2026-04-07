@@ -16,7 +16,7 @@ describe("configSchema", () => {
         },
       },
       ado: { org: "https://dev.azure.com/myorg", project: "MyProj", defaultArea: "App" },
-      slack: { enabled: false, channel: "#pipeline", channelId: "", pollIntervalSeconds: 30 },
+      slack: { enabled: false, channel: "#pipeline", channelId: "", pollIntervalActiveSec: 300, pollIntervalIdleSec: 45 },
       agents: {
         names: { questions: "CustomName" },
         defaultStages: ["research", "impl"],

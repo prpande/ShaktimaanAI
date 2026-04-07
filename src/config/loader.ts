@@ -65,7 +65,8 @@ export function resolveConfig(parsed: ConfigParsed): ResolvedConfig {
       enabled: parsed.slack?.enabled ?? d.slack.enabled,
       channel: parsed.slack?.channel ?? d.slack.channel,
       channelId: parsed.slack?.channelId ?? d.slack.channelId,
-      pollIntervalSeconds: parsed.slack?.pollIntervalSeconds ?? d.slack.pollIntervalSeconds,
+      pollIntervalActiveSec: parsed.slack?.pollIntervalActiveSec ?? d.slack.pollIntervalActiveSec,
+      pollIntervalIdleSec: parsed.slack?.pollIntervalIdleSec ?? d.slack.pollIntervalIdleSec,
       notifyLevel: parsed.slack?.notifyLevel ?? d.slack.notifyLevel,
       allowDMs: parsed.slack?.allowDMs ?? d.slack.allowDMs,
       requirePrefix: parsed.slack?.requirePrefix ?? d.slack.requirePrefix,
@@ -102,7 +103,6 @@ export function resolveConfig(parsed: ConfigParsed): ResolvedConfig {
     },
     quickTask: {
       requireReview: parsed.quickTask?.requireReview ?? d.quickTask.requireReview,
-      complexityThreshold: parsed.quickTask?.complexityThreshold ?? d.quickTask.complexityThreshold,
     },
   };
 }

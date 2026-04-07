@@ -97,10 +97,10 @@ describe("config quickTask section", () => {
     expect(resolved.quickTask.requireReview).toBe(true);
   });
 
-  it("defaults quickTask.complexityThreshold to 0.8", () => {
+  it("does not have quickTask.complexityThreshold (removed in Astra refactor)", () => {
     const parsed = configSchema.parse({ pipeline: { runtimeDir: "/tmp/test" } });
     const resolved = resolveConfig(parsed);
-    expect(resolved.quickTask.complexityThreshold).toBe(0.8);
+    expect(resolved.quickTask).not.toHaveProperty("complexityThreshold");
   });
 });
 
