@@ -1,6 +1,8 @@
-import { readFileSync } from "node:fs";
+import { readFileSync, existsSync } from "node:fs";
+import { join } from "node:path";
 import { configSchema, type ConfigParsed } from "./schema.js";
-import { DEFAULT_CONFIG, DEFAULT_AGENT_NAMES, type ShkmnConfig } from "./defaults.js";
+import { DEFAULT_CONFIG, DEFAULT_AGENT_NAMES, DEFAULT_BUDGET_CONFIG, type ShkmnConfig } from "./defaults.js";
+import { budgetConfigSchema, type BudgetConfig } from "./budget-schema.js";
 
 /**
  * A fully resolved config with all fields present (no optionals).
@@ -105,6 +107,44 @@ export function resolveConfig(parsed: ConfigParsed): ResolvedConfig {
       requireReview: parsed.quickTask?.requireReview ?? d.quickTask.requireReview,
     },
   };
+}
+
+/**
+ * Loads and validates usage-budget.json from runtimeDir.
+ * Returns DEFAULT_BUDGET_CONFIG if file is missing.
+ * Throws if file exists but fails validation.
+ */
+export function loadBudgetConfig(runtimeDir: string): BudgetConfig {
+  const filePath = join(runtimeDir, "usage-budget.json");
+
+  if (!existsSync(filePath)) {
+    return DEFAULT_BUDGET_CONFIG;
+  }
+
+  let raw: string;
+  raw = readFileSync(filePath, "utf-8");
+
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(raw);
+  } catch (err) {
+    throw new Error(
+      `Failed to parse budget config as JSON at "${filePath}": ${(err as Error).message}`,
+    );
+  }
+
+  const result = budgetConfigSchema.safeParse(parsed);
+  if (!result.success) {
+    const messages = result.error.issues
+      .map((i) => {
+        const path = i.path.length > 0 ? `${i.path.join(".")}: ` : "";
+        return `${path}${i.message}`;
+      })
+      .join("; ");
+    throw new Error(`Invalid budget config at "${filePath}": ${messages}`);
+  }
+
+  return result.data;
 }
 
 /**
