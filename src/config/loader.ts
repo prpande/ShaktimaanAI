@@ -74,6 +74,7 @@ export function resolveConfig(parsed: ConfigParsed): ResolvedConfig {
       requirePrefix: parsed.slack?.requirePrefix ?? d.slack.requirePrefix,
       prefix: parsed.slack?.prefix ?? d.slack.prefix,
       dmUserIds: parsed.slack?.dmUserIds ?? d.slack.dmUserIds,
+      outboundPrefix: parsed.slack?.outboundPrefix ?? d.slack.outboundPrefix,
     },
     agents: {
       names: { ...DEFAULT_AGENT_NAMES, ...parsed.agents?.names },

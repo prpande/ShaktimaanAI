@@ -32,6 +32,7 @@ export const configSchema = z.object({
     requirePrefix: z.boolean().optional().default(true),
     prefix: z.string().optional().default("shkmn"),
     dmUserIds: z.array(z.string()).optional().default([]),
+    outboundPrefix: z.string().optional().default("🤖 [ShaktimaanAI]"),
   }).optional().default({}),
   quickTask: z.object({
     requireReview: z.boolean().optional().default(true),

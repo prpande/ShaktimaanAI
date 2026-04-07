@@ -83,6 +83,7 @@ export interface ShkmnConfig {
     requirePrefix: boolean;
     prefix: string;
     dmUserIds: string[];
+    outboundPrefix: string;
   };
   quickTask: {
     requireReview: boolean;
@@ -144,6 +145,7 @@ export const DEFAULT_CONFIG: ShkmnConfig = {
     requirePrefix: true,
     prefix: "shkmn",
     dmUserIds: [],
+    outboundPrefix: "🤖 [ShaktimaanAI]",
   },
   quickTask: {
     requireReview: true,

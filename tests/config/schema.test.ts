@@ -76,4 +76,9 @@ describe("configSchema", () => {
       expect(result.data.agents?.names?.questions).toBe("MyQuestionBot");
     }
   });
+
+  it("slack.outboundPrefix defaults to '🤖 [ShaktimaanAI]'", () => {
+    const result = configSchema.parse({ pipeline: { runtimeDir: "/tmp" }, slack: {} });
+    expect(result.slack.outboundPrefix).toBe("🤖 [ShaktimaanAI]");
+  });
 });
