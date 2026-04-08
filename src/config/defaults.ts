@@ -207,7 +207,7 @@ export const DEFAULT_CONFIG: ShkmnConfig = {
       validate: 15,
       review: 40,
       pr: 20,
-      "quick-triage": 5,
+      "quick-triage": 10,
       quick: 5,
       "quick-execute": 40,
       "slack-io": 15,
