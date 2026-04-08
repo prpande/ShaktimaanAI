@@ -27,6 +27,7 @@ function getAllDirPaths(runtimeDir: string): string[] {
   dirs.push(join(runtimeDir, "history", "daily-log"));
   dirs.push(join(runtimeDir, "history", "monthly-reports"));
   dirs.push(join(runtimeDir, "interactions"));
+  dirs.push(join(runtimeDir, "diagnostics"));
 
   return dirs;
 }
