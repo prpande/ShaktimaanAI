@@ -125,8 +125,8 @@ function resolveMcpServers(
 | plan | all prior outputs (questions, research, design, structure) | Needs full alignment chain |
 | **impl** | **all alignment outputs + retry feedback files** | Needs complete picture; on retry, also gets validate/review feedback but NOT their full outputs |
 | **review** | **plan + design outputs only** | Reviews actual code against plan/design via tools (git diff, Read, Grep); does NOT receive impl's self-reported output |
-| **validate** | **none** | Discovers build/test commands from repo; runs them and reports verdict. No pipeline context needed |
-| **pr** | **review output only** | Uses review summary to draft PR description |
+| **validate** | **Astra's repoSummary only (via RunState)** | Astra already gathered project structure and build/test commands during triage. Validate receives this cached summary instead of re-running `gatherRepoContext()` — avoids duplicate repo scanning and saves Haiku turns on discovery |
+| **pr** | **task content + impl output + review output** | Needs the full picture: WHY (task), WHAT (impl summary of changes), and quality notes (review). Without all three the PR description is incomplete |
 
 #### Implementation Approach
 
@@ -137,6 +137,7 @@ export const STAGE_ARTIFACT_RULES: Record<string, {
   mode: 'all_prior' | 'specific' | 'none';
   specificFiles?: string[];   // for 'specific' mode: which output files to include
   includeRetryFeedback?: boolean;
+  useRepoSummary?: boolean;   // use Astra's cached repoSummary instead of gatherRepoContext()
 }> = {
   questions:  { mode: 'none' },
   research:   { mode: 'all_prior' },
@@ -145,8 +146,8 @@ export const STAGE_ARTIFACT_RULES: Record<string, {
   plan:       { mode: 'all_prior' },
   impl:       { mode: 'all_prior', includeRetryFeedback: true },
   review:     { mode: 'specific', specificFiles: ['plan-output', 'design-output'] },
-  validate:   { mode: 'none' },
-  pr:         { mode: 'specific', specificFiles: ['review-output'] },
+  validate:   { mode: 'none', useRepoSummary: true },
+  pr:         { mode: 'specific', specificFiles: ['impl-output', 'review-output'] },
 };
 ```
 
@@ -156,13 +157,15 @@ The `includeRetryFeedback` flag additionally includes `retry-feedback-*.md` file
 
 The `specific` mode includes only the named output files (matching `{name}-output*.md` pattern to handle retry suffixes like `plan-output-r1.md`).
 
+The `useRepoSummary` flag replaces `gatherRepoContext()` with Astra's cached `repoSummary` from `RunState`. This avoids duplicate repo scanning and is more concise. When `useRepoSummary` is true and a `repoSummary` is available in RunState, it is used instead of calling `gatherRepoContext()`. If no repoSummary is available (direct CLI invocation without triage), falls back to `gatherRepoContext()`.
+
 **Relationship with `STAGE_CONTEXT_RULES`:** The new `STAGE_ARTIFACT_RULES` replaces the `previousOutputLabel` field in `STAGE_CONTEXT_RULES` — that field becomes unused. The `includeTaskContent` and `includeRepoContext` fields in `STAGE_CONTEXT_RULES` remain and continue to control whether task content and repo context are included in the prompt. Updated context rules for execution stages:
 
 | Stage | includeTaskContent | includeRepoContext | Artifact Mode |
 |-------|---|---|---|
-| validate | false (unchanged) | true (unchanged) | none |
+| validate | false (unchanged) | **false** (uses Astra's repoSummary instead) | none + useRepoSummary |
 | review | true (unchanged) | true (unchanged) | specific (plan + design) |
-| pr | true (unchanged) | false (unchanged) | specific (review) |
+| pr | true (unchanged) | false (unchanged) | specific (impl + review) |
 
 In `pipeline.ts`, the artifact collection block (lines 407-413) is replaced with a function that applies these rules:
 
@@ -327,7 +330,7 @@ This separation allows the system prompt to be cached across turns within a sing
 1. **`src/core/agent-runner.ts`** — Add SDK isolation options (`settingSources`, `systemPrompt`, `mcpServers`). Split `buildSystemPrompt` into system + user prompts. Add `resolveMcpServers()` function.
 2. **`src/config/defaults.ts`** — Add `STAGE_ARTIFACT_RULES`, `MCP_SERVER_REGISTRY`, `MCP_TOOL_PREFIXES`. Update default models for research and validate.
 3. **`src/core/pipeline.ts`** — Replace artifact concatenation (lines 407-413) with `collectArtifacts()` function. Pass `requiredMcpServers` from `RunState` to agent runner.
-4. **`src/core/types.ts`** — Add `requiredMcpServers?: string[]` to `RunState` and `AgentRunOptions`.
+4. **`src/core/types.ts`** — Add `requiredMcpServers?: string[]` and `repoSummary?: string` to `RunState` and `AgentRunOptions`.
 5. **`src/core/retry.ts`** — Rename `READY_FOR_REVIEW` → `PASS` in verdict constants and `decideAfterValidate`.
 6. **`agents/quick-triage.md`** — Add `requiredMcpServers` to output format. Strengthen execution stage ordering guidance.
 7. **`agents/validate.md`** — Update verdict output from `READY_FOR_REVIEW` → `PASS`.
