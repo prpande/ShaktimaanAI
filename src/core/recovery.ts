@@ -146,61 +146,72 @@ export async function runRecovery(
   // recovery timeout should exceed the longest stage timeout. Using 2 hours.
   const RECOVERY_TIMEOUT_MS = 2 * 60 * 60 * 1000; // 2 hours per task
 
+  // Separate hold items (synchronous, no async work) from recoverable items
+  const recoverableItems: RecoveryItem[] = [];
   for (const item of items) {
-    try {
-      switch (item.location) {
-        case "pending": {
-          const stageSubdir = join(STAGE_DIR_MAP[item.stage], "pending");
-          logger.info(`Recovering task "${item.slug}" from stage "${item.stage}" (pending)`);
-          await Promise.race([
-            pipeline.resumeRun(item.slug, stageSubdir),
-            new Promise<never>((_, reject) =>
-              setTimeout(() => reject(new Error(`Recovery timed out after ${RECOVERY_TIMEOUT_MS / 1000}s`)), RECOVERY_TIMEOUT_MS),
-            ),
-          ]);
-          result.resumed.push(item.slug);
-          break;
-        }
+    if (item.location === "hold") {
+      logger.info(`Found held task "${item.slug}" in 12-hold — awaiting approval`);
+      result.skipped.push(item.slug);
+    } else {
+      recoverableItems.push(item);
+    }
+  }
 
-        case "done": {
-          // Task completed this stage but crashed before moving to the next.
-          // Resume from the done/ directory — the pipeline will advance it.
-          const stageSubdir = join(STAGE_DIR_MAP[item.stage], "done");
-          logger.info(`Recovering task "${item.slug}" from stage "${item.stage}" (done — needs advance)`);
-          await Promise.race([
-            pipeline.resumeRun(item.slug, stageSubdir),
-            new Promise<never>((_, reject) =>
-              setTimeout(() => reject(new Error(`Recovery timed out after ${RECOVERY_TIMEOUT_MS / 1000}s`)), RECOVERY_TIMEOUT_MS),
-            ),
-          ]);
-          result.resumed.push(item.slug);
-          break;
-        }
+  // Fan out recovery concurrently with proper timeout cleanup
+  const promises = recoverableItems.map((item) => {
+    let timeoutHandle: ReturnType<typeof setTimeout>;
 
-        case "hold": {
-          // Held tasks just need to be logged — they wait for explicit approval.
-          logger.info(`Found held task "${item.slug}" in 12-hold — awaiting approval`);
-          result.skipped.push(item.slug);
-          break;
-        }
+    const timeoutPromise = new Promise<never>((_, reject) => {
+      timeoutHandle = setTimeout(
+        () => reject(new Error(`Recovery timed out after ${RECOVERY_TIMEOUT_MS / 1000}s`)),
+        RECOVERY_TIMEOUT_MS,
+      );
+    });
 
-        case "inbox": {
-          // Unprocessed .task files — start new pipeline runs
-          logger.info(`Recovering unprocessed inbox task "${item.slug}"`);
-          await Promise.race([
-            pipeline.startRun(item.dir),
-            new Promise<never>((_, reject) =>
-              setTimeout(() => reject(new Error(`Recovery timed out after ${RECOVERY_TIMEOUT_MS / 1000}s`)), RECOVERY_TIMEOUT_MS),
-            ),
-          ]);
-          result.resumed.push(item.slug);
-          break;
-        }
+    let pipelinePromise: Promise<void>;
+
+    switch (item.location) {
+      case "pending": {
+        const stageSubdir = join(STAGE_DIR_MAP[item.stage], "pending");
+        logger.info(`Recovering task "${item.slug}" from stage "${item.stage}" (pending)`);
+        pipelinePromise = pipeline.resumeRun(item.slug, stageSubdir);
+        break;
       }
-    } catch (err) {
-      const errorMsg = err instanceof Error ? err.message : String(err);
-      logger.error(`Failed to recover task "${item.slug}": ${errorMsg}`);
-      result.errors.push({ slug: item.slug, error: errorMsg });
+      case "done": {
+        const stageSubdir = join(STAGE_DIR_MAP[item.stage], "done");
+        logger.info(`Recovering task "${item.slug}" from stage "${item.stage}" (done — needs advance)`);
+        pipelinePromise = pipeline.resumeRun(item.slug, stageSubdir);
+        break;
+      }
+      case "inbox": {
+        logger.info(`Recovering unprocessed inbox task "${item.slug}"`);
+        pipelinePromise = pipeline.startRun(item.dir);
+        break;
+      }
+      default:
+        // Should never happen — hold items are filtered above
+        return Promise.resolve({ slug: item.slug, ok: true as const });
+    }
+
+    return Promise.race([pipelinePromise, timeoutPromise])
+      .then(() => ({ slug: item.slug, ok: true as const }))
+      .catch((err) => ({ slug: item.slug, ok: false as const, error: err instanceof Error ? err.message : String(err) }))
+      .finally(() => clearTimeout(timeoutHandle!));
+  });
+
+  const outcomes = await Promise.allSettled(promises);
+
+  for (const outcome of outcomes) {
+    // Promise.allSettled with our .then/.catch wrapper should always be "fulfilled"
+    if (outcome.status === "fulfilled") {
+      const { slug, ok } = outcome.value;
+      if (ok) {
+        result.resumed.push(slug);
+      } else {
+        const errorMsg = (outcome.value as { slug: string; ok: false; error: string }).error;
+        logger.error(`Failed to recover task "${slug}": ${errorMsg}`);
+        result.errors.push({ slug, error: errorMsg });
+      }
     }
   }
 

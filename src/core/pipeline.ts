@@ -399,7 +399,7 @@ export function createPipeline(options: PipelineOptions): Pipeline {
     try {
       recordWorktreeCompletion(manifestPath, {
         slug: state.slug,
-        repoPath: state.worktreePath,
+        repoPath: state.repoRoot ?? state.worktreePath,
         worktreePath: state.worktreePath,
         completedAt: new Date().toISOString(),
       });
@@ -422,6 +422,7 @@ export function createPipeline(options: PipelineOptions): Pipeline {
       try {
         const worktreesDir = join(runtimeDir, "worktrees");
         const worktreePath = createWorktree(repoPath, state.slug, worktreesDir);
+        state.repoRoot = repoPath;
         state.worktreePath = worktreePath;
         return worktreePath;
       } catch (err) {
@@ -864,8 +865,10 @@ export function createPipeline(options: PipelineOptions): Pipeline {
       if (nextStage === null) {
         state.status = "complete";
         writeRunState(holdDir, state);
+        recordCompletionIfWorktree(state);
         moveTaskDir(runtimeDir, slug, "12-hold", "10-complete");
         activeRuns.set(slug, readRunState(join(runtimeDir, "10-complete", slug)));
+        emitNotify({ type: "task_completed", slug, timestamp: new Date().toISOString() });
         return;
       }
 
@@ -908,6 +911,7 @@ export function createPipeline(options: PipelineOptions): Pipeline {
       const found = findTaskDir(slug);
       if (!found) throw new Error(`Task "${slug}" not found`);
       const state = readRunState(found.dir);
+      recordCompletionIfWorktree(state);
       state.status = "failed";
       state.error = "Cancelled by user";
       writeRunState(found.dir, state);

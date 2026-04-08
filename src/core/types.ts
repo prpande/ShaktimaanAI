@@ -40,6 +40,7 @@ export interface RunState {
   // Execution working directory fields
   workDir?: string;
   worktreePath?: string;
+  repoRoot?: string;
   invocationCwd?: string;
 
   // Retry counters
