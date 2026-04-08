@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach } from "vitest";
-import { mkdirSync, rmSync, writeFileSync, existsSync } from "node:fs";
+import { mkdirSync, rmSync, writeFileSync, existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { randomUUID } from "node:crypto";
@@ -182,5 +182,30 @@ describe("cleanupExpired", () => {
     const manifestPath = join(TEST_DIR, "nonexistent-manifest.json");
     const removed = cleanupExpired(manifestPath, 7);
     expect(removed).toEqual([]);
+  }, TEST_TIMEOUT);
+});
+
+// ─── Shell injection prevention ─────────────────────────────────────────────
+
+describe("shell injection prevention", () => {
+  it("uses execFileSync instead of execSync (no shell interpretation)", () => {
+    const source = readFileSync(
+      join(__dirname, "../../src/core/worktree.ts"),
+      "utf-8",
+    );
+    // Must not use execSync (shell-based execution)
+    expect(source).not.toMatch(/\bexecSync\b/);
+    // Must use execFileSync (argument-array based, no shell)
+    expect(source).toMatch(/\bexecFileSync\b/);
+  });
+
+  it("does not execute shell metacharacters in baseBranch", () => {
+    const worktreesDir = join(TEST_DIR, "worktrees");
+    // A baseBranch containing shell metacharacters should fail as an
+    // invalid git ref, NOT execute the injected command.
+    // With execFileSync, the string is passed as a literal argument to git.
+    expect(() =>
+      createWorktree(REPO_DIR, "inject-test", worktreesDir, '$(echo pwned)'),
+    ).toThrow(); // git will reject the invalid ref
   }, TEST_TIMEOUT);
 });
