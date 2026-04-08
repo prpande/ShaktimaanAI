@@ -341,7 +341,7 @@ for (const item of items) {
 
 If the system crashes with 5 tasks in `pending/`, recovery can take up to 10 hours to complete. Each task should be recovered concurrently (fire-and-forget with independent timeouts), matching how `processStage` normally operates.
 
-Additionally, the `setTimeout` handles inside each `Promise.race` are never cleared with `clearTimeout` when the pipeline resolves first. This leaves N hanging timer handles that fire 2 hours later and call `reject` on an already-settled promise — a harmless no-op but a resource leak.
+Additionally, the `setTimeout` handles inside each `Promise.race` are never cleared with `clearTimeout` when the pipeline resolves first. Each handle holds a 2-hour timer that fires, calls `reject` on an already-settled promise (a harmless no-op), and is then garbage-collected — but for the duration of that 2-hour window the handle keeps the event loop alive and consumes memory unnecessarily. For 5 tasks in recovery this means up to 5 timer handles each holding the process open for 2 hours after recovery is complete.
 
 **Fix:** Fan out all recovery items with `Promise.allSettled` and clear each timeout handle when its corresponding pipeline promise settles.
 
@@ -444,9 +444,7 @@ const filePath = join(agentDir, `${stage}.md`);
 return readFileSync(filePath, "utf-8");
 ```
 
-Stage names originate from task files (the `## Pipeline Config → stages:` section), which are written by Slack users via `createTask`. If a user submits `stages: ../../etc/passwd` (or any path traversal sequence), `join` will not block it — `join("/agents", "../../etc/passwd.md")` resolves to `/etc/passwd.md` on POSIX systems.
-
-While the `.md` suffix makes reading system files with no extension ineffective, a crafted stage name could read other `.md` files outside the agents directory (e.g., task files, log files, documentation).
+Stage names originate from task files (the `## Pipeline Config → stages:` section), which are written by Slack users via `createTask`. If a user submits a crafted stage name containing path traversal sequences (e.g., `../../some-file`), the call `join(agentDir, `${stage}.md`)` produces a path outside the agents directory. `path.join` normalises `..` components, so `join("/home/user/agents", "../../etc/cron.d.md")` resolves to `/home/user/etc/cron.d.md` — outside the intended directory. The `.md` suffix limits exploitation to `.md` files, but target `.md` files outside the agents directory (task files, log files, documentation) are readable.
 
 `normalizeStages` filters stages against `CANONICAL_ORDER`, which does provide protection for the standard pipeline path. However, the `quick`, `quick-triage`, `quick-execute`, and `slack-io` stages are not in `CANONICAL_ORDER` and are passed through without sanitization, and `modifyStages` accepts any name from `STAGE_DIR_MAP` keys plus `"quick"`. `loadAgentPrompt` is called for all of these.
 
@@ -465,9 +463,9 @@ While the `.md` suffix makes reading system files with no extension ineffective,
 holdReason?: "budget_exhausted" | "approval_required" | "user_paused";
 ```
 
-Searching the entire codebase, `holdReason` is only ever assigned `"budget_exhausted"` (in `processStage`, line 537). The values `"approval_required"` and `"user_paused"` are never set anywhere.
+Searching the entire codebase, `holdReason` is only ever assigned `"budget_exhausted"` (in `processStage`, line 537). The values `"approval_required"` and `"user_paused"` are defined in the type but never assigned anywhere in the codebase.
 
-`status.ts` displays `[paused]` when `holdReason === "user_paused"` (line 67), but user-paused tasks never have this value set — the `pause` function sets `pausedAtStage` but not `holdReason`. The `[paused]` tag will therefore never appear in the status output.
+`status.ts` displays `[paused]` when `holdReason === "user_paused"` (line 67), but user-paused tasks never have this value set — the `pause` function sets `pausedAtStage` but leaves `holdReason` undefined. The `[paused]` tag will therefore never appear in the status output regardless of how many tasks are paused.
 
 **Fix:** Either remove the two unused union members and update `status.ts` to derive "paused" from `pausedAtStage !== undefined`, or actually assign these values in the `pause` and review-gate code paths.
 
@@ -540,18 +538,16 @@ If the file becomes unreadable after the call-site existence check (e.g., a race
 **File:** `src/core/watcher.ts`, lines 68–73  
 **Severity:** Low
 
-When the processed-timestamp set exceeds 500 entries, the oldest entries are pruned:
+When the processed-timestamp set exceeds 500 entries, entries are pruned:
 
 ```typescript
 if (processedTs.size > 500) {
   const arr = Array.from(processedTs);
-  processedTs = new Set(arr.slice(arr.length - 500));  // keep last 500 inserted
+  processedTs = new Set(arr.slice(arr.length - 500));  // keep last 500 by insertion order
 }
 ```
 
-Because Slack timestamps are floating-point epoch strings, not insertion-order timestamps, the "last 500 inserted" are the 500 most recently received messages — which is the correct intent. However, after a process restart, `processedTs` is reloaded from disk and re-inserted in file-write order, not reception order. A message that was received long ago but written near the end of the JSON array could re-survive a prune cycle when it should have been evicted.
-
-A more robust approach would be to key the set on the Slack `ts` value and prune the 500 with the largest (most recent) numeric values.
+JavaScript `Set` preserves insertion order, so this keeps the 500 most recently *inserted* entries. In memory during a running session this is fine (entries are inserted in reception order). However, after a process restart, `processedTs` is reloaded from the JSON array on disk, re-inserted in the order they appear in the file. If the file happened to be written with older timestamps at the end of the array (e.g., after a previous prune that mixed orders), the "last 500 by insertion order" are not the same as "the 500 most recent Slack timestamps." The pruning should compare by Slack `ts` value (a numeric epoch string) to guarantee that the 500 most recently-received messages are retained, regardless of their position in the file.
 
 ---
 
