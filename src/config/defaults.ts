@@ -278,6 +278,12 @@ export const DEFAULT_BUDGET_CONFIG: BudgetConfig = {
       session_token_limit: 300_000,
       per_task_token_limit: 100_000,
     },
+    haiku: {
+      weekly_token_limit: 30_000_000,
+      daily_token_limit: 6_000_000,
+      session_token_limit: 1_500_000,
+      per_task_token_limit: 400_000,
+    },
   },
   peak_hours: {
     start_utc: "12:00",

@@ -4,6 +4,8 @@ import { join } from "path";
 import { tmpdir } from "os";
 import {
   buildSystemPrompt,
+  buildAgentSystemPrompt,
+  buildAgentUserPrompt,
   resolveToolPermissions,
   resolveMaxTurns,
   resolveTimeoutMinutes,
@@ -284,5 +286,103 @@ describe("resolveTimeoutMinutes", () => {
     const config = makeConfig();
     const result = resolveTimeoutMinutes("unknown-stage", config);
     expect(result).toBe(30);
+  });
+});
+
+// ─── buildAgentSystemPrompt ──────────────────────────────────────────────────
+
+describe("buildAgentSystemPrompt", () => {
+  beforeAll(() => {
+    writeAgentMd("questions", "# Ask good questions\nGather information.");
+    writeAgentMd("validate", "# Validate\nRun tests.");
+  });
+
+  it("includes identity and agent instructions", () => {
+    const result = buildAgentSystemPrompt(makeOptions());
+    expect(result).toContain("questions agent");
+    expect(result).toContain("Ask good questions");
+  });
+
+  it("does NOT include task content or previous output", () => {
+    const result = buildAgentSystemPrompt(makeOptions({
+      taskContent: "Build a feature",
+      previousOutput: "Research findings here",
+    }));
+    expect(result).not.toContain("Build a feature");
+    expect(result).not.toContain("Research findings here");
+  });
+
+  it("includes pipeline context with stage list", () => {
+    const result = buildAgentSystemPrompt(makeOptions());
+    expect(result).toContain("Stage: questions");
+    expect(result).toContain("my-task");
+  });
+});
+
+// ─── buildAgentUserPrompt ────────────────────────────────────────────────────
+
+describe("buildAgentUserPrompt", () => {
+  beforeAll(() => {
+    writeAgentMd("questions", "# Ask questions");
+    writeAgentMd("design", "# Design");
+    writeAgentMd("validate", "# Validate");
+  });
+
+  it("includes task content when includeTaskContent is true", () => {
+    const result = buildAgentUserPrompt(makeOptions({
+      stage: "questions",
+      taskContent: "Build a feature",
+    }));
+    expect(result).toContain("Build a feature");
+  });
+
+  it("excludes task content when includeTaskContent is false", () => {
+    // research has includeTaskContent: false
+    writeAgentMd("research", "# Research");
+    const result = buildAgentUserPrompt(makeOptions({
+      stage: "research",
+      taskContent: "Build a feature",
+    }));
+    expect(result).not.toContain("Build a feature");
+  });
+
+  it("excludes previous output when previousOutputLabel is null", () => {
+    // questions has previousOutputLabel: null
+    const result = buildAgentUserPrompt(makeOptions({
+      stage: "questions",
+      previousOutput: "Should not appear",
+    }));
+    expect(result).not.toContain("Should not appear");
+  });
+
+  it("includes previous output when previousOutputLabel is set", () => {
+    const result = buildAgentUserPrompt(makeOptions({
+      stage: "design",
+      previousOutput: "Research findings",
+    }));
+    expect(result).toContain("Research findings");
+    expect(result).toContain("Research Findings"); // the label
+  });
+
+  it("uses repoSummary when useRepoSummary is set and summary exists", () => {
+    const result = buildAgentUserPrompt(makeOptions({
+      stage: "validate",
+      repoSummary: "npm test runs vitest",
+    }));
+    expect(result).toContain("npm test runs vitest");
+  });
+
+  it("falls back to gatherRepoContext when useRepoSummary is set but no summary", () => {
+    // validate has useRepoSummary: true, includeRepoContext: false
+    // with no repoSummary, should still get repo context via fallback
+    mkdirSync(REPO_DIR, { recursive: true });
+    writeFileSync(join(REPO_DIR, "package.json"), '{"name":"test"}', "utf-8");
+    const taskContent = `# Task: test\n\n## What I want done\ntest\n\n## Repo\n${REPO_DIR}\n\n## Pipeline Config\nstages: validate\nreview_after: design\n`;
+    const result = buildAgentUserPrompt(makeOptions({
+      stage: "validate",
+      taskContent,
+      repoSummary: undefined,
+    }));
+    expect(result).toContain("Repo Context");
   });
 });

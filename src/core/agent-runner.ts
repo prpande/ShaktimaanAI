@@ -258,7 +258,8 @@ export function buildAgentUserPrompt(options: AgentRunOptions): string {
   }
 
   // Previous output (now scoped via STAGE_ARTIFACT_RULES in pipeline.ts)
-  if (previousOutput && previousOutput.trim()) {
+  // previousOutputLabel: null means "do not include previous output at all"
+  if (rules.previousOutputLabel !== null && previousOutput && previousOutput.trim()) {
     const label = rules.previousOutputLabel ?? "Previous Output";
     sections.push(`## ${label}\n\n${previousOutput}`);
   }
