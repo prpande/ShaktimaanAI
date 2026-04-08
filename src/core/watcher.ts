@@ -293,7 +293,7 @@ export function createWatcher(options: WatcherOptions): Watcher {
               {
                 source: "slack",
                 content: text,
-                repo: process.cwd(),
+                repo: undefined,
                 slackThread: entry.thread_ts ?? entry.ts,
                 stages: triageResult.recommendedStages ?? undefined,
                 stageHints: triageResult.stageHints ?? undefined,
