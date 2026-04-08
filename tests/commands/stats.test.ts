@@ -90,6 +90,24 @@ describe("parseCompletedEntry", () => {
     expect(parsed).not.toBeNull();
     expect(parsed!.durationSeconds).toBe(0);
   });
+
+  it("extracts model, inputTokens, and outputTokens", () => {
+    const entry = makeEntry({ model: "opus", inputTokens: 5000, outputTokens: 2000 });
+    const parsed = parseCompletedEntry(entry);
+    expect(parsed).not.toBeNull();
+    expect(parsed!.model).toBe("opus");
+    expect(parsed!.inputTokens).toBe(5000);
+    expect(parsed!.outputTokens).toBe(2000);
+  });
+
+  it("defaults model and tokens when missing", () => {
+    const entry = makeEntry();
+    const parsed = parseCompletedEntry(entry);
+    expect(parsed).not.toBeNull();
+    expect(parsed!.model).toBe("");
+    expect(parsed!.inputTokens).toBe(0);
+    expect(parsed!.outputTokens).toBe(0);
+  });
 });
 
 // ─── aggregateStageStats ────────────────────────────────────────────────────
@@ -97,9 +115,9 @@ describe("parseCompletedEntry", () => {
 describe("aggregateStageStats", () => {
   it("aggregates entries by stage with correct averages", () => {
     const entries: CompletedLogEntry[] = [
-      { timestamp: "2026-04-01T10:00:00Z", slug: "task-a", stage: "questions", durationSeconds: 60, costUsd: 0.04, turns: 3 },
-      { timestamp: "2026-04-01T11:00:00Z", slug: "task-b", stage: "questions", durationSeconds: 80, costUsd: 0.06, turns: 5 },
-      { timestamp: "2026-04-01T12:00:00Z", slug: "task-a", stage: "research", durationSeconds: 200, costUsd: 0.15, turns: 10 },
+      { timestamp: "2026-04-01T10:00:00Z", slug: "task-a", stage: "questions", durationSeconds: 60, costUsd: 0.04, turns: 3, model: "sonnet", inputTokens: 1000, outputTokens: 500 },
+      { timestamp: "2026-04-01T11:00:00Z", slug: "task-b", stage: "questions", durationSeconds: 80, costUsd: 0.06, turns: 5, model: "sonnet", inputTokens: 1200, outputTokens: 600 },
+      { timestamp: "2026-04-01T12:00:00Z", slug: "task-a", stage: "research", durationSeconds: 200, costUsd: 0.15, turns: 10, model: "opus", inputTokens: 5000, outputTokens: 2000 },
     ];
 
     const stats = aggregateStageStats(entries);
@@ -111,6 +129,9 @@ describe("aggregateStageStats", () => {
     expect(qStats.avgCostUsd).toBeCloseTo(0.05);
     expect(qStats.avgTurns).toBe(4);
     expect(qStats.totalCostUsd).toBeCloseTo(0.10);
+    expect(qStats.totalInputTokens).toBe(2200);
+    expect(qStats.totalOutputTokens).toBe(1100);
+    expect(qStats.dominantModel).toBe("sonnet");
 
     const rStats = stats.find((s) => s.stage === "research")!;
     expect(rStats.count).toBe(1);
@@ -118,13 +139,16 @@ describe("aggregateStageStats", () => {
     expect(rStats.avgCostUsd).toBeCloseTo(0.15);
     expect(rStats.avgTurns).toBe(10);
     expect(rStats.totalCostUsd).toBeCloseTo(0.15);
+    expect(rStats.totalInputTokens).toBe(5000);
+    expect(rStats.totalOutputTokens).toBe(2000);
+    expect(rStats.dominantModel).toBe("opus");
   });
 
   it("orders output by PIPELINE_STAGES constant", () => {
     const entries: CompletedLogEntry[] = [
-      { timestamp: "2026-04-01T10:00:00Z", slug: "t", stage: "impl", durationSeconds: 60, costUsd: 0.1, turns: 5 },
-      { timestamp: "2026-04-01T11:00:00Z", slug: "t", stage: "questions", durationSeconds: 30, costUsd: 0.02, turns: 2 },
-      { timestamp: "2026-04-01T12:00:00Z", slug: "t", stage: "design", durationSeconds: 120, costUsd: 0.08, turns: 7 },
+      { timestamp: "2026-04-01T10:00:00Z", slug: "t", stage: "impl", durationSeconds: 60, costUsd: 0.1, turns: 5, model: "opus", inputTokens: 0, outputTokens: 0 },
+      { timestamp: "2026-04-01T11:00:00Z", slug: "t", stage: "questions", durationSeconds: 30, costUsd: 0.02, turns: 2, model: "sonnet", inputTokens: 0, outputTokens: 0 },
+      { timestamp: "2026-04-01T12:00:00Z", slug: "t", stage: "design", durationSeconds: 120, costUsd: 0.08, turns: 7, model: "opus", inputTokens: 0, outputTokens: 0 },
     ];
 
     const stats = aggregateStageStats(entries);
@@ -133,8 +157,8 @@ describe("aggregateStageStats", () => {
 
   it("appends unknown stages after known stages", () => {
     const entries: CompletedLogEntry[] = [
-      { timestamp: "2026-04-01T10:00:00Z", slug: "t", stage: "custom-stage", durationSeconds: 60, costUsd: 0.1, turns: 5 },
-      { timestamp: "2026-04-01T11:00:00Z", slug: "t", stage: "questions", durationSeconds: 30, costUsd: 0.02, turns: 2 },
+      { timestamp: "2026-04-01T10:00:00Z", slug: "t", stage: "custom-stage", durationSeconds: 60, costUsd: 0.1, turns: 5, model: "sonnet", inputTokens: 0, outputTokens: 0 },
+      { timestamp: "2026-04-01T11:00:00Z", slug: "t", stage: "questions", durationSeconds: 30, costUsd: 0.02, turns: 2, model: "sonnet", inputTokens: 0, outputTokens: 0 },
     ];
 
     const stats = aggregateStageStats(entries);
@@ -151,10 +175,10 @@ describe("aggregateStageStats", () => {
 describe("computePipelineSummary", () => {
   it("computes per-run averages and identifies most expensive stage", () => {
     const entries: CompletedLogEntry[] = [
-      { timestamp: "2026-04-01T10:00:00Z", slug: "task-a", stage: "questions", durationSeconds: 60, costUsd: 0.04, turns: 3 },
-      { timestamp: "2026-04-01T11:00:00Z", slug: "task-a", stage: "research", durationSeconds: 200, costUsd: 0.15, turns: 10 },
-      { timestamp: "2026-04-02T10:00:00Z", slug: "task-b", stage: "questions", durationSeconds: 80, costUsd: 0.06, turns: 5 },
-      { timestamp: "2026-04-02T11:00:00Z", slug: "task-b", stage: "research", durationSeconds: 180, costUsd: 0.12, turns: 8 },
+      { timestamp: "2026-04-01T10:00:00Z", slug: "task-a", stage: "questions", durationSeconds: 60, costUsd: 0.04, turns: 3, model: "sonnet", inputTokens: 0, outputTokens: 0 },
+      { timestamp: "2026-04-01T11:00:00Z", slug: "task-a", stage: "research", durationSeconds: 200, costUsd: 0.15, turns: 10, model: "opus", inputTokens: 0, outputTokens: 0 },
+      { timestamp: "2026-04-02T10:00:00Z", slug: "task-b", stage: "questions", durationSeconds: 80, costUsd: 0.06, turns: 5, model: "sonnet", inputTokens: 0, outputTokens: 0 },
+      { timestamp: "2026-04-02T11:00:00Z", slug: "task-b", stage: "research", durationSeconds: 180, costUsd: 0.12, turns: 8, model: "opus", inputTokens: 0, outputTokens: 0 },
     ];
 
     const stageStats = aggregateStageStats(entries);
@@ -169,7 +193,7 @@ describe("computePipelineSummary", () => {
 
   it("handles a single run", () => {
     const entries: CompletedLogEntry[] = [
-      { timestamp: "2026-04-01T10:00:00Z", slug: "solo", stage: "impl", durationSeconds: 300, costUsd: 0.50, turns: 20 },
+      { timestamp: "2026-04-01T10:00:00Z", slug: "solo", stage: "impl", durationSeconds: 300, costUsd: 0.50, turns: 20, model: "opus", inputTokens: 0, outputTokens: 0 },
     ];
 
     const stageStats = aggregateStageStats(entries);
@@ -235,8 +259,8 @@ describe("formatDuration", () => {
 
 describe("formatStatsTable", () => {
   const sampleStats: StageStats[] = [
-    { stage: "questions", count: 2, avgDurationSeconds: 83, avgTurns: 4.2, avgCostUsd: 0.042, totalCostUsd: 0.084 },
-    { stage: "research", count: 2, avgDurationSeconds: 225, avgTurns: 8.1, avgCostUsd: 0.156, totalCostUsd: 0.312 },
+    { stage: "questions", count: 2, avgDurationSeconds: 83, avgTurns: 4.2, avgCostUsd: 0.042, totalCostUsd: 0.084, totalInputTokens: 2200, totalOutputTokens: 1100, dominantModel: "sonnet" },
+    { stage: "research", count: 2, avgDurationSeconds: 225, avgTurns: 8.1, avgCostUsd: 0.156, totalCostUsd: 0.312, totalInputTokens: 10000, totalOutputTokens: 4000, dominantModel: "opus" },
   ];
   const sampleSummary: PipelineSummary = {
     totalRuns: 2,
@@ -250,8 +274,10 @@ describe("formatStatsTable", () => {
     const output = formatStatsTable(sampleStats, sampleSummary);
     expect(output).toContain("Stage");
     expect(output).toContain("Runs");
+    expect(output).toContain("Model");
     expect(output).toContain("Avg Time");
     expect(output).toContain("Avg Turns");
+    expect(output).toContain("Tokens");
     expect(output).toContain("Avg Cost");
     expect(output).toContain("Total Cost");
   });
@@ -262,6 +288,10 @@ describe("formatStatsTable", () => {
     expect(output).toContain("research");
     expect(output).toContain("1m 23s");
     expect(output).toContain("$0.042");
+    expect(output).toContain("sonnet");
+    expect(output).toContain("opus");
+    expect(output).toContain("3.3K"); // questions: 2200 + 1100 = 3300
+    expect(output).toContain("14.0K"); // research: 10000 + 4000 = 14000
   });
 
   it("includes TOTAL summary row with grand total cost", () => {
@@ -288,7 +318,7 @@ describe("formatStatsTable", () => {
 describe("formatStatsJson", () => {
   it("returns valid JSON matching the schema", () => {
     const stats: StageStats[] = [
-      { stage: "questions", count: 2, avgDurationSeconds: 83, avgTurns: 4.2, avgCostUsd: 0.042, totalCostUsd: 0.084 },
+      { stage: "questions", count: 2, avgDurationSeconds: 83, avgTurns: 4.2, avgCostUsd: 0.042, totalCostUsd: 0.084, totalInputTokens: 2200, totalOutputTokens: 1100, dominantModel: "sonnet" },
     ];
     const summary: PipelineSummary = {
       totalRuns: 2,
@@ -308,29 +338,15 @@ describe("formatStatsJson", () => {
     expect(parsed.stages[0].avgTurns).toBe(4.2);
     expect(parsed.stages[0].avgCostUsd).toBe(0.042);
     expect(parsed.stages[0].totalCostUsd).toBe(0.084);
+    expect(parsed.stages[0].totalInputTokens).toBe(2200);
+    expect(parsed.stages[0].totalOutputTokens).toBe(1100);
+    expect(parsed.stages[0].dominantModel).toBe("sonnet");
 
     expect(parsed.summary.totalRuns).toBe(2);
     expect(parsed.summary.avgTotalDurationSeconds).toBe(83);
     expect(parsed.summary.avgTotalCostUsd).toBe(0.042);
     expect(parsed.summary.avgTotalTurns).toBe(4.2);
     expect(parsed.summary.mostExpensiveStage).toBe("questions");
-  });
-
-  it("does NOT include inputTokens or outputTokens in output", () => {
-    const stats: StageStats[] = [
-      { stage: "impl", count: 1, avgDurationSeconds: 100, avgTurns: 5, avgCostUsd: 0.1, totalCostUsd: 0.1 },
-    ];
-    const summary: PipelineSummary = {
-      totalRuns: 1,
-      avgTotalDurationSeconds: 100,
-      avgTotalCostUsd: 0.1,
-      avgTotalTurns: 5,
-      mostExpensiveStage: "impl",
-    };
-
-    const jsonStr = formatStatsJson(stats, summary);
-    expect(jsonStr).not.toContain("inputTokens");
-    expect(jsonStr).not.toContain("outputTokens");
   });
 });
 

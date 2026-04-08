@@ -18,6 +18,9 @@ export interface CompletedLogEntry {
   durationSeconds: number;
   costUsd: number;
   turns: number;
+  model: string;
+  inputTokens: number;
+  outputTokens: number;
 }
 
 /** Aggregated stats for a single pipeline stage. */
@@ -28,6 +31,9 @@ export interface StageStats {
   avgTurns: number;
   avgCostUsd: number;
   totalCostUsd: number;
+  totalInputTokens: number;
+  totalOutputTokens: number;
+  dominantModel: string;
 }
 
 /** Summary across all pipeline runs. */
@@ -62,6 +68,9 @@ export function parseCompletedEntry(entry: DailyLogEntry): CompletedLogEntry | n
 
   const durationSeconds = typeof entry.durationSeconds === "number" ? entry.durationSeconds : 0;
   const turns = typeof entry.turns === "number" ? entry.turns : 0;
+  const model = typeof entry.model === "string" ? entry.model : "";
+  const inputTokens = typeof entry.inputTokens === "number" ? entry.inputTokens : 0;
+  const outputTokens = typeof entry.outputTokens === "number" ? entry.outputTokens : 0;
 
   return {
     timestamp: entry.timestamp,
@@ -70,6 +79,9 @@ export function parseCompletedEntry(entry: DailyLogEntry): CompletedLogEntry | n
     durationSeconds,
     costUsd,
     turns,
+    model,
+    inputTokens,
+    outputTokens,
   };
 }
 
@@ -99,6 +111,19 @@ export function aggregateStageStats(entries: CompletedLogEntry[]): StageStats[] 
     const totalDuration = stageEntries.reduce((sum, e) => sum + e.durationSeconds, 0);
     const totalCost = stageEntries.reduce((sum, e) => sum + e.costUsd, 0);
     const totalTurns = stageEntries.reduce((sum, e) => sum + e.turns, 0);
+    const totalInput = stageEntries.reduce((sum, e) => sum + e.inputTokens, 0);
+    const totalOutput = stageEntries.reduce((sum, e) => sum + e.outputTokens, 0);
+
+    // Find dominant model (most frequently used for this stage)
+    const modelCounts = new Map<string, number>();
+    for (const e of stageEntries) {
+      if (e.model) modelCounts.set(e.model, (modelCounts.get(e.model) ?? 0) + 1);
+    }
+    let dominantModel = "";
+    let maxCount = 0;
+    for (const [m, c] of modelCounts) {
+      if (c > maxCount) { dominantModel = m; maxCount = c; }
+    }
 
     statsMap.set(stage, {
       stage,
@@ -107,6 +132,9 @@ export function aggregateStageStats(entries: CompletedLogEntry[]): StageStats[] 
       avgTurns: totalTurns / count,
       avgCostUsd: totalCost / count,
       totalCostUsd: totalCost,
+      totalInputTokens: totalInput,
+      totalOutputTokens: totalOutput,
+      dominantModel,
     });
   }
 
@@ -205,6 +233,14 @@ function formatCost(cost: number): string {
   return `$${cost.toFixed(3)}`;
 }
 
+/** Formats token counts with K/M suffixes. */
+function formatTokens(tokens: number): string {
+  if (tokens === 0) return "0";
+  if (tokens >= 1_000_000) return `${(tokens / 1_000_000).toFixed(1)}M`;
+  if (tokens >= 1_000) return `${(tokens / 1_000).toFixed(1)}K`;
+  return String(tokens);
+}
+
 /**
  * Renders a formatted ASCII table to stdout.
  * Uses padEnd/padStart for alignment — no external library.
@@ -213,8 +249,10 @@ export function formatStatsTable(stats: StageStats[], summary: PipelineSummary):
   const COL = {
     stage: 14,
     runs: 7,
+    model: 9,
     time: 12,
     turns: 11,
+    tokens: 12,
     avgCost: 11,
     totalCost: 12,
   };
@@ -222,27 +260,34 @@ export function formatStatsTable(stats: StageStats[], summary: PipelineSummary):
   const header =
     "Stage".padEnd(COL.stage) +
     "Runs".padStart(COL.runs) +
+    "Model".padStart(COL.model) +
     "Avg Time".padStart(COL.time) +
     "Avg Turns".padStart(COL.turns) +
+    "Tokens".padStart(COL.tokens) +
     "Avg Cost".padStart(COL.avgCost) +
     "Total Cost".padStart(COL.totalCost);
 
   const sep =
     "─".repeat(COL.stage) +
     "  " + "─".repeat(COL.runs - 2) +
+    "  " + "─".repeat(COL.model - 2) +
     "  " + "─".repeat(COL.time - 2) +
     "  " + "─".repeat(COL.turns - 2) +
+    "  " + "─".repeat(COL.tokens - 2) +
     "  " + "─".repeat(COL.avgCost - 2) +
     "  " + "─".repeat(COL.totalCost - 2);
 
   const lines: string[] = [header, sep];
 
   for (const s of stats) {
+    const totalTokens = s.totalInputTokens + s.totalOutputTokens;
     lines.push(
       s.stage.padEnd(COL.stage) +
       String(s.count).padStart(COL.runs) +
+      s.dominantModel.padStart(COL.model) +
       formatDuration(s.avgDurationSeconds).padStart(COL.time) +
       s.avgTurns.toFixed(1).padStart(COL.turns) +
+      formatTokens(totalTokens).padStart(COL.tokens) +
       formatCost(s.avgCostUsd).padStart(COL.avgCost) +
       formatCost(s.totalCostUsd).padStart(COL.totalCost),
     );
@@ -250,12 +295,16 @@ export function formatStatsTable(stats: StageStats[], summary: PipelineSummary):
 
   lines.push(sep);
 
+  const grandTotalTokens = stats.reduce((sum, s) => sum + s.totalInputTokens + s.totalOutputTokens, 0);
+
   // TOTAL row
   lines.push(
     "TOTAL".padEnd(COL.stage) +
     String(summary.totalRuns).padStart(COL.runs) +
+    "".padStart(COL.model) +
     formatDuration(summary.avgTotalDurationSeconds).padStart(COL.time) +
     summary.avgTotalTurns.toFixed(1).padStart(COL.turns) +
+    formatTokens(grandTotalTokens).padStart(COL.tokens) +
     formatCost(summary.avgTotalCostUsd).padStart(COL.avgCost) +
     formatCost(stats.reduce((sum, s) => sum + s.totalCostUsd, 0)).padStart(COL.totalCost),
   );
@@ -264,8 +313,10 @@ export function formatStatsTable(stats: StageStats[], summary: PipelineSummary):
   lines.push(
     "Most $$".padEnd(COL.stage) +
     "".padStart(COL.runs) +
+    "".padStart(COL.model) +
     "".padStart(COL.time) +
     "".padStart(COL.turns) +
+    "".padStart(COL.tokens) +
     "".padStart(COL.avgCost) +
     summary.mostExpensiveStage.padStart(COL.totalCost),
   );

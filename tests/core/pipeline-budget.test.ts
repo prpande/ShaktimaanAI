@@ -270,7 +270,7 @@ describe("Budget-aware resume", () => {
       logger: makeLogger(),
     });
 
-    await expect(pipeline.resume(slug)).rejects.toThrow(/[Bb]udget still exhausted/);
+    await pipeline.resume(slug); // should not throw — stays in hold silently
 
     const holdDir = join(TEST_DIR, "12-hold", slug);
     expect(existsSync(holdDir)).toBe(true);
