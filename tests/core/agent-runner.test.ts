@@ -436,4 +436,22 @@ describe("filterMcpToolsByTaskNeeds", () => {
     expect(result).toContain("Grep");
     expect(result).toContain("Bash");
   });
+
+  it("adds MCP tools for required servers not in original allowedTools", () => {
+    // impl stage has no MCP tools by default
+    const implTools = ["Read", "Write", "Edit", "Bash", "Glob", "Grep"];
+    const result = filterMcpToolsByTaskNeeds(implTools, ["notion", "figma"]);
+    expect(result).toContain("Read");
+    expect(result).toContain("Write");
+    expect(result).toContain("mcp__plugin_notion_notion__*");
+    expect(result).toContain("mcp__plugin_figma_figma__*");
+    expect(result).not.toContain("mcp__claude_ai_Slack__*");
+  });
+
+  it("does not duplicate MCP patterns already present", () => {
+    const tools = ["Read", "mcp__claude_ai_Slack__slack_read_channel"];
+    const result = filterMcpToolsByTaskNeeds(tools, ["slack"]);
+    expect(result).toEqual(["Read", "mcp__claude_ai_Slack__slack_read_channel"]);
+    // Should NOT add mcp__claude_ai_Slack__* since a Slack tool is already present
+  });
 });

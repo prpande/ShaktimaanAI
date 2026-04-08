@@ -295,11 +295,15 @@ export function buildAgentUserPrompt(options: AgentRunOptions): string {
 // ─── MCP tool filtering ─────────────────────────────────────────────────────
 
 /**
- * Filters MCP tool patterns in allowedTools based on Astra's requiredMcpServers.
+ * Adjusts allowedTools based on Astra's requiredMcpServers.
  *
- * When Astra specifies which MCP servers a task needs (e.g., ["slack"]),
- * this removes MCP tool patterns for servers the task doesn't need
- * (e.g., removes "mcp__plugin_notion_notion__*" if notion isn't required).
+ * Two operations:
+ * 1. ADD: For each required MCP server, adds its wildcard tool pattern
+ *    (e.g., "mcp__claude_ai_Slack__*") if not already present. This ensures
+ *    stages that don't normally have MCP tools can access them when the task
+ *    requires it (e.g., impl needs Figma tools for a Figma-based task).
+ * 2. REMOVE: Strips MCP tool patterns for servers the task doesn't need,
+ *    avoiding unnecessary tool definitions in the prompt.
  *
  * Non-MCP tools pass through unchanged. When requiredMcpServers is empty
  * or undefined (CLI invocations without triage), all tools pass through
@@ -314,20 +318,30 @@ export function filterMcpToolsByTaskNeeds(
     return allowedTools;
   }
 
-  // Build set of allowed MCP prefixes from requiredMcpServers
-  const allowedPrefixes = new Set<string>();
+  // Build set of required MCP prefixes
+  const requiredPrefixes = new Set<string>();
   for (const serverName of requiredMcpServers) {
     const prefix = MCP_TOOL_PREFIXES[serverName];
-    if (prefix) allowedPrefixes.add(prefix);
+    if (prefix) requiredPrefixes.add(prefix);
   }
 
-  return allowedTools.filter(tool => {
-    if (!tool.startsWith("mcp__")) return true; // non-MCP tools always pass
-    // Check if any allowed prefix matches this tool
-    return Array.from(allowedPrefixes).some(prefix =>
+  // Start with non-MCP tools + MCP tools that match required servers
+  const result = allowedTools.filter(tool => {
+    if (!tool.startsWith("mcp__")) return true;
+    return Array.from(requiredPrefixes).some(prefix =>
       tool.startsWith(prefix) || tool === prefix + "*",
     );
   });
+
+  // Add wildcard patterns for required servers not already covered
+  for (const prefix of requiredPrefixes) {
+    const alreadyCovered = result.some(t => t.startsWith(prefix));
+    if (!alreadyCovered) {
+      result.push(prefix + "*");
+    }
+  }
+
+  return result;
 }
 
 // ─── Agent runner ────────────────────────────────────────────────────────────
@@ -372,12 +386,12 @@ export async function runAgent(options: AgentRunOptions): Promise<AgentRunResult
 
     // SDK isolation: settingSources:[] prevents hooks from loading (~40-50k tokens
     // saved per invocation). Cloud MCPs (Slack, Notion, Figma) load independently
-    // of filesystem settings — verified via testing. Tool access is controlled by
-    // allowedTools/disallowedTools which already restricts MCP tools per stage.
+    // of filesystem settings — verified via testing.
     //
-    // When Astra provides requiredMcpServers, we further restrict MCP tool access
-    // to only the servers the task needs, avoiding unnecessary MCP tool definitions
-    // in stages that have broad MCP permissions but don't need them for this task.
+    // When Astra provides requiredMcpServers, filterMcpToolsByTaskNeeds:
+    // 1. ADDS MCP tool patterns for servers the task needs (e.g., impl gets
+    //    Figma tools when the task references a Figma design)
+    // 2. REMOVES MCP tool patterns for servers the task doesn't need
     const effectiveAllowedTools = filterMcpToolsByTaskNeeds(
       allowedTools,
       options.requiredMcpServers,
