@@ -4,7 +4,7 @@ import { fileURLToPath } from "node:url";
 import { loadAgentPrompt } from "./agent-config.js";
 import { gatherRepoContext } from "./repo-context.js";
 import { parseTaskFile } from "../task/parser.js";
-import { DEFAULT_STAGE_TOOLS, STAGE_CONTEXT_RULES } from "../config/defaults.js";
+import { DEFAULT_STAGE_TOOLS, STAGE_CONTEXT_RULES, STAGE_ARTIFACT_RULES, MCP_TOOL_PREFIXES } from "../config/defaults.js";
 import { createStreamLogger } from "./stream-logger.js";
 import type { AgentRunOptions, AgentRunResult } from "./types.js";
 import type { ResolvedConfig } from "../config/loader.js";
@@ -172,6 +172,163 @@ export function buildSystemPrompt(options: AgentRunOptions): string {
   return sections.join("\n\n");
 }
 
+// ─── Split prompt builders (SDK isolation) ──────────────────────────────────
+
+/**
+ * Builds the system prompt: static per-stage content that benefits from caching.
+ * Contains: identity, pipeline context, agent instructions, output instructions.
+ * Does NOT contain: task content, previous output, repo context, stage hints.
+ */
+export function buildAgentSystemPrompt(options: AgentRunOptions): string {
+  const { stage, slug, taskContent, config, outputPath } = options;
+
+  const agentsDir = resolveAgentsDir(config);
+  const agentInstructions = loadAgentPrompt(agentsDir, stage);
+  const taskMeta = parseTaskFile(taskContent);
+
+  const agentName = config.agents.names[stage] ?? stage;
+  const stageList = (taskMeta.stages.length > 0 ? taskMeta.stages : config.agents.defaultStages).join(", ");
+
+  const sections: string[] = [];
+
+  // Identity
+  sections.push(`# Identity\n\nYou are ${agentName}, the ${stage} agent in the ShaktimaanAI pipeline.`);
+
+  // Pipeline context
+  const EXECUTION_STAGES = new Set(["impl", "validate", "review", "pr"]);
+  const isExecStage = EXECUTION_STAGES.has(stage);
+  let pipelineCtx = `## Pipeline Context\n\nPipeline: ShaktimaanAI | Task: ${slug} | Stage: ${stage}\nStage sequence for this task: ${stageList}`;
+  if (taskMeta.repo) {
+    if (isExecStage && options.cwd !== taskMeta.repo) {
+      pipelineCtx += `\nTarget repository (original): ${taskMeta.repo}`;
+      pipelineCtx += `\nWorking directory (YOUR worktree copy): ${options.cwd}`;
+      pipelineCtx += `\nCRITICAL: You are working in a git worktree. ALL file reads, writes, and edits MUST use paths under your working directory (${options.cwd}), NOT the original repo path. The worktree is a full copy of the repo.`;
+    } else {
+      pipelineCtx += `\nTarget repository: ${taskMeta.repo}`;
+      pipelineCtx += `\nIMPORTANT: Your working directory is NOT the repo root. Use absolute paths when reading repo files.`;
+    }
+    pipelineCtx += `\nIMPORTANT: On Windows, use forward slashes or escaped backslashes in paths. Do NOT use /c/Users/... paths in Node.js — use C:/Users/... instead.`;
+  }
+  sections.push(pipelineCtx);
+
+  // Agent instructions
+  sections.push(`---\n\n${agentInstructions}`);
+
+  // Output instructions
+  const { disallowed } = resolveToolPermissions(stage, config);
+  const canWrite = !disallowed.includes("Write");
+  if (canWrite) {
+    sections.push(`---\n\nWrite your output to: ${outputPath}`);
+  } else {
+    sections.push(
+      `---\n\n## Output Instructions\n\n` +
+      `Output your complete response as text. Do NOT attempt to write files — ` +
+      `the pipeline will capture your text output automatically. ` +
+      `Do NOT use Bash to write files (echo, cat heredoc, python, etc.).`,
+    );
+  }
+
+  return sections.join("\n\n");
+}
+
+/**
+ * Builds the user prompt: dynamic per-invocation content.
+ * Contains: task content, previous stage outputs, repo context, stage hints.
+ */
+export function buildAgentUserPrompt(options: AgentRunOptions): string {
+  const { stage, taskContent, previousOutput, config } = options;
+
+  const rules = STAGE_CONTEXT_RULES[stage] ?? {
+    includeTaskContent: true,
+    previousOutputLabel: "Previous Output",
+    includeRepoContext: true,
+  };
+
+  const artifactRules = STAGE_ARTIFACT_RULES[stage];
+  const taskMeta = parseTaskFile(taskContent);
+
+  const sections: string[] = [];
+
+  // Task content (conditional)
+  if (rules.includeTaskContent) {
+    sections.push(`## Task\n\n${taskContent}`);
+  }
+
+  // Previous output (now scoped via STAGE_ARTIFACT_RULES in pipeline.ts)
+  if (previousOutput && previousOutput.trim()) {
+    const label = rules.previousOutputLabel ?? "Previous Output";
+    sections.push(`## ${label}\n\n${previousOutput}`);
+  }
+
+  // Repo context — either Astra's cached summary or live gatherRepoContext
+  if (artifactRules?.useRepoSummary && options.repoSummary) {
+    sections.push(`## Repo Context\n\n${options.repoSummary}`);
+  } else if (rules.includeRepoContext) {
+    const repoContext = gatherRepoContext(taskMeta.repo);
+    sections.push(`## Repo Context\n\n${repoContext}`);
+  }
+
+  // User Guidance (stage hints)
+  const taskFileHint = taskMeta.stageHints[stage];
+  const runtimeHints = options.stageHints?.[stage] ?? [];
+  const allHints: string[] = [
+    ...(taskFileHint ? [taskFileHint] : []),
+    ...runtimeHints,
+  ];
+  if (allHints.length > 0) {
+    const bullets = allHints.map((h) => `- ${h}`).join("\n");
+    sections.push(
+      `## User Guidance\n\nThe user has provided the following instructions for this stage:\n${bullets}`,
+    );
+  }
+
+  return sections.join("\n\n");
+}
+
+// ─── MCP Server Resolution ─────────────────────────────────────────────────
+
+/**
+ * Resolves which MCP servers to load for a stage.
+ * Returns the intersection of task-level requirements (from Astra)
+ * and stage-level tool permissions.
+ *
+ * When requiredMcpServers is empty (no Astra triage, direct CLI),
+ * falls back to loading servers whose tool prefixes appear in
+ * the stage's allowed tools list.
+ */
+export function resolveMcpServers(
+  stage: string,
+  requiredMcpServers: string[],
+  config: ResolvedConfig,
+): Record<string, Record<string, unknown>> {
+  const stageTools = resolveToolPermissions(stage, config);
+  const result: Record<string, Record<string, unknown>> = {};
+
+  // Determine which MCP servers to consider
+  const candidates = requiredMcpServers.length > 0
+    ? requiredMcpServers
+    : Object.keys(MCP_TOOL_PREFIXES);
+
+  for (const serverName of candidates) {
+    const toolPrefix = MCP_TOOL_PREFIXES[serverName];
+    if (!toolPrefix) continue;
+
+    const isAllowed = stageTools.allowed.some(t =>
+      t === toolPrefix + '*' || t.startsWith(toolPrefix),
+    );
+
+    if (isAllowed) {
+      // Placeholder: cloud-hosted MCP servers (Slack, Notion, Figma)
+      // are managed by Claude Code's plugin system. The exact server
+      // config depends on the deployment. Mark as needed so the runner
+      // can decide how to load them.
+      result[serverName] = { type: "needed", toolPrefix };
+    }
+  }
+
+  return result;
+}
+
 // ─── Agent runner ────────────────────────────────────────────────────────────
 
 /**
@@ -186,7 +343,8 @@ export async function runAgent(options: AgentRunOptions): Promise<AgentRunResult
   const { query } = await import("@anthropic-ai/claude-agent-sdk");
 
   const { allowed: allowedTools, disallowed: disallowedTools } = resolveToolPermissions(stage, config);
-  const systemPrompt = buildSystemPrompt(options);
+  const agentSystemPrompt = buildAgentSystemPrompt(options);
+  const userPrompt = buildAgentUserPrompt(options);
   const streamLogPath = options.outputPath.replace(/\.md$/, "-stream.jsonl");
   const streamLogger = createStreamLogger(streamLogPath);
   const maxTurns = resolveMaxTurns(stage, config);
@@ -212,8 +370,10 @@ export async function runAgent(options: AgentRunOptions): Promise<AgentRunResult
     let receivedResult = false;
 
     const messages = query({
-      prompt: systemPrompt,
+      prompt: userPrompt,
       options: {
+        systemPrompt: agentSystemPrompt,
+        settingSources: [],     // SDK isolation — no hooks, no filesystem settings
         ...(model ? { model } : {}),
         allowedTools,
         disallowedTools,
