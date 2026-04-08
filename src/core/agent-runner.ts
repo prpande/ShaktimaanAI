@@ -375,18 +375,21 @@ export async function runAgent(options: AgentRunOptions): Promise<AgentRunResult
     let outputTokens = 0;
     let receivedResult = false;
 
-    // TODO: Wire resolveMcpServers() here once cloud MCP loading is implemented.
-    // The plumbing exists (requiredMcpServers flows from Astra triage → task file
-    // → RunState → options.requiredMcpServers), but the SDK's mcpServers option
-    // only supports local stdio/sse/http servers. Cloud-hosted MCPs (Slack, Notion,
-    // Figma) use the claudeai-proxy type which requires the plugin system.
-    // When resolved, add: mcpServers: resolveMcpServers(stage, options.requiredMcpServers ?? [], config),
+    // Determine if this stage needs MCP tools (Slack, Notion, Figma).
+    // Stages with MCP tool patterns in allowedTools need settings loaded so
+    // cloud MCP servers are available. Stages without MCP tools get full
+    // SDK isolation (settingSources: []) for maximum token savings.
+    const needsMcp = allowedTools.some(t => t.startsWith("mcp__"));
+    // TODO: Once the SDK supports selective cloud MCP loading via mcpServers
+    // or plugins option, all stages can use settingSources: [] and load only
+    // the specific MCP servers from resolveMcpServers(). Until then, MCP-needing
+    // stages must load user settings (which unfortunately also loads hooks).
 
     const messages = query({
       prompt: userPrompt,
       options: {
         systemPrompt: agentSystemPrompt,
-        settingSources: [],     // SDK isolation — no hooks, no filesystem settings
+        ...(needsMcp ? {} : { settingSources: [] as const }),
         ...(model ? { model } : {}),
         allowedTools,
         disallowedTools,
