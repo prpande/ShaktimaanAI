@@ -1,5 +1,5 @@
 import { Command } from "commander";
-import { writeFileSync, unlinkSync, existsSync } from "node:fs";
+import { writeFileSync, unlinkSync, existsSync, readFileSync } from "node:fs";
 import { join, dirname } from "node:path";
 import { resolveConfigPath } from "../config/resolve-path.js";
 import { loadConfig, loadEnvFile } from "../config/loader.js";
@@ -91,8 +91,43 @@ export function registerStartCommand(program: Command): void {
       // 7. Start watcher
       activeWatcher.start();
 
-      // 8. Write PID file
+      // 8. Write PID file (with stale PID detection)
       const pidFile = join(config.pipeline.runtimeDir, "shkmn.pid");
+      if (existsSync(pidFile)) {
+        const existingPid = parseInt(readFileSync(pidFile, "utf-8").trim(), 10);
+        if (!isNaN(existingPid)) {
+          try {
+            process.kill(existingPid, 0);  // Signal 0 = check if alive, don't kill
+            // Process is alive — another instance is running
+            console.error(
+              `Pipeline already running (PID ${existingPid}). ` +
+              `If this is stale, delete ${pidFile} and retry.`,
+            );
+            process.exit(1);
+          } catch (error) {
+            const code = (error as NodeJS.ErrnoException).code;
+            if (code === "ESRCH") {
+              // Process is dead — stale PID file, safe to overwrite
+              logger.warn(`[startup] Removed stale PID file (PID ${existingPid} is not running)`);
+              unlinkSync(pidFile);
+            } else if (code === "EPERM") {
+              // Process exists but cannot be signaled — treat as already running
+              console.error(
+                `Pipeline already running (PID ${existingPid}). ` +
+                `If this is stale, delete ${pidFile} and retry.`,
+              );
+              process.exit(1);
+            } else {
+              // Unknown error — remove stale file (fail-safe for Windows)
+              logger.warn(`[startup] Removed stale PID file (PID ${existingPid}, signal check error: ${code})`);
+              unlinkSync(pidFile);
+            }
+          }
+        } else {
+          // Malformed PID file — remove it
+          unlinkSync(pidFile);
+        }
+      }
       writeFileSync(pidFile, String(process.pid), "utf-8");
 
       // 9. Confirm startup

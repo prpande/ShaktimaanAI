@@ -47,6 +47,7 @@ export const configSchema = z.object({
     retryCount: z.number().optional(),
     maxValidateRetries: z.number().optional(),
     maxSuggestionRetriesPerCycle: z.number().optional(),
+    maxReviewRetries: z.number().optional(),
     tools: z.record(z.string(), z.object({
       allowed: z.array(z.string()).optional(),
       disallowed: z.array(z.string()).optional(),
