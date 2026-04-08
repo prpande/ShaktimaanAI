@@ -7,6 +7,7 @@ import { type ResolvedConfig } from "../config/loader.js";
 export interface CreateTaskInput {
   source: "slack" | "dashboard" | "cli";
   content: string;
+  taskTitle?: string;
   repo?: string;
   adoItem?: string;
   slackThread?: string;
@@ -97,7 +98,7 @@ export function buildTaskFileContent(
   enrichedContext?: string,
   repoSummary?: string,
 ): string {
-  const title = extractTitle(input.content);
+  const title = input.taskTitle ?? extractTitle(input.content);
   const stages =
     input.stages && input.stages.length > 0
       ? normalizeStages(input.stages).join(", ")
@@ -173,7 +174,7 @@ export function createTask(
   enrichedContext?: string,
   repoSummary?: string,
 ): string {
-  const title = extractTitle(input.content);
+  const title = input.taskTitle ?? extractTitle(input.content);
   const slug = generateSlug(title);
   const content = buildTaskFileContent(input, config, enrichedContext, repoSummary);
   const filePath = join(runtimeDir, "00-inbox", `${slug}.task`);

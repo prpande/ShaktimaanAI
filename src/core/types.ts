@@ -103,6 +103,7 @@ export interface AstraTriageResult {
   extractedSlug?: string | null;
 
   // Pipeline routing path
+  taskTitle?: string | null;
   recommendedStages?: string[] | null;
   stageHints?: Record<string, string> | null;
   enrichedContext?: string | null;
