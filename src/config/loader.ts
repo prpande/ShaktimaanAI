@@ -16,7 +16,13 @@ export type ResolvedConfig = ShkmnConfig;
  */
 export function loadConfig(configPath: string): ResolvedConfig {
   let raw: string;
-  raw = readFileSync(configPath, "utf-8");
+  try {
+    raw = readFileSync(configPath, "utf-8");
+  } catch (err) {
+    throw new Error(
+      `Failed to read config file at "${configPath}": ${err instanceof Error ? err.message : String(err)}`,
+    );
+  }
 
   let parsed: unknown;
   try {
@@ -83,7 +89,6 @@ export function resolveConfig(parsed: ConfigParsed): ResolvedConfig {
       maxConcurrentTotal: parsed.agents?.maxConcurrentTotal ?? da.maxConcurrentTotal,
       maxTurns: { ...da.maxTurns, ...parsed.agents?.maxTurns },
       timeoutsMinutes: { ...da.timeoutsMinutes, ...parsed.agents?.timeoutsMinutes },
-      heartbeatTimeoutMinutes: parsed.agents?.heartbeatTimeoutMinutes ?? da.heartbeatTimeoutMinutes,
       retryCount: parsed.agents?.retryCount ?? da.retryCount,
       maxValidateRetries: parsed.agents?.maxValidateRetries ?? da.maxValidateRetries,
       maxSuggestionRetriesPerCycle: parsed.agents?.maxSuggestionRetriesPerCycle ?? da.maxSuggestionRetriesPerCycle,
@@ -123,7 +128,13 @@ export function loadBudgetConfig(runtimeDir: string): BudgetConfig {
   }
 
   let raw: string;
-  raw = readFileSync(filePath, "utf-8");
+  try {
+    raw = readFileSync(filePath, "utf-8");
+  } catch (err) {
+    throw new Error(
+      `Failed to read budget config at "${filePath}": ${err instanceof Error ? err.message : String(err)}`,
+    );
+  }
 
   let parsed: unknown;
   try {

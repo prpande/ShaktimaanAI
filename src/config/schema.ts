@@ -44,7 +44,6 @@ export const configSchema = z.object({
     maxConcurrentTotal: z.number().optional(),
     maxTurns: z.record(z.string(), z.number()).optional(),
     timeoutsMinutes: z.record(z.string(), z.number()).optional(),
-    heartbeatTimeoutMinutes: z.number().optional(),
     retryCount: z.number().optional(),
     maxValidateRetries: z.number().optional(),
     maxSuggestionRetriesPerCycle: z.number().optional(),
