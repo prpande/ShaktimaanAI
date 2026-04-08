@@ -12,15 +12,15 @@ import type { ReviewIssue } from "../../src/core/types.js";
 
 describe("parseAgentVerdict", () => {
   describe("validate stage verdicts", () => {
-    it("detects READY_FOR_REVIEW in bold markdown format", () => {
+    it("detects PASS in bold markdown format", () => {
       const output = `
 ## Validation Report
 Build: PASS
 Tests: PASS
 
-**Verdict:** READY_FOR_REVIEW
+**Verdict:** PASS
       `;
-      expect(parseAgentVerdict(output, "validate")).toBe("READY_FOR_REVIEW");
+      expect(parseAgentVerdict(output, "validate")).toBe("PASS");
     });
 
     it("detects NEEDS_FIXES in bold markdown format", () => {
@@ -32,9 +32,9 @@ Build failed at src/core/pipeline.ts line 42.
       expect(parseAgentVerdict(output, "validate")).toBe("NEEDS_FIXES");
     });
 
-    it("detects READY_FOR_REVIEW case-insensitively", () => {
-      const output = "**verdict:** ready_for_review";
-      expect(parseAgentVerdict(output, "validate")).toBe("READY_FOR_REVIEW");
+    it("detects PASS case-insensitively", () => {
+      const output = "**verdict:** pass";
+      expect(parseAgentVerdict(output, "validate")).toBe("PASS");
     });
 
     it("returns unknown when no verdict present", () => {
@@ -192,8 +192,8 @@ describe("decideAfterValidate", () => {
   const outcomeReady = {
     stage: "validate",
     success: true,
-    verdict: "READY_FOR_REVIEW",
-    output: "All tests pass.\n\n**Verdict:** READY_FOR_REVIEW",
+    verdict: "PASS",
+    output: "All tests pass.\n\n**Verdict:** PASS",
   };
 
   const outcomeNeedsFixes = (output = "Build failed.\n\n**Verdict:** NEEDS_FIXES") => ({
@@ -203,7 +203,7 @@ describe("decideAfterValidate", () => {
     output,
   });
 
-  it("returns continue when READY_FOR_REVIEW", () => {
+  it("returns continue when PASS", () => {
     const decision = decideAfterValidate(outcomeReady, 0, 2);
     expect(decision.action).toBe("continue");
   });

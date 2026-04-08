@@ -37,7 +37,7 @@ function makeLogger() {
 function successResult(overrides: Partial<AgentRunResult> = {}): AgentRunResult {
   return {
     success: true,
-    output: "**Verdict:** READY_FOR_REVIEW\n\nAll checks passed.",
+    output: "**Verdict:** PASS\n\nAll checks passed.",
     costUsd: 0.05,
     turns: 3,
     durationMs: 5000,

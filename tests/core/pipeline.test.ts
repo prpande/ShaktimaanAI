@@ -478,12 +478,12 @@ describe("createPipeline", () => {
       }
       if (options.outputPath) {
         mkdirSync(dirname(options.outputPath), { recursive: true });
-        writeFileSync(options.outputPath, `Output for ${options.stage} — **Verdict:** READY_FOR_REVIEW`);
+        writeFileSync(options.outputPath, `Output for ${options.stage} — **Verdict:** PASS`);
       }
       return {
         success: true,
         output: options.stage === "validate"
-          ? "All pass.\n\n**Verdict:** READY_FOR_REVIEW"
+          ? "All pass.\n\n**Verdict:** PASS"
           : `Output for ${options.stage}`,
         costUsd: 0,
         turns: 1,
@@ -527,12 +527,12 @@ describe("createPipeline", () => {
       if (options.stage === "impl") capturedCwd = options.cwd;
       if (options.outputPath) {
         mkdirSync(dirname(options.outputPath), { recursive: true });
-        writeFileSync(options.outputPath, `Output — **Verdict:** READY_FOR_REVIEW`);
+        writeFileSync(options.outputPath, `Output — **Verdict:** PASS`);
       }
       return {
         success: true,
         output: options.stage === "validate"
-          ? "**Verdict:** READY_FOR_REVIEW"
+          ? "**Verdict:** PASS"
           : "done",
         costUsd: 0, turns: 1, inputTokens: 0, outputTokens: 0, durationMs: 10,
       };
@@ -565,11 +565,11 @@ describe("createPipeline", () => {
     const stubRunner = async (options: AgentRunOptions): Promise<AgentRunResult> => {
       if (options.outputPath) {
         mkdirSync(dirname(options.outputPath), { recursive: true });
-        writeFileSync(options.outputPath, `Output — **Verdict:** READY_FOR_REVIEW`);
+        writeFileSync(options.outputPath, `Output — **Verdict:** PASS`);
       }
       return {
         success: true,
-        output: "**Verdict:** READY_FOR_REVIEW",
+        output: "**Verdict:** PASS",
         costUsd: 0, turns: 1, inputTokens: 0, outputTokens: 0, durationMs: 10,
       };
     };
@@ -656,7 +656,7 @@ describe("pipeline retry integration", () => {
       if (options.stage === "validate") {
         validateCallCount++;
         // Fail first time, pass second time
-        const verdict = validateCallCount === 1 ? "NEEDS_FIXES" : "READY_FOR_REVIEW";
+        const verdict = validateCallCount === 1 ? "NEEDS_FIXES" : "PASS";
         const output = `Build output.\n\n**Verdict:** ${verdict}`;
         if (options.outputPath) writeFileSync(options.outputPath, output);
         return { success: true, output, costUsd: 0, turns: 1, inputTokens: 0, outputTokens: 0, durationMs: 10 };
@@ -765,7 +765,7 @@ describe("pipeline retry integration", () => {
         return { success: true, output: out, costUsd: 0, turns: 1, inputTokens: 0, outputTokens: 0, durationMs: 10 };
       }
       // Second validate passes
-      const out = "All clear.\n\n**Verdict:** READY_FOR_REVIEW";
+      const out = "All clear.\n\n**Verdict:** PASS";
       if (options.outputPath) writeFileSync(options.outputPath, out);
       return { success: true, output: out, costUsd: 0, turns: 1, inputTokens: 0, outputTokens: 0, durationMs: 10 };
     };
@@ -813,7 +813,7 @@ describe("pipeline retry integration", () => {
         return { success: true, output: "impl done", costUsd: 0, turns: 1, inputTokens: 0, outputTokens: 0, durationMs: 10 };
       }
       if (options.stage === "validate") {
-        const out = "Tests pass.\n\n**Verdict:** READY_FOR_REVIEW";
+        const out = "Tests pass.\n\n**Verdict:** PASS";
         if (options.outputPath) writeFileSync(options.outputPath, out);
         return { success: true, output: out, costUsd: 0, turns: 1, inputTokens: 0, outputTokens: 0, durationMs: 10 };
       }
@@ -897,7 +897,7 @@ describe("Spec 5a pipeline behavior", () => {
       }
       if (options.stage === "validate") {
         validateCallCount++;
-        const out = "Tests pass.\n\n**Verdict:** READY_FOR_REVIEW";
+        const out = "Tests pass.\n\n**Verdict:** PASS";
         if (options.outputPath) writeFileSync(options.outputPath, out);
         return { success: true, output: out, costUsd: 0, turns: 1, inputTokens: 0, outputTokens: 0, durationMs: 10 };
       }
@@ -960,7 +960,7 @@ describe("Spec 5a pipeline behavior", () => {
         return { success: true, output: out, costUsd: 0, turns: 1, inputTokens: 0, outputTokens: 0, durationMs: 10 };
       }
       if (options.stage === "validate") {
-        const out = "Tests pass.\n\n**Verdict:** READY_FOR_REVIEW";
+        const out = "Tests pass.\n\n**Verdict:** PASS";
         if (options.outputPath) writeFileSync(options.outputPath, out);
         return { success: true, output: out, costUsd: 0, turns: 1, inputTokens: 0, outputTokens: 0, durationMs: 10 };
       }
@@ -1024,7 +1024,7 @@ describe("Spec 5a pipeline behavior", () => {
       if (options.stage === "validate") {
         validateCallCount++;
         // Fail first time, pass second time
-        const verdict = validateCallCount === 1 ? "NEEDS_FIXES" : "READY_FOR_REVIEW";
+        const verdict = validateCallCount === 1 ? "NEEDS_FIXES" : "PASS";
         const out = `Build output.\n\n**Verdict:** ${verdict}`;
         if (options.outputPath) writeFileSync(options.outputPath, out);
         return { success: true, output: out, costUsd: 0, turns: 1, inputTokens: 0, outputTokens: 0, durationMs: 10 };
