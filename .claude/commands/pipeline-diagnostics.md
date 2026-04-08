@@ -9,13 +9,13 @@ You are a diagnostic coordinator for the ShaktimaanAI pipeline. Your job is to a
 
 ## Step 1: Resolve Configuration
 
-Read the pipeline config to find the runtime directory:
+Read the pipeline config to find the runtime directory. The CLI resolves config in this order:
 
-```
-~/.shkmn/shkmn.config.json → pipeline.runtimeDir
-```
+1. `$SHKMN_CONFIG` environment variable (if set and file exists)
+2. `./shkmn.config.json` (current working directory)
+3. `~/.shkmn/runtime/shkmn.config.json`
 
-If the config file doesn't exist, default to `~/.shkmn/runtime/`.
+Read `pipeline.runtimeDir` from the first config file found. If none exist, default to `~/.shkmn/runtime/`.
 
 Also resolve the ShaktimaanAI repo root. Check `repos.aliases` in config, or use the current working directory if it contains `src/core/pipeline.ts`.
 
@@ -88,7 +88,7 @@ Prompt the agent with:
 
 Prompt the agent with:
 - Paths to heimdall.log, shkmn.pid, worktrees/, worktree-manifest.json
-- The baselines: ALL_STAGE_DIRS, STAGES_WITH_PENDING_DONE, heartbeatTimeoutMinutes, maxConcurrentTotal, worktree retentionDays, DEFAULT_CONFIG vs shkmn.config.json diff, DEFAULT_BUDGET_CONFIG
+- The baselines: ALL_STAGE_DIRS, STAGES_WITH_PENDING_DONE, maxConcurrentTotal, worktree retentionDays, DEFAULT_CONFIG vs shkmn.config.json diff, DEFAULT_BUDGET_CONFIG
 - The daily JSONL entries (all types, for concurrency analysis)
 - The full checklist I1–I8 with instructions for each check (see Appendix D below)
 

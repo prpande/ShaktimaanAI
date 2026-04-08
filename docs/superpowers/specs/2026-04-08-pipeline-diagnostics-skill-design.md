@@ -181,7 +181,7 @@ interface DiagnosticFinding {
 
 | ID | Check | What to validate | Severity if violated |
 |----|-------|-----------------|---------------------|
-| I1 | Heimdall uptime | Parse `heimdall.log` timestamps. Gaps > configured `heartbeatTimeoutMinutes` (default 10) = WARNING. No log entries at all = ERROR | WARNING/ERROR |
+| I1 | Heimdall uptime | Parse `heimdall.log` for recurring heartbeat/liveness/watcher activity entries during the audit window. If other pipeline activity is present but Heimdall shows no heartbeat/liveness evidence for the same period, report WARNING. No log entries at all = ERROR | WARNING/ERROR |
 | I2 | PID file validity | `shkmn.pid` exists and contains a numeric PID. If pipeline is expected to be running, verify the process exists (best-effort) | INFO |
 | I3 | Worktree lifecycle | Tasks that reached `impl` or later should have `worktreePath` in run-state. If `worktree-manifest.json` exists, completed/failed tasks should have cleanup entries. Worktree dirs in `worktrees/` without active tasks = WARNING | WARNING |
 | I4 | Config vs defaults divergence | Diff `shkmn.config.json` values against `DEFAULT_CONFIG`. Report all overrides as INFO (awareness, not errors). Flag missing required fields as ERROR | INFO/ERROR |
