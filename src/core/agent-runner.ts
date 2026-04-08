@@ -78,8 +78,8 @@ export function resolveTimeoutMinutes(stage: string, config: ResolvedConfig): nu
 // ─── System prompt builder ───────────────────────────────────────────────────
 
 /**
- * Composes the system prompt from sections based on stage context rules.
- * No template hydration — sections are assembled directly.
+ * @deprecated Use buildAgentSystemPrompt + buildAgentUserPrompt instead.
+ * Retained for backward compatibility with external callers.
  */
 export function buildSystemPrompt(options: AgentRunOptions): string {
   const { stage, slug, taskContent, previousOutput, outputPath, config } = options;
@@ -175,9 +175,12 @@ export function buildSystemPrompt(options: AgentRunOptions): string {
 // ─── Split prompt builders (SDK isolation) ──────────────────────────────────
 
 /**
- * Builds the system prompt: static per-stage content that benefits from caching.
+ * Builds the system prompt: per-stage instructions that benefit from prompt
+ * caching across turns within a single agent invocation.
  * Contains: identity, pipeline context, agent instructions, output instructions.
- * Does NOT contain: task content, previous output, repo context, stage hints.
+ * Does NOT contain: previous output, repo context, stage hints.
+ * Note: includes task metadata (repo path, stage list) so it varies per task,
+ * but remains stable across all turns of a single agent run.
  */
 export function buildAgentSystemPrompt(options: AgentRunOptions): string {
   const { stage, slug, taskContent, config, outputPath } = options;
@@ -260,10 +263,12 @@ export function buildAgentUserPrompt(options: AgentRunOptions): string {
     sections.push(`## ${label}\n\n${previousOutput}`);
   }
 
-  // Repo context — either Astra's cached summary or live gatherRepoContext
+  // Repo context — either Astra's cached summary or live gatherRepoContext.
+  // useRepoSummary stages fall back to gatherRepoContext when no summary is available
+  // (e.g., CLI-created tasks that bypass triage).
   if (artifactRules?.useRepoSummary && options.repoSummary) {
     sections.push(`## Repo Context\n\n${options.repoSummary}`);
-  } else if (rules.includeRepoContext) {
+  } else if (rules.includeRepoContext || (artifactRules?.useRepoSummary && !options.repoSummary)) {
     const repoContext = gatherRepoContext(taskMeta.repo);
     sections.push(`## Repo Context\n\n${repoContext}`);
   }

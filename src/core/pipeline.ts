@@ -58,7 +58,8 @@ export function collectArtifacts(
     .filter(f => {
       if (rules.includeRetryFeedback && f.startsWith('retry-feedback-')) return true;
       // Match "{stage}-output.md" or "{stage}-output-r1.md"
-      const stageMatch = f.match(/^([\w-]+?)-output/);
+      // Use greedy match up to the last "-output" to handle hyphenated stage names
+      const stageMatch = f.match(/^(.+)-output/);
       return stageMatch ? priorStages.has(stageMatch[1]) : false;
     })
     .map(f => readFileSync(join(artifactsDir, f), 'utf-8'))
