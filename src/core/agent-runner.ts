@@ -291,48 +291,43 @@ export function buildAgentUserPrompt(options: AgentRunOptions): string {
   return sections.join("\n\n");
 }
 
-// ─── MCP Server Resolution ─────────────────────────────────────────────────
+
+// ─── MCP tool filtering ─────────────────────────────────────────────────────
 
 /**
- * Resolves which MCP servers to load for a stage.
- * Returns the intersection of task-level requirements (from Astra)
- * and stage-level tool permissions.
+ * Filters MCP tool patterns in allowedTools based on Astra's requiredMcpServers.
  *
- * When requiredMcpServers is empty (no Astra triage, direct CLI),
- * falls back to loading servers whose tool prefixes appear in
- * the stage's allowed tools list.
+ * When Astra specifies which MCP servers a task needs (e.g., ["slack"]),
+ * this removes MCP tool patterns for servers the task doesn't need
+ * (e.g., removes "mcp__plugin_notion_notion__*" if notion isn't required).
+ *
+ * Non-MCP tools pass through unchanged. When requiredMcpServers is empty
+ * or undefined (CLI invocations without triage), all tools pass through
+ * unchanged (backward compatible).
  */
-export function resolveMcpServers(
-  stage: string,
-  requiredMcpServers: string[],
-  config: ResolvedConfig,
-): Record<string, Record<string, unknown>> {
-  const stageTools = resolveToolPermissions(stage, config);
-  const result: Record<string, Record<string, unknown>> = {};
-
-  // Determine which MCP servers to consider
-  const candidates = requiredMcpServers.length > 0
-    ? requiredMcpServers
-    : Object.keys(MCP_TOOL_PREFIXES);
-
-  for (const serverName of candidates) {
-    const toolPrefix = MCP_TOOL_PREFIXES[serverName];
-    if (!toolPrefix) continue;
-
-    const isAllowed = stageTools.allowed.some(t =>
-      t === toolPrefix + '*' || t.startsWith(toolPrefix),
-    );
-
-    if (isAllowed) {
-      // Placeholder: cloud-hosted MCP servers (Slack, Notion, Figma)
-      // are managed by Claude Code's plugin system. The exact server
-      // config depends on the deployment. Mark as needed so the runner
-      // can decide how to load them.
-      result[serverName] = { type: "needed", toolPrefix };
-    }
+export function filterMcpToolsByTaskNeeds(
+  allowedTools: string[],
+  requiredMcpServers?: string[],
+): string[] {
+  // No Astra guidance → pass all tools through (backward compatible)
+  if (!requiredMcpServers || requiredMcpServers.length === 0) {
+    return allowedTools;
   }
 
-  return result;
+  // Build set of allowed MCP prefixes from requiredMcpServers
+  const allowedPrefixes = new Set<string>();
+  for (const serverName of requiredMcpServers) {
+    const prefix = MCP_TOOL_PREFIXES[serverName];
+    if (prefix) allowedPrefixes.add(prefix);
+  }
+
+  return allowedTools.filter(tool => {
+    if (!tool.startsWith("mcp__")) return true; // non-MCP tools always pass
+    // Check if any allowed prefix matches this tool
+    return Array.from(allowedPrefixes).some(prefix =>
+      tool.startsWith(prefix) || tool === prefix + "*",
+    );
+  });
 }
 
 // ─── Agent runner ────────────────────────────────────────────────────────────
@@ -375,23 +370,26 @@ export async function runAgent(options: AgentRunOptions): Promise<AgentRunResult
     let outputTokens = 0;
     let receivedResult = false;
 
-    // Determine if this stage needs MCP tools (Slack, Notion, Figma).
-    // Stages with MCP tool patterns in allowedTools need settings loaded so
-    // cloud MCP servers are available. Stages without MCP tools get full
-    // SDK isolation (settingSources: []) for maximum token savings.
-    const needsMcp = allowedTools.some(t => t.startsWith("mcp__"));
-    // TODO: Once the SDK supports selective cloud MCP loading via mcpServers
-    // or plugins option, all stages can use settingSources: [] and load only
-    // the specific MCP servers from resolveMcpServers(). Until then, MCP-needing
-    // stages must load user settings (which unfortunately also loads hooks).
+    // SDK isolation: settingSources:[] prevents hooks from loading (~40-50k tokens
+    // saved per invocation). Cloud MCPs (Slack, Notion, Figma) load independently
+    // of filesystem settings — verified via testing. Tool access is controlled by
+    // allowedTools/disallowedTools which already restricts MCP tools per stage.
+    //
+    // When Astra provides requiredMcpServers, we further restrict MCP tool access
+    // to only the servers the task needs, avoiding unnecessary MCP tool definitions
+    // in stages that have broad MCP permissions but don't need them for this task.
+    const effectiveAllowedTools = filterMcpToolsByTaskNeeds(
+      allowedTools,
+      options.requiredMcpServers,
+    );
 
     const messages = query({
       prompt: userPrompt,
       options: {
         systemPrompt: agentSystemPrompt,
-        ...(needsMcp ? {} : { settingSources: [] as const }),
+        settingSources: [],
         ...(model ? { model } : {}),
-        allowedTools,
+        allowedTools: effectiveAllowedTools,
         disallowedTools,
         maxTurns,
         cwd,

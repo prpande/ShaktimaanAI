@@ -6,6 +6,7 @@ import {
   buildSystemPrompt,
   buildAgentSystemPrompt,
   buildAgentUserPrompt,
+  filterMcpToolsByTaskNeeds,
   resolveToolPermissions,
   resolveMaxTurns,
   resolveTimeoutMinutes,
@@ -384,5 +385,55 @@ describe("buildAgentUserPrompt", () => {
       repoSummary: undefined,
     }));
     expect(result).toContain("Repo Context");
+  });
+});
+
+// ─── filterMcpToolsByTaskNeeds ───────────────────────────────────────────────
+
+describe("filterMcpToolsByTaskNeeds", () => {
+  const allTools = [
+    "Read", "Glob", "Grep", "Bash",
+    "mcp__claude_ai_Slack__slack_read_channel",
+    "mcp__claude_ai_Slack__slack_send_message",
+    "mcp__plugin_notion_notion__notion-search",
+    "mcp__plugin_figma_figma__get_design_context",
+  ];
+
+  it("passes all tools through when requiredMcpServers is empty", () => {
+    expect(filterMcpToolsByTaskNeeds(allTools, [])).toEqual(allTools);
+  });
+
+  it("passes all tools through when requiredMcpServers is undefined", () => {
+    expect(filterMcpToolsByTaskNeeds(allTools, undefined)).toEqual(allTools);
+  });
+
+  it("keeps only Slack MCP tools when task needs only slack", () => {
+    const result = filterMcpToolsByTaskNeeds(allTools, ["slack"]);
+    expect(result).toContain("Read");
+    expect(result).toContain("mcp__claude_ai_Slack__slack_read_channel");
+    expect(result).toContain("mcp__claude_ai_Slack__slack_send_message");
+    expect(result).not.toContain("mcp__plugin_notion_notion__notion-search");
+    expect(result).not.toContain("mcp__plugin_figma_figma__get_design_context");
+  });
+
+  it("keeps Slack and Notion when task needs both", () => {
+    const result = filterMcpToolsByTaskNeeds(allTools, ["slack", "notion"]);
+    expect(result).toContain("mcp__claude_ai_Slack__slack_read_channel");
+    expect(result).toContain("mcp__plugin_notion_notion__notion-search");
+    expect(result).not.toContain("mcp__plugin_figma_figma__get_design_context");
+  });
+
+  it("handles wildcard tool patterns", () => {
+    const tools = ["Read", "mcp__claude_ai_Slack__*", "mcp__plugin_notion_notion__*"];
+    const result = filterMcpToolsByTaskNeeds(tools, ["slack"]);
+    expect(result).toEqual(["Read", "mcp__claude_ai_Slack__*"]);
+  });
+
+  it("always keeps non-MCP tools", () => {
+    const result = filterMcpToolsByTaskNeeds(allTools, ["figma"]);
+    expect(result).toContain("Read");
+    expect(result).toContain("Glob");
+    expect(result).toContain("Grep");
+    expect(result).toContain("Bash");
   });
 });
