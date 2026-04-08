@@ -88,7 +88,17 @@ function checkAuthCommand(name: string, command: string, toolLabel: string): Che
     if (isNotInstalledError(err)) {
       return { name, passed: false, message: `${toolLabel} not installed \u2014 ${command.split(" ")[0]}: command not found`, fixable: false };
     }
-    return { name, passed: false, message: (err as Error).message, fixable: false };
+    const stderr = (err as any)?.stderr?.toString() ?? "";
+    const message = (err as Error).message;
+    const exitCode = (err as any)?.status;
+
+    if (stderr.includes("rate limit") || stderr.includes("429")) {
+      return { name, passed: false, message: "Rate limited — try again later", fixable: false };
+    }
+    if (stderr.includes("ENOTFOUND") || stderr.includes("ETIMEDOUT") || stderr.includes("network")) {
+      return { name, passed: false, message: "Network error — check connectivity", fixable: false };
+    }
+    return { name, passed: false, message: `Auth check failed (exit ${exitCode}): ${message}`, fixable: false };
   }
 }
 
@@ -109,7 +119,7 @@ export function checkConfig(configPath: string | null): CheckResult {
   }
   try {
     loadConfig(configPath);
-    return { name, passed: true, message: "Valid", fixable: true };
+    return { name, passed: true, message: "Valid", fixable: false };
   } catch (err) {
     return { name, passed: false, message: (err as Error).message, fixable: true };
   }
@@ -162,7 +172,7 @@ export function checkRuntimeDirs(runtimeDir: string | null): CheckResult {
 
   const { valid, missing } = verifyRuntimeDirs(runtimeDir);
   if (valid) {
-    return { name, passed: true, message: "All directories present", fixable: true };
+    return { name, passed: true, message: "All directories present", fixable: false };
   }
   return {
     name,

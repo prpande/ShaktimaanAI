@@ -39,6 +39,7 @@ export interface NaradaPayload {
     dmOldest: string;
   };
   approvalChecks: Array<{ slug: string; thread_ts: string }>;
+  conversationChecks: Array<{ key: string; thread_ts: string }>;
   outboundPrefix: string;
   files: {
     outbox: string;
@@ -122,6 +123,14 @@ export function buildNaradaPayload(
     }
   }
 
+  // Conversation threads: astra-* entries track threads where Astra answered directly
+  const conversationChecks: Array<{ key: string; thread_ts: string }> = [];
+  for (const [key, threadTs] of Object.entries(threadMap)) {
+    if (key.startsWith("astra-")) {
+      conversationChecks.push({ key, thread_ts: threadTs });
+    }
+  }
+
   return {
     outbox,
     inbound: {
@@ -131,6 +140,7 @@ export function buildNaradaPayload(
       dmOldest: dmTs,
     },
     approvalChecks,
+    conversationChecks,
     outboundPrefix: opts.outboundPrefix ?? "🤖 [ShaktimaanAI]",
     files: {
       outbox: join(runtimeDir, "slack-outbox.jsonl"),

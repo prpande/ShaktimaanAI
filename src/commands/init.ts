@@ -56,7 +56,6 @@ export function writeInitConfig(dir: string, answers: InitAnswers): void {
       maxConcurrentTotal: d.agents.maxConcurrentTotal,
       maxTurns: { ...d.agents.maxTurns },
       timeoutsMinutes: { ...d.agents.timeoutsMinutes },
-      heartbeatTimeoutMinutes: d.agents.heartbeatTimeoutMinutes,
       retryCount: d.agents.retryCount,
     },
     schedule: {

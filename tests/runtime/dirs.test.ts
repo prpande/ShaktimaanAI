@@ -2,7 +2,8 @@ import { describe, it, expect, beforeEach, afterEach } from "vitest";
 import { mkdirSync, rmSync, existsSync } from "node:fs";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
-import { createRuntimeDirs, STAGE_DIRS, verifyRuntimeDirs } from "../../src/runtime/dirs.js";
+import { createRuntimeDirs, verifyRuntimeDirs } from "../../src/runtime/dirs.js";
+import { ALL_STAGE_DIRS } from "../../src/core/stage-map.js";
 
 const TEST_DIR = join(tmpdir(), "shkmn-test-dirs-" + Date.now());
 
@@ -14,14 +15,14 @@ afterEach(() => {
   rmSync(TEST_DIR, { recursive: true, force: true });
 });
 
-describe("STAGE_DIRS", () => {
+describe("ALL_STAGE_DIRS", () => {
   it("has 13 top-level stage directories", () => {
-    expect(STAGE_DIRS).toHaveLength(13);
+    expect(ALL_STAGE_DIRS).toHaveLength(13);
   });
 
   it("starts with 00-inbox and ends with 12-hold", () => {
-    expect(STAGE_DIRS[0]).toBe("00-inbox");
-    expect(STAGE_DIRS[STAGE_DIRS.length - 1]).toBe("12-hold");
+    expect(ALL_STAGE_DIRS[0]).toBe("00-inbox");
+    expect(ALL_STAGE_DIRS[ALL_STAGE_DIRS.length - 1]).toBe("12-hold");
   });
 });
 
@@ -33,7 +34,6 @@ describe("createRuntimeDirs", () => {
     expect(existsSync(join(TEST_DIR, "01-questions", "pending"))).toBe(true);
     expect(existsSync(join(TEST_DIR, "01-questions", "done"))).toBe(true);
     expect(existsSync(join(TEST_DIR, "06-impl", "pending"))).toBe(true);
-    expect(existsSync(join(TEST_DIR, "06-impl", "active"))).toBe(true);
     expect(existsSync(join(TEST_DIR, "06-impl", "done"))).toBe(true);
     expect(existsSync(join(TEST_DIR, "10-complete"))).toBe(true);
     expect(existsSync(join(TEST_DIR, "11-failed"))).toBe(true);

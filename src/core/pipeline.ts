@@ -7,6 +7,7 @@ import { type AgentRunnerFn, type AgentRunOptions, type RunState, type Completed
 import { type AgentRegistry } from "./registry.js";
 import { type TaskLogger, createTaskLogger } from "./logger.js";
 import { STAGE_DIR_MAP, DIR_STAGE_MAP, STAGES_WITH_PENDING_DONE } from "./stage-map.js";
+import { STAGE_ARTIFACT_RULES } from "../config/defaults.js";
 import { type Notifier, type NotifyEvent } from "../surfaces/types.js";
 import { parseAgentVerdict, parseReviewFindings, decideAfterValidate, decideAfterReview } from "./retry.js";
 import { createWorktree, recordWorktreeCompletion } from "./worktree.js";
@@ -16,8 +17,101 @@ import { loadBudgetConfig } from "../config/loader.js";
 import { DEFAULT_BUDGET_CONFIG } from "../config/defaults.js";
 import type { BudgetConfig } from "../config/budget-schema.js";
 
-// Re-export for backwards compatibility
+// Re-exported for external consumers; DIR_STAGE_MAP is not used internally in this module.
 export { STAGE_DIR_MAP, DIR_STAGE_MAP };
+
+// ─── Scoped Artifact Collection ────────────────────────────────────────────
+
+/** Extract retry number from artifact filename. Base "foo-output.md" = 0, "foo-output-r2.md" = 2. */
+function parseRetryNum(filename: string): number {
+  const m = filename.match(/-r(\d+)\.md$/);
+  return m ? parseInt(m[1], 10) : 0;
+}
+
+/**
+ * Collects artifact files for a stage based on STAGE_ARTIFACT_RULES.
+ * Replaces the old blanket concatenation of all .md files.
+ */
+export function collectArtifacts(
+  artifactsDir: string,
+  stage: string,
+  stages: string[],
+): string {
+  const rules = STAGE_ARTIFACT_RULES[stage] ?? { mode: 'all_prior' as const };
+
+  if (rules.mode === 'none') return '';
+
+  let files: string[];
+  try {
+    files = readdirSync(artifactsDir).filter(f => f.endsWith('.md')).sort();
+  } catch {
+    return '';
+  }
+
+  if (rules.mode === 'specific') {
+    // For each prefix, pick only the latest file (highest retry number).
+    // Base "impl-output.md" = retry 0, "impl-output-r2.md" = retry 2.
+    const latestByPrefix = new Map<string, { file: string; retry: number }>();
+    for (const f of files) {
+      const matchedPrefix = rules.specificFiles!.find(prefix => f.startsWith(prefix));
+      if (matchedPrefix) {
+        const retryNum = parseRetryNum(f);
+        const current = latestByPrefix.get(matchedPrefix);
+        if (!current || retryNum > current.retry) {
+          latestByPrefix.set(matchedPrefix, { file: f, retry: retryNum });
+        }
+      }
+    }
+    return Array.from(latestByPrefix.values())
+      .map(({ file }) => readFileSync(join(artifactsDir, file), 'utf-8'))
+      .join('\n');
+  }
+
+  // mode === 'all_prior': only include outputs from stages before current.
+  // Dedup per prior stage — pick only the latest retry for each.
+  const stageIdx = stages.indexOf(stage);
+  if (stageIdx <= 0) return '';
+  const priorStages = new Set(stages.slice(0, stageIdx));
+
+  const latestPerStage = new Map<string, { file: string; retry: number }>();
+  const retryFeedbackFiles: string[] = [];
+
+  for (const f of files) {
+    if (rules.includeRetryFeedback && f.startsWith('retry-feedback-')) {
+      retryFeedbackFiles.push(f);
+      continue;
+    }
+    const stageMatch = f.match(/^(.+)-output/);
+    if (!stageMatch || !priorStages.has(stageMatch[1])) continue;
+    const stageName = stageMatch[1];
+    const retryNum = parseRetryNum(f);
+    const current = latestPerStage.get(stageName);
+    if (!current || retryNum > current.retry) {
+      latestPerStage.set(stageName, { file: f, retry: retryNum });
+    }
+  }
+
+  function parseTrailingNum(filename: string): number {
+    const match = filename.match(/-(\d+)\.md$/);
+    return match ? parseInt(match[1], 10) : 0;
+  }
+
+  const outputFiles = [
+    ...Array.from(latestPerStage.values()).map(({ file }) => file),
+    ...retryFeedbackFiles,
+  ].sort((a, b) => {
+    const aIsRetry = a.startsWith("retry-feedback-");
+    const bIsRetry = b.startsWith("retry-feedback-");
+    if (aIsRetry && bIsRetry) return parseTrailingNum(a) - parseTrailingNum(b);
+    if (aIsRetry) return 1;
+    if (bIsRetry) return -1;
+    return a.localeCompare(b);
+  });
+
+  return outputFiles
+    .map(f => readFileSync(join(artifactsDir, f), 'utf-8'))
+    .join('\n');
+}
 
 // ─── Pure Utilities ─────────────────────────────────────────────────────────
 
@@ -65,6 +159,8 @@ export function createRunState(
     validateFailCount: 0,
     stageHints: {},
     retryAttempts: {},
+    requiredMcpServers: taskMeta.requiredMcpServers.length > 0 ? taskMeta.requiredMcpServers : undefined,
+    repoSummary: taskMeta.repoSummary || undefined,
   };
 }
 
@@ -128,7 +224,11 @@ export function moveTaskDir(
         // Wait for file handles to be released (100ms, 200ms, 400ms, 800ms, 1600ms)
         const delayMs = 100 * Math.pow(2, attempt);
         const start = Date.now();
-        while (Date.now() - start < delayMs) { /* spin wait — sync context */ }
+        while (Date.now() - start < delayMs) {
+          // Intentional spin-wait: moveTaskDir must be synchronous because it's called
+          // from both sync and async contexts in the pipeline. This path only executes
+          // on Windows EBUSY/EPERM retry (rare), with max total wait of ~3.1s.
+        }
         continue;
       }
       // If retries exhausted or different error, fall back to copy+delete
@@ -266,6 +366,7 @@ export function createPipeline(options: PipelineOptions): Pipeline {
       if (activeRuns.has(slug)) continue;
 
       logger.info(`[pipeline] Retrying deferred task "${slug}"`);
+      activeRuns.set(slug, state);
       // Fire-and-forget — processStage will re-defer if still at capacity
       processStage(slug, taskDir).catch((err: unknown) => {
         logger.error(
@@ -315,7 +416,7 @@ export function createPipeline(options: PipelineOptions): Pipeline {
     try {
       recordWorktreeCompletion(manifestPath, {
         slug: state.slug,
-        repoPath: state.worktreePath,
+        repoPath: state.repoRoot ?? state.worktreePath,
         worktreePath: state.worktreePath,
         completedAt: new Date().toISOString(),
       });
@@ -338,6 +439,7 @@ export function createPipeline(options: PipelineOptions): Pipeline {
       try {
         const worktreesDir = join(runtimeDir, "worktrees");
         const worktreePath = createWorktree(repoPath, state.slug, worktreesDir);
+        state.repoRoot = repoPath;
         state.worktreePath = worktreePath;
         return worktreePath;
       } catch (err) {
@@ -405,13 +507,9 @@ export function createPipeline(options: PipelineOptions): Pipeline {
 
       // Collect previous outputs from artifacts/
       const artifactsDir = join(currentTaskDir, "artifacts");
-      let previousOutput = "";
-      if (existsSync(artifactsDir)) {
-        const files = readdirSync(artifactsDir).filter(f => f.endsWith(".md")).sort();
-        for (const file of files) {
-          previousOutput += readFileSync(join(artifactsDir, file), "utf-8") + "\n";
-        }
-      }
+      const previousOutput = existsSync(artifactsDir)
+        ? collectArtifacts(artifactsDir, stage, state.stages)
+        : "";
 
       // Read task content
       const taskContent = readFileSync(join(currentTaskDir, "task.task"), "utf-8");
@@ -437,6 +535,8 @@ export function createPipeline(options: PipelineOptions): Pipeline {
         stageHints: state.stageHints,
         abortController,
         logger: taskLogger,
+        requiredMcpServers: state.requiredMcpServers,
+        repoSummary: state.repoSummary,
       };
 
       // ─── Pre-stage budget check ──────────────────────────────────────────
@@ -670,6 +770,7 @@ export function createPipeline(options: PipelineOptions): Pipeline {
       // Check review gate
       if (isReviewGate(stage, state.reviewAfter)) {
         state.status = "hold";
+        state.holdReason = "approval_required";
         writeRunState(doneDir, state);
         moveTaskDir(
           runtimeDir, slug,
@@ -782,8 +883,10 @@ export function createPipeline(options: PipelineOptions): Pipeline {
       if (nextStage === null) {
         state.status = "complete";
         writeRunState(holdDir, state);
+        recordCompletionIfWorktree(state);
         moveTaskDir(runtimeDir, slug, "12-hold", "10-complete");
         activeRuns.set(slug, readRunState(join(runtimeDir, "10-complete", slug)));
+        emitNotify({ type: "task_completed", slug, timestamp: new Date().toISOString() });
         return;
       }
 
@@ -826,6 +929,7 @@ export function createPipeline(options: PipelineOptions): Pipeline {
       const found = findTaskDir(slug);
       if (!found) throw new Error(`Task "${slug}" not found`);
       const state = readRunState(found.dir);
+      recordCompletionIfWorktree(state);
       state.status = "failed";
       state.error = "Cancelled by user";
       writeRunState(found.dir, state);
@@ -879,6 +983,7 @@ export function createPipeline(options: PipelineOptions): Pipeline {
       const state = readRunState(found.dir);
       state.status = "hold";
       state.pausedAtStage = state.currentStage;
+      state.holdReason = "user_paused";
       writeRunState(found.dir, state);
       moveTaskDir(runtimeDir, slug, found.subdir, "12-hold");
       activeRuns.set(slug, readRunState(join(runtimeDir, "12-hold", slug)));
@@ -913,15 +1018,16 @@ export function createPipeline(options: PipelineOptions): Pipeline {
         if (resolution.action === "hold") {
           state.holdDetail = resolution.reason;
           writeRunState(holdDir, state);
-          throw new Error(`Budget still exhausted for "${slug}": ${resolution.reason}`);
+          logger.warn(`[pipeline] Budget still exhausted for "${slug}": ${resolution.reason} — keeping in hold`);
+          return;
         }
-        // Budget is now OK — clear hold fields
-        delete state.holdReason;
+        // Budget is now OK — clear hold detail
         delete state.holdDetail;
       }
 
       state.status = "running";
       state.currentStage = resumeStage;
+      delete state.holdReason;
       delete state.pausedAtStage;
       writeRunState(holdDir, state);
       const nextDir = moveTaskDir(runtimeDir, slug, "12-hold", join(STAGE_DIR_MAP[resumeStage], "pending"));
@@ -950,6 +1056,12 @@ export function createPipeline(options: PipelineOptions): Pipeline {
       const found = findTaskDir(slug);
       if (!found) throw new Error(`Task "${slug}" not found`);
       const state = readRunState(found.dir);
+      if (!newStages.includes(state.currentStage)) {
+        throw new Error(
+          `Cannot remove current stage "${state.currentStage}" from stage list. ` +
+          `The task is currently executing this stage.`,
+        );
+      }
       const oldStages = [...state.stages];
       state.stages = newStages;
       writeRunState(found.dir, state);

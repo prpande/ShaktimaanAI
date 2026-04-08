@@ -2,7 +2,8 @@ import type { ResolvedConfig } from "../config/loader.js";
 
 export type PipelineStage =
   | "questions" | "research" | "design" | "structure" | "plan"
-  | "impl" | "review" | "validate" | "pr";
+  | "impl" | "review" | "validate" | "pr"
+  | "quick" | "quick-triage" | "quick-execute" | "slack-io";
 
 export type RunStatus = "running" | "hold" | "complete" | "failed";
 
@@ -40,6 +41,7 @@ export interface RunState {
   // Execution working directory fields
   workDir?: string;
   worktreePath?: string;
+  repoRoot?: string;
   invocationCwd?: string;
 
   // Retry counters
@@ -55,6 +57,10 @@ export interface RunState {
   pausedAtStage?: string;
   holdReason?: "budget_exhausted" | "approval_required" | "user_paused";
   holdDetail?: string;
+
+  // Token optimization: Astra-determined MCP requirements and repo summary
+  requiredMcpServers?: string[];
+  repoSummary?: string;
 }
 
 export interface AgentRunOptions {
@@ -69,6 +75,8 @@ export interface AgentRunOptions {
   logger: { info(msg: string): void; warn(msg: string): void; error(msg: string): void };
   stageHints?: Record<string, string[]>;
   model?: string;
+  requiredMcpServers?: string[];
+  repoSummary?: string;
 }
 
 export interface AgentRunResult {
@@ -98,6 +106,7 @@ export interface AstraTriageResult {
   stageHints?: Record<string, string> | null;
   enrichedContext?: string | null;
   repoSummary?: string | null;
+  requiredMcpServers?: string[] | null;
 
   // Metadata
   confidence: number;

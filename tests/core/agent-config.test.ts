@@ -19,20 +19,42 @@ describe("loadAgentPrompt", () => {
   });
 
   it("throws when agent file does not exist", () => {
-    expect(() => loadAgentPrompt(TEST_DIR, "nonexistent")).toThrow(/Agent prompt not found/);
+    expect(() => loadAgentPrompt(TEST_DIR, "validate")).toThrow(/Agent prompt not found/);
   });
 
   it("returns content with no frontmatter processing (raw file read)", () => {
     const content = "---\nstage: test\n---\nBody here";
-    writeFileSync(join(TEST_DIR, "raw.md"), content, "utf-8");
+    writeFileSync(join(TEST_DIR, "design.md"), content, "utf-8");
 
-    const result = loadAgentPrompt(TEST_DIR, "raw");
+    const result = loadAgentPrompt(TEST_DIR, "design");
     expect(result).toBe(content);
   });
 
   it("handles empty file gracefully", () => {
-    writeFileSync(join(TEST_DIR, "empty.md"), "", "utf-8");
-    const result = loadAgentPrompt(TEST_DIR, "empty");
+    writeFileSync(join(TEST_DIR, "impl.md"), "", "utf-8");
+    const result = loadAgentPrompt(TEST_DIR, "impl");
     expect(result).toBe("");
+  });
+
+  it("rejects path traversal in stage name", () => {
+    expect(() => loadAgentPrompt(TEST_DIR, "../../etc/passwd")).toThrow(
+      /Invalid stage name/,
+    );
+  });
+
+  it("rejects stage name not in allowlist", () => {
+    expect(() => loadAgentPrompt(TEST_DIR, "unknown-stage")).toThrow(
+      /Invalid stage name/,
+    );
+  });
+
+  it("accepts valid stage names", () => {
+    // This will throw "not found" (file doesn't exist) but NOT "Invalid stage name"
+    expect(() => loadAgentPrompt("/nonexistent", "impl")).toThrow(
+      /Agent prompt not found/,
+    );
+    expect(() => loadAgentPrompt("/nonexistent", "impl")).not.toThrow(
+      /Invalid stage name/,
+    );
   });
 });

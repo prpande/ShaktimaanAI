@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, afterEach } from "vitest";
+import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import { mkdirSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
@@ -89,15 +89,30 @@ describe("scanForRecovery", () => {
 
 // ─── runRecovery ──────────────────────────────────────────────────────────────
 
+function createMockPipeline(overrides: Partial<Pipeline> = {}): Pipeline {
+  return {
+    async startRun() {},
+    async resumeRun() {},
+    async approveAndResume() {},
+    getActiveRuns() { return []; },
+    async cancel() {},
+    async skip() {},
+    async pause() {},
+    async resume() {},
+    async modifyStages() {},
+    async restartStage() {},
+    async retry() {},
+    addNotifier() {},
+    ...overrides,
+  };
+}
+
 describe("runRecovery", () => {
   it("resumes all found tasks and reports them", async () => {
     const resumed: string[] = [];
-    const mockPipeline: Pipeline = {
-      async startRun() {},
+    const mockPipeline = createMockPipeline({
       async resumeRun(slug) { resumed.push(slug); },
-      async approveAndResume() {},
-      getActiveRuns() { return []; },
-    };
+    });
 
     const pendingDir = join(TEST_DIR, STAGE_DIR_MAP["questions"], "pending");
     mkdirSync(join(pendingDir, "task-alpha"), { recursive: true });
@@ -111,14 +126,11 @@ describe("runRecovery", () => {
   });
 
   it("captures errors per item without crashing", async () => {
-    const mockPipeline: Pipeline = {
-      async startRun() {},
+    const mockPipeline = createMockPipeline({
       async resumeRun(slug) {
         throw new Error(`Failed to resume ${slug}`);
       },
-      async approveAndResume() {},
-      getActiveRuns() { return []; },
-    };
+    });
 
     const pendingDir = join(TEST_DIR, STAGE_DIR_MAP["research"], "pending");
     mkdirSync(join(pendingDir, "broken-task"), { recursive: true });
@@ -131,16 +143,106 @@ describe("runRecovery", () => {
   });
 
   it("returns empty result when nothing pending", async () => {
-    const mockPipeline: Pipeline = {
-      async startRun() {},
-      async resumeRun() {},
-      async approveAndResume() {},
-      getActiveRuns() { return []; },
-    };
+    const mockPipeline = createMockPipeline();
 
     const result: RecoveryResult = await runRecovery(TEST_DIR, mockPipeline, mockLogger);
     expect(result.resumed).toHaveLength(0);
     expect(result.skipped).toHaveLength(0);
     expect(result.errors).toHaveLength(0);
+  });
+});
+
+// ─── F-5.3: concurrent recovery with timer cleanup ──────────────────────────
+
+describe("F-5.3: concurrent recovery", () => {
+  it("recovers multiple pending tasks concurrently", async () => {
+    const callOrder: string[] = [];
+    const resolvers: Array<() => void> = [];
+
+    const mockPipeline = createMockPipeline({
+      async resumeRun(slug) {
+        callOrder.push(`start:${slug}`);
+        await new Promise<void>((resolve) => {
+          resolvers.push(() => {
+            callOrder.push(`end:${slug}`);
+            resolve();
+          });
+        });
+      },
+    });
+
+    // Create two pending tasks
+    const pDir1 = join(TEST_DIR, STAGE_DIR_MAP["questions"], "pending", "task-1");
+    const pDir2 = join(TEST_DIR, STAGE_DIR_MAP["research"], "pending", "task-2");
+    mkdirSync(pDir1, { recursive: true });
+    mkdirSync(pDir2, { recursive: true });
+
+    const recoveryPromise = runRecovery(TEST_DIR, mockPipeline, mockLogger);
+
+    // Give the concurrent promises time to start
+    await new Promise(r => setTimeout(r, 50));
+
+    // Both tasks should have started before either has finished
+    expect(callOrder.filter(c => c.startsWith("start:"))).toHaveLength(2);
+    expect(callOrder.filter(c => c.startsWith("end:"))).toHaveLength(0);
+
+    // Now resolve both
+    for (const resolve of resolvers) resolve();
+
+    const result = await recoveryPromise;
+    expect(result.resumed).toHaveLength(2);
+    expect(result.resumed).toContain("task-1");
+    expect(result.resumed).toContain("task-2");
+    expect(result.errors).toHaveLength(0);
+  });
+
+  it("hold items are skipped without async work", async () => {
+    const holdDir = join(TEST_DIR, "12-hold", "held-task");
+    mkdirSync(holdDir, { recursive: true });
+
+    const mockPipeline = createMockPipeline({
+      async resumeRun() { throw new Error("Should not be called for hold items"); },
+    });
+
+    const result = await runRecovery(TEST_DIR, mockPipeline, mockLogger);
+    expect(result.skipped).toContain("held-task");
+    expect(result.resumed).toHaveLength(0);
+    expect(result.errors).toHaveLength(0);
+  });
+
+  it("clears timeout handles after pipeline settles", async () => {
+    const taskDir = join(TEST_DIR, STAGE_DIR_MAP["questions"], "pending", "timeout-task");
+    mkdirSync(taskDir, { recursive: true });
+
+    const clearTimeoutSpy = vi.spyOn(globalThis, "clearTimeout");
+
+    const mockPipeline = createMockPipeline({
+      async resumeRun() { /* resolve immediately */ },
+    });
+
+    await runRecovery(TEST_DIR, mockPipeline, mockLogger);
+
+    // clearTimeout should have been called at least once (for the task's timeout)
+    expect(clearTimeoutSpy).toHaveBeenCalled();
+    clearTimeoutSpy.mockRestore();
+  });
+
+  it("captures errors from individual tasks without blocking others", async () => {
+    const task1Dir = join(TEST_DIR, STAGE_DIR_MAP["questions"], "pending", "ok-task");
+    const task2Dir = join(TEST_DIR, STAGE_DIR_MAP["research"], "pending", "fail-task");
+    mkdirSync(task1Dir, { recursive: true });
+    mkdirSync(task2Dir, { recursive: true });
+
+    const mockPipeline = createMockPipeline({
+      async resumeRun(slug) {
+        if (slug === "fail-task") throw new Error("Simulated failure");
+      },
+    });
+
+    const result = await runRecovery(TEST_DIR, mockPipeline, mockLogger);
+    expect(result.resumed).toContain("ok-task");
+    expect(result.errors).toHaveLength(1);
+    expect(result.errors[0].slug).toBe("fail-task");
+    expect(result.errors[0].error).toContain("Simulated failure");
   });
 });

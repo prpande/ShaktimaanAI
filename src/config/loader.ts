@@ -1,5 +1,5 @@
 import { readFileSync, existsSync } from "node:fs";
-import { join } from "node:path";
+import { join, isAbsolute } from "node:path";
 import { configSchema, type ConfigParsed } from "./schema.js";
 import { DEFAULT_CONFIG, DEFAULT_AGENT_NAMES, DEFAULT_BUDGET_CONFIG, type ShkmnConfig } from "./defaults.js";
 import { budgetConfigSchema, type BudgetConfig } from "./budget-schema.js";
@@ -16,7 +16,13 @@ export type ResolvedConfig = ShkmnConfig;
  */
 export function loadConfig(configPath: string): ResolvedConfig {
   let raw: string;
-  raw = readFileSync(configPath, "utf-8");
+  try {
+    raw = readFileSync(configPath, "utf-8");
+  } catch (err) {
+    throw new Error(
+      `Failed to read config file at "${configPath}": ${err instanceof Error ? err.message : String(err)}`,
+    );
+  }
 
   let parsed: unknown;
   try {
@@ -36,7 +42,13 @@ export function loadConfig(configPath: string): ResolvedConfig {
     throw new Error(`Invalid config at "${configPath}": ${messages}`);
   }
 
-  return resolveConfig(result.data);
+  const resolved = resolveConfig(result.data);
+  if (!isAbsolute(resolved.pipeline.runtimeDir)) {
+    throw new Error(
+      `pipeline.runtimeDir must be an absolute path, got: "${resolved.pipeline.runtimeDir}"`,
+    );
+  }
+  return resolved;
 }
 
 /**
@@ -83,7 +95,6 @@ export function resolveConfig(parsed: ConfigParsed): ResolvedConfig {
       maxConcurrentTotal: parsed.agents?.maxConcurrentTotal ?? da.maxConcurrentTotal,
       maxTurns: { ...da.maxTurns, ...parsed.agents?.maxTurns },
       timeoutsMinutes: { ...da.timeoutsMinutes, ...parsed.agents?.timeoutsMinutes },
-      heartbeatTimeoutMinutes: parsed.agents?.heartbeatTimeoutMinutes ?? da.heartbeatTimeoutMinutes,
       retryCount: parsed.agents?.retryCount ?? da.retryCount,
       maxValidateRetries: parsed.agents?.maxValidateRetries ?? da.maxValidateRetries,
       maxSuggestionRetriesPerCycle: parsed.agents?.maxSuggestionRetriesPerCycle ?? da.maxSuggestionRetriesPerCycle,
@@ -123,7 +134,13 @@ export function loadBudgetConfig(runtimeDir: string): BudgetConfig {
   }
 
   let raw: string;
-  raw = readFileSync(filePath, "utf-8");
+  try {
+    raw = readFileSync(filePath, "utf-8");
+  } catch (err) {
+    throw new Error(
+      `Failed to read budget config at "${filePath}": ${err instanceof Error ? err.message : String(err)}`,
+    );
+  }
 
   let parsed: unknown;
   try {

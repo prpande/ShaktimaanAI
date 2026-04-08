@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import type { ReviewIssue } from "./types.js";
 
 // ─── Interfaces ──────────────────────────────────────────────────────────────
@@ -24,24 +25,16 @@ export interface RetryDecision {
  * Used to track the "same" issue across review iterations.
  */
 export function issueHash(severity: string, description: string): string {
-  // Extract first sentence (up to first period, exclamation, question mark or end)
   const firstSentence = description.split(/[.!?]/)[0] ?? description;
   const normalized = `${severity}|${firstSentence}`
     .toLowerCase()
     .replace(/[\s\W]+/g, "");
-
-  // Simple djb2 hash — good enough for issue identity
-  let hash = 5381;
-  for (let i = 0; i < normalized.length; i++) {
-    hash = ((hash << 5) + hash) ^ normalized.charCodeAt(i);
-    hash = hash >>> 0; // keep as unsigned 32-bit
-  }
-  return hash.toString(16).padStart(8, "0");
+  return createHash("sha256").update(normalized).digest("hex").slice(0, 16);
 }
 
 // ─── parseAgentVerdict ───────────────────────────────────────────────────────
 
-const VALIDATE_VERDICTS = ["READY_FOR_REVIEW", "NEEDS_FIXES"] as const;
+const VALIDATE_VERDICTS = ["PASS", "NEEDS_FIXES"] as const;
 const REVIEW_VERDICTS = ["APPROVED_WITH_SUGGESTIONS", "APPROVED", "CHANGES_REQUIRED"] as const;
 
 /**
@@ -105,7 +98,7 @@ export function parseReviewFindings(output: string): ReviewIssue[] {
 /**
  * Decides what to do after the validate stage completes.
  *
- * - READY_FOR_REVIEW → continue
+ * - PASS → continue
  * - NEEDS_FIXES, retryCount < maxRetries → retry impl with feedback
  * - NEEDS_FIXES, retryCount >= maxRetries → fail
  * - unknown verdict → fail (agent did not produce parseable output)
@@ -115,7 +108,7 @@ export function decideAfterValidate(
   retryCount: number,
   maxRetries: number,
 ): RetryDecision {
-  if (outcome.verdict === "READY_FOR_REVIEW") {
+  if (outcome.verdict === "PASS") {
     return { action: "continue", reason: "Validation passed" };
   }
 

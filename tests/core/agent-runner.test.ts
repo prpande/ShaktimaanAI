@@ -4,6 +4,9 @@ import { join } from "path";
 import { tmpdir } from "os";
 import {
   buildSystemPrompt,
+  buildAgentSystemPrompt,
+  buildAgentUserPrompt,
+  filterMcpToolsByTaskNeeds,
   resolveToolPermissions,
   resolveMaxTurns,
   resolveTimeoutMinutes,
@@ -284,5 +287,171 @@ describe("resolveTimeoutMinutes", () => {
     const config = makeConfig();
     const result = resolveTimeoutMinutes("unknown-stage", config);
     expect(result).toBe(30);
+  });
+});
+
+// ─── buildAgentSystemPrompt ──────────────────────────────────────────────────
+
+describe("buildAgentSystemPrompt", () => {
+  beforeAll(() => {
+    writeAgentMd("questions", "# Ask good questions\nGather information.");
+    writeAgentMd("validate", "# Validate\nRun tests.");
+  });
+
+  it("includes identity and agent instructions", () => {
+    const result = buildAgentSystemPrompt(makeOptions());
+    expect(result).toContain("questions agent");
+    expect(result).toContain("Ask good questions");
+  });
+
+  it("does NOT include task content or previous output", () => {
+    const result = buildAgentSystemPrompt(makeOptions({
+      taskContent: "Build a feature",
+      previousOutput: "Research findings here",
+    }));
+    expect(result).not.toContain("Build a feature");
+    expect(result).not.toContain("Research findings here");
+  });
+
+  it("includes pipeline context with stage list", () => {
+    const result = buildAgentSystemPrompt(makeOptions());
+    expect(result).toContain("Stage: questions");
+    expect(result).toContain("my-task");
+  });
+});
+
+// ─── buildAgentUserPrompt ────────────────────────────────────────────────────
+
+describe("buildAgentUserPrompt", () => {
+  beforeAll(() => {
+    writeAgentMd("questions", "# Ask questions");
+    writeAgentMd("design", "# Design");
+    writeAgentMd("validate", "# Validate");
+  });
+
+  it("includes task content when includeTaskContent is true", () => {
+    const result = buildAgentUserPrompt(makeOptions({
+      stage: "questions",
+      taskContent: "Build a feature",
+    }));
+    expect(result).toContain("Build a feature");
+  });
+
+  it("excludes task content when includeTaskContent is false", () => {
+    // research has includeTaskContent: false
+    writeAgentMd("research", "# Research");
+    const result = buildAgentUserPrompt(makeOptions({
+      stage: "research",
+      taskContent: "Build a feature",
+    }));
+    expect(result).not.toContain("Build a feature");
+  });
+
+  it("excludes previous output when previousOutputLabel is null", () => {
+    // questions has previousOutputLabel: null
+    const result = buildAgentUserPrompt(makeOptions({
+      stage: "questions",
+      previousOutput: "Should not appear",
+    }));
+    expect(result).not.toContain("Should not appear");
+  });
+
+  it("includes previous output when previousOutputLabel is set", () => {
+    const result = buildAgentUserPrompt(makeOptions({
+      stage: "design",
+      previousOutput: "Research findings",
+    }));
+    expect(result).toContain("Research findings");
+    expect(result).toContain("Research Findings"); // the label
+  });
+
+  it("uses repoSummary when useRepoSummary is set and summary exists", () => {
+    const result = buildAgentUserPrompt(makeOptions({
+      stage: "validate",
+      repoSummary: "npm test runs vitest",
+    }));
+    expect(result).toContain("npm test runs vitest");
+  });
+
+  it("falls back to gatherRepoContext when useRepoSummary is set but no summary", () => {
+    // validate has useRepoSummary: true, includeRepoContext: false
+    // with no repoSummary, should still get repo context via fallback
+    mkdirSync(REPO_DIR, { recursive: true });
+    writeFileSync(join(REPO_DIR, "package.json"), '{"name":"test"}', "utf-8");
+    const taskContent = `# Task: test\n\n## What I want done\ntest\n\n## Repo\n${REPO_DIR}\n\n## Pipeline Config\nstages: validate\nreview_after: design\n`;
+    const result = buildAgentUserPrompt(makeOptions({
+      stage: "validate",
+      taskContent,
+      repoSummary: undefined,
+    }));
+    expect(result).toContain("Repo Context");
+  });
+});
+
+// ─── filterMcpToolsByTaskNeeds ───────────────────────────────────────────────
+
+describe("filterMcpToolsByTaskNeeds", () => {
+  const allTools = [
+    "Read", "Glob", "Grep", "Bash",
+    "mcp__claude_ai_Slack__slack_read_channel",
+    "mcp__claude_ai_Slack__slack_send_message",
+    "mcp__plugin_notion_notion__notion-search",
+    "mcp__plugin_figma_figma__get_design_context",
+  ];
+
+  it("passes all tools through when requiredMcpServers is empty", () => {
+    expect(filterMcpToolsByTaskNeeds(allTools, [])).toEqual(allTools);
+  });
+
+  it("passes all tools through when requiredMcpServers is undefined", () => {
+    expect(filterMcpToolsByTaskNeeds(allTools, undefined)).toEqual(allTools);
+  });
+
+  it("keeps only Slack MCP tools when task needs only slack", () => {
+    const result = filterMcpToolsByTaskNeeds(allTools, ["slack"]);
+    expect(result).toContain("Read");
+    expect(result).toContain("mcp__claude_ai_Slack__slack_read_channel");
+    expect(result).toContain("mcp__claude_ai_Slack__slack_send_message");
+    expect(result).not.toContain("mcp__plugin_notion_notion__notion-search");
+    expect(result).not.toContain("mcp__plugin_figma_figma__get_design_context");
+  });
+
+  it("keeps Slack and Notion when task needs both", () => {
+    const result = filterMcpToolsByTaskNeeds(allTools, ["slack", "notion"]);
+    expect(result).toContain("mcp__claude_ai_Slack__slack_read_channel");
+    expect(result).toContain("mcp__plugin_notion_notion__notion-search");
+    expect(result).not.toContain("mcp__plugin_figma_figma__get_design_context");
+  });
+
+  it("handles wildcard tool patterns", () => {
+    const tools = ["Read", "mcp__claude_ai_Slack__*", "mcp__plugin_notion_notion__*"];
+    const result = filterMcpToolsByTaskNeeds(tools, ["slack"]);
+    expect(result).toEqual(["Read", "mcp__claude_ai_Slack__*"]);
+  });
+
+  it("always keeps non-MCP tools", () => {
+    const result = filterMcpToolsByTaskNeeds(allTools, ["figma"]);
+    expect(result).toContain("Read");
+    expect(result).toContain("Glob");
+    expect(result).toContain("Grep");
+    expect(result).toContain("Bash");
+  });
+
+  it("adds MCP tools for required servers not in original allowedTools", () => {
+    // impl stage has no MCP tools by default
+    const implTools = ["Read", "Write", "Edit", "Bash", "Glob", "Grep"];
+    const result = filterMcpToolsByTaskNeeds(implTools, ["notion", "figma"]);
+    expect(result).toContain("Read");
+    expect(result).toContain("Write");
+    expect(result).toContain("mcp__plugin_notion_notion__*");
+    expect(result).toContain("mcp__plugin_figma_figma__*");
+    expect(result).not.toContain("mcp__claude_ai_Slack__*");
+  });
+
+  it("does not duplicate MCP patterns already present", () => {
+    const tools = ["Read", "mcp__claude_ai_Slack__slack_read_channel"];
+    const result = filterMcpToolsByTaskNeeds(tools, ["slack"]);
+    expect(result).toEqual(["Read", "mcp__claude_ai_Slack__slack_read_channel"]);
+    // Should NOT add mcp__claude_ai_Slack__* since a Slack tool is already present
   });
 });
