@@ -98,6 +98,7 @@ export function resolveConfig(parsed: ConfigParsed): ResolvedConfig {
       retryCount: parsed.agents?.retryCount ?? da.retryCount,
       maxValidateRetries: parsed.agents?.maxValidateRetries ?? da.maxValidateRetries,
       maxSuggestionRetriesPerCycle: parsed.agents?.maxSuggestionRetriesPerCycle ?? da.maxSuggestionRetriesPerCycle,
+      maxReviewRetries: parsed.agents?.maxReviewRetries ?? da.maxReviewRetries,
       tools: { ...da.tools, ...parsed.agents?.tools },
       models: { ...da.models, ...parsed.agents?.models },
     },

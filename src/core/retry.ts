@@ -165,7 +165,16 @@ export function decideAfterReview(
   currentIteration: number,
   suggestionRetryUsed: boolean,
   enforceSuggestions: boolean,
+  maxReviewRetries: number = 5,
 ): RetryDecision {
+  // Hard cap: counter-based, independent of issue tracking
+  if (currentIteration > maxReviewRetries) {
+    return {
+      action: "fail",
+      reason: `Review retry limit (${maxReviewRetries}) exceeded — ${currentIteration} iterations without approval`,
+    };
+  }
+
   if (outcome.verdict === "APPROVED") {
     return { action: "continue", reason: "Review approved" };
   }

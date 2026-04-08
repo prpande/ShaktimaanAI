@@ -151,9 +151,14 @@ export function createWatcher(options: WatcherOptions): Watcher {
         logger.warn("[watcher] Slack DM polling enabled but no dmUserIds configured — skipping DMs");
       }
 
+      // Truncate slack-io stream file to prevent unbounded growth
+      try {
+        writeFileSync(join(runtimeDir, "slack-io-output-stream.jsonl"), "", "utf-8");
+      } catch { /* swallow — file may not exist yet */ }
+
       // Spawn Narada
       const abortController = new AbortController();
-      await runner({
+      const naradaResult = await runner({
         stage: "slack-io",
         slug: "slack-io-poll",
         taskContent: JSON.stringify(payload, null, 2),
@@ -164,6 +169,24 @@ export function createWatcher(options: WatcherOptions): Watcher {
         abortController,
         logger: { info() {}, warn() {}, error() {} },
       });
+
+      // Log Narada completion for budget tracking
+      try {
+        const { appendDailyLogEntry } = await import("./interactions.js");
+        appendDailyLogEntry(join(runtimeDir, "interactions"), {
+          timestamp: new Date().toISOString(),
+          type: "agent_completed",
+          slug: "slack-io-poll",
+          stage: "slack-io",
+          agentName: config.agents.names["slackIO"] ?? "Narada",
+          model: config.agents.models?.["slack-io"] ?? "haiku",
+          durationSeconds: Math.round(naradaResult.durationMs / 1000),
+          costUsd: naradaResult.costUsd,
+          inputTokens: naradaResult.inputTokens,
+          outputTokens: naradaResult.outputTokens,
+          success: naradaResult.success,
+        });
+      } catch { /* swallow */ }
 
       // Post-process inbox
       const inboxEntries = readInbox(runtimeDir);
@@ -207,7 +230,7 @@ export function createWatcher(options: WatcherOptions): Watcher {
           source: "slack",
         };
 
-        const triageResult = await runAstraTriage(astraInput, runner, config, logger);
+        const triageResult = await runAstraTriage(astraInput, runner, config, logger, entry.ts);
 
         if (!triageResult) {
           notifySlackError(
@@ -218,6 +241,12 @@ export function createWatcher(options: WatcherOptions): Watcher {
           logger.warn(`[watcher] Astra triage failed for message ${entry.ts}`);
           continue;
         }
+
+        // Persist triage result for audit trail
+        try {
+          const triageFile = join(runtimeDir, "astra-responses", `triage-${entry.ts.replace(".", "-")}.json`);
+          writeFileSync(triageFile, JSON.stringify(triageResult, null, 2), "utf-8");
+        } catch { /* swallow */ }
 
         switch (triageResult.action) {
           case "control_command": {
@@ -255,6 +284,12 @@ export function createWatcher(options: WatcherOptions): Watcher {
                 logger: { info() {}, warn() {}, error() {} },
               });
 
+              // Track conversation thread BEFORE checking success — always register the thread
+              const answerThreadTs = entry.thread_ts ?? entry.ts;
+              const threadMap = loadThreadMap(runtimeDir);
+              threadMap[`astra-${entry.ts.replace(".", "-")}`] = answerThreadTs;
+              saveThreadMap(runtimeDir, threadMap);
+
               if (executeResult.success && executeResult.output) {
                 writeOutboxEntry(
                   entry.channel,
@@ -271,11 +306,6 @@ export function createWatcher(options: WatcherOptions): Watcher {
                   `I ran into a problem while working on that — ${executeResult.error ?? "unknown error"}. Let me know if you'd like me to try again.`,
                 );
               }
-              // Track conversation thread so follow-up replies are visible
-              const answerThreadTs = entry.thread_ts ?? entry.ts;
-              const threadMap = loadThreadMap(runtimeDir);
-              threadMap[`astra-${entry.ts.replace(".", "-")}`] = answerThreadTs;
-              saveThreadMap(runtimeDir, threadMap);
 
               logger.info(`[watcher] Astra: answered message ${entry.ts} directly`);
             } catch (err: unknown) {

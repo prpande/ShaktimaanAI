@@ -137,6 +137,7 @@ export interface ShkmnConfig {
     retryCount: number;
     maxValidateRetries: number;
     maxSuggestionRetriesPerCycle: number;
+    maxReviewRetries: number;
     tools: Record<string, { allowed?: string[]; disallowed?: string[] }>;
     models: Record<string, string>;
   };
@@ -229,6 +230,7 @@ export const DEFAULT_CONFIG: ShkmnConfig = {
     retryCount: 1,
     maxValidateRetries: 2,
     maxSuggestionRetriesPerCycle: 1,
+    maxReviewRetries: 5,
     tools: {},
     models: {
       questions: "sonnet",

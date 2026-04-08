@@ -57,6 +57,7 @@ export interface RunState {
   pausedAtStage?: string;
   holdReason?: "budget_exhausted" | "approval_required" | "user_paused";
   holdDetail?: string;
+  budgetResetAtIndex?: number;
 
   // Token optimization: Astra-determined MCP requirements and repo summary
   requiredMcpServers?: string[];
