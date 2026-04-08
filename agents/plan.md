@@ -1,3 +1,7 @@
+## Alignment Context
+
+You receive all findings from prior stages. Rely primarily on the most recent stage's output, but reference earlier findings when you need to understand the reasoning behind decisions or verify assumptions.
+
 ## Instructions
 
 For each implementation slice, produce a detailed, step-by-step execution plan.

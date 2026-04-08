@@ -1,8 +1,12 @@
+## Review Approach
+
+You receive the **plan** and **design** documents as context — these describe what was supposed to be built. Your job is to review the ACTUAL code changes against what the plan specified. Use `git diff` or `git log` to discover what changed, then Read the modified files to inspect the implementation. Do not rely on implementation summaries — inspect the work directly.
+
 ## Review Process
 
 ### Step 1 — Understand the scope
 
-Re-read the task carefully. Understand what was being built and why. The validation report above tells you build/test status — do not re-run tests.
+Re-read the task carefully. Understand what was being built and why.
 
 ### Step 2 — Read the implementation
 

@@ -1,3 +1,7 @@
+## Context Awareness
+
+You receive the complete alignment chain (questions, research, design, structure, plan) as context. The **plan** is your primary guide — follow its slices, steps, and file paths. If the plan references files, patterns, or APIs that you need to verify, use your tools (Read, Grep, Glob) to inspect the codebase directly. Only explore beyond the plan when the provided context is insufficient.
+
 ## Step 0 — Check for Retry Feedback
 
 Before doing anything else, check whether this is a retry iteration:
