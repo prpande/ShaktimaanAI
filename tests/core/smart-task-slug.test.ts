@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach } from "vitest";
-import { mkdirSync, rmSync, readFileSync, existsSync } from "node:fs";
+import { mkdirSync, rmSync } from "node:fs";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 
@@ -7,7 +7,6 @@ import { configSchema } from "../../src/config/schema.js";
 import { resolveConfig } from "../../src/config/loader.js";
 import {
   type CreateTaskInput,
-  extractTitle,
   generateSlug,
   buildTaskFileContent,
   createTask,
@@ -126,6 +125,45 @@ describe("createTask prefers taskTitle", () => {
     const slug = createTask(input, TEST_DIR, config);
 
     expect(slug).toMatch(/^fix-the-login-bug-\d{14}$/);
+  });
+
+  it("falls back to extractTitle when taskTitle is empty string", () => {
+    const config = makeConfig();
+    const input: CreateTaskInput = {
+      source: "slack",
+      content: "Fix the login bug",
+      taskTitle: "",
+    };
+
+    const slug = createTask(input, TEST_DIR, config);
+
+    expect(slug).toMatch(/^fix-the-login-bug-\d{14}$/);
+  });
+
+  it("falls back to extractTitle when taskTitle is whitespace-only", () => {
+    const config = makeConfig();
+    const input: CreateTaskInput = {
+      source: "slack",
+      content: "Fix the login bug",
+      taskTitle: "   ",
+    };
+
+    const slug = createTask(input, TEST_DIR, config);
+
+    expect(slug).toMatch(/^fix-the-login-bug-\d{14}$/);
+  });
+
+  it("strips newlines from taskTitle", () => {
+    const config = makeConfig();
+    const input: CreateTaskInput = {
+      source: "slack",
+      content: "Some long message",
+      taskTitle: "fix auth\ntoken refresh",
+    };
+
+    const slug = createTask(input, TEST_DIR, config);
+
+    expect(slug).toMatch(/^fix-auth-token-refresh-\d{14}$/);
   });
 });
 

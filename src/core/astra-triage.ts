@@ -13,7 +13,7 @@ const triageResultSchema = z.object({
     "resume", "modify_stages", "restart_stage", "retry",
   ]).nullable().optional(),
   extractedSlug: z.string().nullable().optional(),
-  taskTitle: z.string().nullable().optional(),
+  taskTitle: z.string().trim().min(1).nullable().optional(),
   recommendedStages: z.array(z.string()).nullable().optional(),
   stageHints: z.record(z.string(), z.string()).nullable().optional(),
   enrichedContext: z.string().nullable().optional(),

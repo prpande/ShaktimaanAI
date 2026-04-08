@@ -98,7 +98,8 @@ export function buildTaskFileContent(
   enrichedContext?: string,
   repoSummary?: string,
 ): string {
-  const title = input.taskTitle ?? extractTitle(input.content);
+  const sanitized = input.taskTitle?.trim().replace(/[\r\n]+/g, " ").slice(0, 80);
+  const title = sanitized && sanitized.length > 0 ? sanitized : extractTitle(input.content);
   const stages =
     input.stages && input.stages.length > 0
       ? normalizeStages(input.stages).join(", ")
@@ -174,7 +175,8 @@ export function createTask(
   enrichedContext?: string,
   repoSummary?: string,
 ): string {
-  const title = input.taskTitle ?? extractTitle(input.content);
+  const sanitized = input.taskTitle?.trim().replace(/[\r\n]+/g, " ").slice(0, 80);
+  const title = sanitized && sanitized.length > 0 ? sanitized : extractTitle(input.content);
   const slug = generateSlug(title);
   const content = buildTaskFileContent(input, config, enrichedContext, repoSummary);
   const filePath = join(runtimeDir, "00-inbox", `${slug}.task`);
