@@ -104,10 +104,24 @@ export function registerStartCommand(program: Command): void {
               `If this is stale, delete ${pidFile} and retry.`,
             );
             process.exit(1);
-          } catch {
-            // Process is dead — stale PID file, safe to overwrite
-            logger.warn(`[startup] Removed stale PID file (PID ${existingPid} is not running)`);
-            unlinkSync(pidFile);
+          } catch (error) {
+            const code = (error as NodeJS.ErrnoException).code;
+            if (code === "ESRCH") {
+              // Process is dead — stale PID file, safe to overwrite
+              logger.warn(`[startup] Removed stale PID file (PID ${existingPid} is not running)`);
+              unlinkSync(pidFile);
+            } else if (code === "EPERM") {
+              // Process exists but cannot be signaled — treat as already running
+              console.error(
+                `Pipeline already running (PID ${existingPid}). ` +
+                `If this is stale, delete ${pidFile} and retry.`,
+              );
+              process.exit(1);
+            } else {
+              // Unknown error — remove stale file (fail-safe for Windows)
+              logger.warn(`[startup] Removed stale PID file (PID ${existingPid}, signal check error: ${code})`);
+              unlinkSync(pidFile);
+            }
           }
         } else {
           // Malformed PID file — remove it

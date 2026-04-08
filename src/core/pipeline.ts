@@ -932,7 +932,9 @@ export function createPipeline(options: PipelineOptions): Pipeline {
 
       // Guard: budget/pause holds mean the stage was interrupted — resume at current stage
       if (state.holdReason === "budget_exhausted" || state.holdReason === "user_paused") {
-        state.budgetResetAtIndex = state.completedStages.length;
+        if (state.holdReason === "budget_exhausted") {
+          state.budgetResetAtIndex = state.completedStages.length;
+        }
         delete state.holdReason;
         delete state.holdDetail;
         delete state.pausedAtStage;

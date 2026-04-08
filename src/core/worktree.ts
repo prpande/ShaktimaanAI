@@ -54,7 +54,7 @@ export function createWorktree(
       worktreePath,
       createdAt: new Date().toISOString(),
     });
-  } catch { /* log but don't fail worktree creation */ }
+  } catch { /* intentionally ignore manifest write failures to avoid failing worktree creation */ }
 
   return worktreePath;
 }

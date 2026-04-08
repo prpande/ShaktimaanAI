@@ -294,12 +294,10 @@ describe("6a-4: retry/fail stages log agent_completed", () => {
       ],
     });
 
-    let callCount = 0;
     const pipeline = createPipeline({
       config,
       registry: createAgentRegistry(config.agents.maxConcurrentTotal),
       runner: async (opts: AgentRunOptions) => {
-        callCount++;
         if (opts.stage === "review") {
           return successResult({
             output: "[R1] MUST_FIX: Error\n\n**Verdict:** CHANGES_REQUIRED",
@@ -319,15 +317,15 @@ describe("6a-4: retry/fail stages log agent_completed", () => {
     const interactionsDir = join(TEST_DIR, "interactions");
     const todayStr = new Date().toISOString().slice(0, 10);
     const logPath = join(interactionsDir, `${todayStr}.jsonl`);
-    if (existsSync(logPath)) {
-      const lines = readFileSync(logPath, "utf-8").trim().split("\n");
-      const entries = lines.map(l => JSON.parse(l));
-      const completedEntries = entries.filter(
-        (e: any) => e.type === "agent_completed" && e.stage === "review",
-      );
-      // Should have at least one agent_completed for the retried review
-      expect(completedEntries.length).toBeGreaterThanOrEqual(1);
-    }
+    expect(existsSync(logPath)).toBe(true);
+
+    const lines = readFileSync(logPath, "utf-8").trim().split("\n");
+    const entries = lines.map(l => JSON.parse(l));
+    const completedEntries = entries.filter(
+      (e: any) => e.type === "agent_completed" && e.stage === "review",
+    );
+    // Should have at least one agent_completed for the retried review
+    expect(completedEntries.length).toBeGreaterThanOrEqual(1);
   });
 });
 
