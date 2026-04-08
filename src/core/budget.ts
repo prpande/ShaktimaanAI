@@ -139,9 +139,11 @@ export function aggregateWeeklyTokens(
 export function aggregateTaskTokens(
   completedStages: CompletedStage[],
   model: string,
+  startIndex: number = 0,
 ): number {
   let total = 0;
-  for (const stage of completedStages) {
+  for (let i = startIndex; i < completedStages.length; i++) {
+    const stage = completedStages[i];
     if (stage.model !== model) continue;
     total += (stage.inputTokens ?? 0) + (stage.outputTokens ?? 0);
   }

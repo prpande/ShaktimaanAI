@@ -65,6 +65,7 @@ export async function runAstraTriage(
   runAgentFn: AgentRunnerFn,
   config: ResolvedConfig,
   logger: Logger,
+  messageTs?: string,
 ): Promise<AstraTriageResult | null> {
   const taskContent = [
     `## Incoming Message`,
@@ -86,7 +87,7 @@ export async function runAstraTriage(
       slug: "astra-triage",
       taskContent,
       previousOutput: "",
-      outputPath: join(config.pipeline.runtimeDir, "astra-responses", "triage-output.md"),
+      outputPath: join(config.pipeline.runtimeDir, "astra-responses", `triage-${messageTs?.replace(".", "-") ?? "output"}-output.md`),
       cwd: process.cwd(),
       config,
       logger,

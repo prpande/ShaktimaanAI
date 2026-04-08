@@ -323,6 +323,9 @@ export function createPipeline(options: PipelineOptions): Pipeline {
   ): void {
     state.status = "failed";
     state.error = errorMsg;
+    delete state.holdReason;
+    delete state.holdDetail;
+    delete state.pausedAtStage;
     writeRunState(taskDir, state);
     try {
       moveTaskDir(runtimeDir, slug, fromSubdir, "11-failed");
@@ -543,7 +546,9 @@ export function createPipeline(options: PipelineOptions): Pipeline {
       const budgetContext: BudgetCheckContext = {
         interactionsDir,
         sessionTracker,
-        taskCompletedStages: state.completedStages,
+        taskCompletedStages: state.budgetResetAtIndex
+          ? state.completedStages.slice(state.budgetResetAtIndex)
+          : state.completedStages,
         today: new Date(),
       };
       const modelResolution = resolveModelForStage(stage, config, budgetConfig, budgetContext);
@@ -636,6 +641,7 @@ export function createPipeline(options: PipelineOptions): Pipeline {
             state.reviewRetryCount + 1,
             state.suggestionRetryUsed,
             config.review.enforceSuggestions,
+            config.agents.maxReviewRetries,
           );
         }
 
@@ -644,8 +650,32 @@ export function createPipeline(options: PipelineOptions): Pipeline {
         );
 
         if (decision.action === "fail") {
+          // Log completion for failed verdict stages — critical for budget accuracy
+          try {
+            appendDailyLogEntry(interactionsDir, {
+              timestamp: new Date().toISOString(),
+              type: "agent_completed",
+              slug,
+              stage,
+              agentName: config.agents.names[stage] ?? stage,
+              model: runOptions.model ?? "",
+              durationSeconds: Math.round(result.durationMs / 1000),
+              costUsd: result.costUsd,
+              inputTokens: result.inputTokens,
+              outputTokens: result.outputTokens,
+              artifactPath: `${stage}-output${outputSuffix}.md`,
+              agentStreamLog: result.streamLogPath ?? "",
+              success: true,
+              verdict,
+              retryAction: decision.action,
+            });
+          } catch { /* swallow */ }
+
           state.status = "failed";
           state.error = decision.reason;
+          delete state.holdReason;
+          delete state.holdDetail;
+          delete state.pausedAtStage;
           writeRunState(currentTaskDir, state);
           recordCompletionIfWorktree(state);
           moveTaskDir(
@@ -658,6 +688,27 @@ export function createPipeline(options: PipelineOptions): Pipeline {
         }
 
         if (decision.action === "retry") {
+          // Log completion even for retried stages — critical for budget accuracy
+          try {
+            appendDailyLogEntry(interactionsDir, {
+              timestamp: new Date().toISOString(),
+              type: "agent_completed",
+              slug,
+              stage,
+              agentName: config.agents.names[stage] ?? stage,
+              model: runOptions.model ?? "",
+              durationSeconds: Math.round(result.durationMs / 1000),
+              costUsd: result.costUsd,
+              inputTokens: result.inputTokens,
+              outputTokens: result.outputTokens,
+              artifactPath: `${stage}-output${outputSuffix}.md`,
+              agentStreamLog: result.streamLogPath ?? "",
+              success: true,
+              verdict,
+              retryAction: decision.action,
+            });
+          } catch { /* swallow */ }
+
           // Write feedback artifact for impl to read
           const retryCount = stage === "validate"
             ? state.validateFailCount + 1
@@ -878,6 +929,24 @@ export function createPipeline(options: PipelineOptions): Pipeline {
       }
 
       const state = readRunState(holdDir);
+
+      // Guard: budget/pause holds mean the stage was interrupted — resume at current stage
+      if (state.holdReason === "budget_exhausted" || state.holdReason === "user_paused") {
+        state.budgetResetAtIndex = state.completedStages.length;
+        delete state.holdReason;
+        delete state.holdDetail;
+        delete state.pausedAtStage;
+        state.status = "running";
+        writeRunState(holdDir, state);
+
+        const stageDir = STAGE_DIR_MAP[state.currentStage];
+        const nextDir = moveTaskDir(runtimeDir, slug, "12-hold", join(stageDir, "pending"));
+        activeRuns.set(slug, state);
+        await processStage(slug, nextDir);
+        return;
+      }
+
+      // Original behavior: advance to next stage (for approval_required holds)
       const nextStage = getNextStage(state.currentStage, state.stages);
 
       if (nextStage === null) {
@@ -1008,10 +1077,11 @@ export function createPipeline(options: PipelineOptions): Pipeline {
 
       // Budget-aware resume: re-check budget before allowing resume
       if (state.holdReason === "budget_exhausted") {
+        state.budgetResetAtIndex = state.completedStages.length;
         const budgetCtx: BudgetCheckContext = {
           interactionsDir,
           sessionTracker,
-          taskCompletedStages: state.completedStages,
+          taskCompletedStages: state.completedStages.slice(state.budgetResetAtIndex),
           today: new Date(),
         };
         const resolution = resolveModelForStage(resumeStage, config, budgetConfig, budgetCtx);

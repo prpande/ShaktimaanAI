@@ -1,6 +1,6 @@
 import { execFileSync } from "node:child_process";
 import { mkdirSync, existsSync, readFileSync, writeFileSync } from "node:fs";
-import { join } from "node:path";
+import { join, dirname } from "node:path";
 
 export interface WorktreeInfo {
   path: string;
@@ -12,7 +12,8 @@ export interface WorktreeManifestEntry {
   slug: string;
   repoPath: string;
   worktreePath: string;
-  completedAt: string;
+  createdAt?: string;
+  completedAt?: string;
 }
 
 /**
@@ -43,6 +44,17 @@ export function createWorktree(
     cwd: repoPath,
     stdio: "pipe",
   });
+
+  // Record creation in manifest
+  const manifestPath = join(dirname(worktreesDir), "worktree-manifest.json");
+  try {
+    recordWorktreeCreation(manifestPath, {
+      slug,
+      repoPath,
+      worktreePath,
+      createdAt: new Date().toISOString(),
+    });
+  } catch { /* log but don't fail worktree creation */ }
 
   return worktreePath;
 }
@@ -122,6 +134,38 @@ export function listWorktrees(repoPath: string): WorktreeInfo[] {
   return result;
 }
 
+// ─── Manifest helpers ──────────────────────────────────────────────────────
+
+function readManifest(manifestPath: string): WorktreeManifestEntry[] {
+  try {
+    return JSON.parse(readFileSync(manifestPath, "utf-8")) as WorktreeManifestEntry[];
+  } catch {
+    return [];
+  }
+}
+
+function writeManifest(manifestPath: string, entries: WorktreeManifestEntry[]): void {
+  writeFileSync(manifestPath, JSON.stringify(entries, null, 2), "utf-8");
+}
+
+/**
+ * Records a worktree creation entry in the manifest file.
+ * Creates the manifest if it doesn't exist.
+ */
+export function recordWorktreeCreation(
+  manifestPath: string,
+  entry: { slug: string; repoPath: string; worktreePath: string; createdAt: string },
+): void {
+  const entries = readManifest(manifestPath);
+  const idx = entries.findIndex(e => e.slug === entry.slug);
+  if (idx !== -1) {
+    entries[idx] = { ...entries[idx], ...entry };
+  } else {
+    entries.push(entry);
+  }
+  writeManifest(manifestPath, entries);
+}
+
 /**
  * Records a worktree completion entry in the manifest file.
  * Creates the manifest if it doesn't exist. Overwrites existing entry for the same slug.
@@ -130,24 +174,14 @@ export function recordWorktreeCompletion(
   manifestPath: string,
   entry: WorktreeManifestEntry,
 ): void {
-  let entries: WorktreeManifestEntry[] = [];
-  if (existsSync(manifestPath)) {
-    try {
-      entries = JSON.parse(readFileSync(manifestPath, "utf-8")) as WorktreeManifestEntry[];
-    } catch {
-      entries = [];
-    }
-  }
-
-  // Replace existing entry for same slug or append
+  const entries = readManifest(manifestPath);
   const idx = entries.findIndex(e => e.slug === entry.slug);
   if (idx !== -1) {
-    entries[idx] = entry;
+    entries[idx] = { ...entries[idx], ...entry };
   } else {
     entries.push(entry);
   }
-
-  writeFileSync(manifestPath, JSON.stringify(entries, null, 2), "utf-8");
+  writeManifest(manifestPath, entries);
 }
 
 /**
@@ -155,14 +189,8 @@ export function recordWorktreeCompletion(
  * Returns an array of worktree paths that were removed.
  */
 export function cleanupExpired(manifestPath: string, retentionDays: number): string[] {
-  if (!existsSync(manifestPath)) return [];
-
-  let entries: WorktreeManifestEntry[];
-  try {
-    entries = JSON.parse(readFileSync(manifestPath, "utf-8")) as WorktreeManifestEntry[];
-  } catch {
-    return [];
-  }
+  const entries = readManifest(manifestPath);
+  if (entries.length === 0) return [];
 
   const cutoff = new Date();
   cutoff.setDate(cutoff.getDate() - retentionDays);
@@ -171,6 +199,10 @@ export function cleanupExpired(manifestPath: string, retentionDays: number): str
   const remaining: WorktreeManifestEntry[] = [];
 
   for (const entry of entries) {
+    if (!entry.completedAt) {
+      remaining.push(entry);
+      continue;
+    }
     const completedAt = new Date(entry.completedAt);
     if (completedAt < cutoff) {
       removeWorktree(entry.repoPath, entry.worktreePath, entry.slug);
@@ -180,6 +212,6 @@ export function cleanupExpired(manifestPath: string, retentionDays: number): str
     }
   }
 
-  writeFileSync(manifestPath, JSON.stringify(remaining, null, 2), "utf-8");
+  writeManifest(manifestPath, remaining);
   return removed;
 }
