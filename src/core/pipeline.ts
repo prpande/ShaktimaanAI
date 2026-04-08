@@ -22,6 +22,12 @@ export { STAGE_DIR_MAP, DIR_STAGE_MAP };
 
 // ─── Scoped Artifact Collection ────────────────────────────────────────────
 
+/** Extract retry number from artifact filename. Base "foo-output.md" = 0, "foo-output-r2.md" = 2. */
+function parseRetryNum(filename: string): number {
+  const m = filename.match(/-r(\d+)\.md$/);
+  return m ? parseInt(m[1], 10) : 0;
+}
+
 /**
  * Collects artifact files for a stage based on STAGE_ARTIFACT_RULES.
  * Replaces the old blanket concatenation of all .md files.
@@ -43,33 +49,54 @@ export function collectArtifacts(
   }
 
   if (rules.mode === 'specific') {
-    // For each prefix, pick only the latest file (highest retry suffix or base).
-    // Files are sorted alphabetically, so "impl-output-r2.md" > "impl-output.md".
-    const latestByPrefix = new Map<string, string>();
+    // For each prefix, pick only the latest file (highest retry number).
+    // Base "impl-output.md" = retry 0, "impl-output-r2.md" = retry 2.
+    const latestByPrefix = new Map<string, { file: string; retry: number }>();
     for (const f of files) {
       const matchedPrefix = rules.specificFiles!.find(prefix => f.startsWith(prefix));
       if (matchedPrefix) {
-        latestByPrefix.set(matchedPrefix, f); // sorted order → last wins
+        const retryNum = parseRetryNum(f);
+        const current = latestByPrefix.get(matchedPrefix);
+        if (!current || retryNum > current.retry) {
+          latestByPrefix.set(matchedPrefix, { file: f, retry: retryNum });
+        }
       }
     }
     return Array.from(latestByPrefix.values())
-      .map(f => readFileSync(join(artifactsDir, f), 'utf-8'))
+      .map(({ file }) => readFileSync(join(artifactsDir, file), 'utf-8'))
       .join('\n');
   }
 
-  // mode === 'all_prior': only include outputs from stages before current
+  // mode === 'all_prior': only include outputs from stages before current.
+  // Dedup per prior stage — pick only the latest retry for each.
   const stageIdx = stages.indexOf(stage);
   if (stageIdx <= 0) return '';
   const priorStages = new Set(stages.slice(0, stageIdx));
 
-  return files
-    .filter(f => {
-      if (rules.includeRetryFeedback && f.startsWith('retry-feedback-')) return true;
-      // Match "{stage}-output.md" or "{stage}-output-r1.md"
-      // Use greedy match up to the last "-output" to handle hyphenated stage names
-      const stageMatch = f.match(/^(.+)-output/);
-      return stageMatch ? priorStages.has(stageMatch[1]) : false;
-    })
+  const latestPerStage = new Map<string, { file: string; retry: number }>();
+  const retryFeedbackFiles: string[] = [];
+
+  for (const f of files) {
+    if (rules.includeRetryFeedback && f.startsWith('retry-feedback-')) {
+      retryFeedbackFiles.push(f);
+      continue;
+    }
+    const stageMatch = f.match(/^(.+)-output/);
+    if (!stageMatch || !priorStages.has(stageMatch[1])) continue;
+    const stageName = stageMatch[1];
+    const retryNum = parseRetryNum(f);
+    const current = latestPerStage.get(stageName);
+    if (!current || retryNum > current.retry) {
+      latestPerStage.set(stageName, { file: f, retry: retryNum });
+    }
+  }
+
+  const outputFiles = [
+    ...Array.from(latestPerStage.values()).map(({ file }) => file),
+    ...retryFeedbackFiles,
+  ].sort();
+
+  return outputFiles
     .map(f => readFileSync(join(artifactsDir, f), 'utf-8'))
     .join('\n');
 }

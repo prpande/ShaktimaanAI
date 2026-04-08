@@ -1130,4 +1130,22 @@ describe("collectArtifacts", () => {
   it("returns empty for non-existent directory", () => {
     expect(collectArtifacts("/nonexistent", "design", stages)).toBe("");
   });
+
+  it("picks latest retry artifact over base in specific mode", () => {
+    writeFileSync(join(artifactsDir, "impl-output-r1.md"), "I retry 1", "utf-8");
+    writeFileSync(join(artifactsDir, "impl-output-r2.md"), "I retry 2", "utf-8");
+    const result = collectArtifacts(artifactsDir, "pr", stages);
+    expect(result).toContain("I retry 2");
+    expect(result).not.toContain("I output");
+    expect(result).not.toContain("I retry 1");
+    expect(result).toContain("Rev output");
+  });
+
+  it("picks latest retry artifact over base in all_prior mode", () => {
+    writeFileSync(join(artifactsDir, "research-output-r1.md"), "R retry 1", "utf-8");
+    const result = collectArtifacts(artifactsDir, "design", stages);
+    expect(result).toContain("Q output");
+    expect(result).toContain("R retry 1");
+    expect(result).not.toContain("R output");
+  });
 });
