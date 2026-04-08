@@ -30,6 +30,14 @@ Your task content is a JSON payload with `outbox`, `inbound`, `approvalChecks`, 
 3. If found, write to `files.inbox`:
    `{"ts": "<ts>", "text": "<text>", "user": "<user>", "thread_ts": "<thread_ts>", "channel": "<channel>", "isApproval": true, "slug": "<slug>"}`
 
+## Step 3b — Check Conversation Threads
+
+1. For each entry in `conversationChecks`, call `mcp__claude_ai_Slack__slack_read_thread` with `channel_id` = `inbound.channelId` and `message_ts` = entry.thread_ts
+2. Skip replies where `text` starts with `outboundPrefix` (pipeline's own messages)
+3. For each new user reply, write to `files.inbox`:
+   `{"ts": "<ts>", "text": "<text>", "user": "<user>", "thread_ts": "<thread_ts>", "channel": "<channel>"}`
+4. These are follow-up messages in threads where Astra previously answered — they will be triaged as new messages
+
 ## Step 4 — Update Cursor
 
 1. Read `files.cursor` (JSON with `channelTs` and `dmTs`)

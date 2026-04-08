@@ -11,7 +11,7 @@ import { type AgentRunnerFn } from "./types.js";
 import { stripPrefix } from "../surfaces/slack-surface.js";
 import { runAstraTriage, type AstraInput } from "./astra-triage.js";
 import { createTask } from "./task-creator.js";
-import { buildNaradaPayload, readInbox, clearInbox, readSentLog } from "./slack-queue.js";
+import { buildNaradaPayload, readInbox, clearInbox, readSentLog, loadThreadMap, saveThreadMap } from "./slack-queue.js";
 
 // ─── Control file schema ──────────────────────────────────────────────────────
 
@@ -270,6 +270,12 @@ export function createWatcher(options: WatcherOptions): Watcher {
                   `I ran into a problem while working on that — ${executeResult.error ?? "unknown error"}. Let me know if you'd like me to try again.`,
                 );
               }
+              // Track conversation thread so follow-up replies are visible
+              const answerThreadTs = entry.thread_ts ?? entry.ts;
+              const threadMap = loadThreadMap(runtimeDir);
+              threadMap[`astra-${entry.ts.replace(".", "-")}`] = answerThreadTs;
+              saveThreadMap(runtimeDir, threadMap);
+
               logger.info(`[watcher] Astra: answered message ${entry.ts} directly`);
             } catch (err: unknown) {
               notifySlackError(
