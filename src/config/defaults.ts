@@ -48,13 +48,52 @@ export const STAGE_CONTEXT_RULES: Record<string, {
   plan:      { includeTaskContent: false, previousOutputLabel: "Implementation Slices",    includeRepoContext: true },
   impl:      { includeTaskContent: true,  previousOutputLabel: "Implementation Plan",      includeRepoContext: true },
   review:    { includeTaskContent: true,  previousOutputLabel: "Implementation Output",   includeRepoContext: true },
-  validate:  { includeTaskContent: false, previousOutputLabel: "Review Output",            includeRepoContext: true },
+  validate:  { includeTaskContent: false, previousOutputLabel: "Review Output",            includeRepoContext: false },
   pr:        { includeTaskContent: true,  previousOutputLabel: "Review Output",            includeRepoContext: false },
   quick:     { includeTaskContent: true,  previousOutputLabel: null,                      includeRepoContext: true },
   "quick-triage": { includeTaskContent: true, previousOutputLabel: null,                 includeRepoContext: true },
   "quick-execute": { includeTaskContent: true, previousOutputLabel: null,                includeRepoContext: true },
   "slack-io": { includeTaskContent: true, previousOutputLabel: null,                      includeRepoContext: false },
 };
+
+// ─── Scoped artifact passing rules ──────────────────────────────────────────
+
+export interface StageArtifactRule {
+  mode: 'all_prior' | 'specific' | 'none';
+  specificFiles?: string[];
+  includeRetryFeedback?: boolean;
+  useRepoSummary?: boolean;
+}
+
+export const STAGE_ARTIFACT_RULES: Record<string, StageArtifactRule> = {
+  questions:       { mode: 'none' },
+  research:        { mode: 'all_prior' },
+  design:          { mode: 'all_prior' },
+  structure:       { mode: 'all_prior' },
+  plan:            { mode: 'all_prior' },
+  impl:            { mode: 'all_prior', includeRetryFeedback: true },
+  review:          { mode: 'specific', specificFiles: ['plan-output', 'design-output'] },
+  validate:        { mode: 'none', useRepoSummary: true },
+  pr:              { mode: 'specific', specificFiles: ['impl-output', 'review-output'] },
+  quick:           { mode: 'none' },
+  "quick-triage":  { mode: 'none' },
+  "quick-execute": { mode: 'none' },
+  "slack-io":      { mode: 'none' },
+};
+
+// ─── MCP tool prefix mapping ────────────────────────────────────────────────
+
+/**
+ * Maps short MCP server names to their tool name prefixes.
+ * Used to match Astra's requiredMcpServers against stage tool permissions.
+ */
+export const MCP_TOOL_PREFIXES: Record<string, string> = {
+  slack:  "mcp__claude_ai_Slack__",
+  notion: "mcp__plugin_notion_notion__",
+  figma:  "mcp__plugin_figma_figma__",
+};
+
+// ─── Config types ───────────────────────────────────────────────────────────
 
 export interface ShkmnConfig {
   pipeline: {
@@ -195,13 +234,13 @@ export const DEFAULT_CONFIG: ShkmnConfig = {
     tools: {},
     models: {
       questions: "sonnet",
-      research: "opus",
+      research: "sonnet",
       design: "opus",
       structure: "sonnet",
       plan: "opus",
       impl: "opus",
       review: "sonnet",
-      validate: "sonnet",
+      validate: "haiku",
       pr: "sonnet",
       "quick-triage": "haiku",
       quick: "haiku",
