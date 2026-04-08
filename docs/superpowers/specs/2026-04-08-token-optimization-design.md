@@ -235,7 +235,53 @@ Modify execution stage prompts to align with the new artifact passing strategy:
 **Alignment stage prompts (design, structure, plan) — add guidance:**
 > You receive all findings from prior stages. Rely primarily on the most recent stage's output, but reference earlier findings when you need to understand the reasoning behind decisions or verify assumptions.
 
-### 5. Prompt Architecture Refactor
+### 5. Stage Ordering Fix
+
+**Problem:** The canonical execution stage order is `impl → review → validate → pr`, but Astra (running on Haiku) sometimes recommends the old ordering (`impl → validate → review → pr`). Two root causes:
+
+1. **Misleading verdict name:** The validate stage emits `READY_FOR_REVIEW` on success — a name from when validate ran before review. This leaks into the quick-triage prompt context and confuses Haiku into thinking validate precedes review.
+2. **Weak ordering enforcement in the prompt:** The quick-triage prompt states the canonical order but doesn't strongly emphasize the execution stage sequence.
+
+**Fix — three layers:**
+
+**Layer 1: Rename validate verdict** (source-level fix)
+
+Rename `READY_FOR_REVIEW` → `PASS` across the codebase. This removes the misleading implication that review follows validate.
+
+| Verdict | Old Name | New Name |
+|---------|----------|----------|
+| validate success | `READY_FOR_REVIEW` | `PASS` |
+| validate failure | `NEEDS_FIXES` | `NEEDS_FIXES` (unchanged) |
+
+Files affected: `src/core/retry.ts` (verdict constants + `decideAfterValidate`), `agents/validate.md` (verdict output format), and test files.
+
+**Layer 2: Strengthen quick-triage prompt ordering**
+
+Replace the current ordering guidance in `agents/quick-triage.md` with explicit, unambiguous instructions:
+
+> **Execution stage order is FIXED:** `impl → review → validate → pr`. Review ALWAYS comes before validate. The review agent inspects code quality against the plan. The validate agent then runs build and tests. Never output validate before review.
+
+**Layer 3: Server-side stage ordering validation**
+
+Add a validation function in the triage response handler (in `src/commands/`) that enforces the canonical stage order. When Astra outputs `recommendedStages`, the handler checks and auto-corrects the order:
+
+```typescript
+const CANONICAL_ORDER = [
+  "questions", "research", "design", "structure", "plan",
+  "impl", "review", "validate", "pr",
+];
+
+function enforceStageOrder(stages: string[]): string[] {
+  const orderMap = new Map(CANONICAL_ORDER.map((s, i) => [s, i]));
+  return [...stages].sort((a, b) =>
+    (orderMap.get(a) ?? 999) - (orderMap.get(b) ?? 999)
+  );
+}
+```
+
+This is a safety net — if Astra outputs stages in wrong order, the pipeline auto-corrects silently. Logs a warning when correction occurs.
+
+### 6. Prompt Architecture Refactor
 
 **Current:** `buildSystemPrompt()` constructs one monolithic string passed as `prompt` (user message). The Claude Code system prompt loads separately with hooks adding more content.
 
@@ -282,9 +328,11 @@ This separation allows the system prompt to be cached across turns within a sing
 2. **`src/config/defaults.ts`** — Add `STAGE_ARTIFACT_RULES`, `MCP_SERVER_REGISTRY`, `MCP_TOOL_PREFIXES`. Update default models for research and validate.
 3. **`src/core/pipeline.ts`** — Replace artifact concatenation (lines 407-413) with `collectArtifacts()` function. Pass `requiredMcpServers` from `RunState` to agent runner.
 4. **`src/core/types.ts`** — Add `requiredMcpServers?: string[]` to `RunState` and `AgentRunOptions`.
-5. **`agents/quick-triage.md`** — Add `requiredMcpServers` to output format with detection guidance.
-6. **`agents/impl.md`** — Add guidance about relying on plan, exploring repo only when needed.
-7. **`agents/review.md`** — Add guidance about inspecting actual code via tools, not relying on impl summary.
-8. **`agents/design.md`**, **`agents/structure.md`**, **`agents/plan.md`** — Add guidance about using full alignment chain context.
-9. **`src/commands/`** — Update triage response parsing to extract and store `requiredMcpServers`.
-10. **Tests** — Update `agent-runner` and `pipeline` tests for new artifact passing, SDK options, and MCP resolution.
+5. **`src/core/retry.ts`** — Rename `READY_FOR_REVIEW` → `PASS` in verdict constants and `decideAfterValidate`.
+6. **`agents/quick-triage.md`** — Add `requiredMcpServers` to output format. Strengthen execution stage ordering guidance.
+7. **`agents/validate.md`** — Update verdict output from `READY_FOR_REVIEW` → `PASS`.
+8. **`agents/impl.md`** — Add guidance about relying on plan, exploring repo only when needed.
+9. **`agents/review.md`** — Add guidance about inspecting actual code via tools, not relying on impl summary.
+10. **`agents/design.md`**, **`agents/structure.md`**, **`agents/plan.md`** — Add guidance about using full alignment chain context.
+11. **`src/commands/`** — Update triage response parsing to extract `requiredMcpServers`, add `enforceStageOrder()` validation.
+12. **Tests** — Update `agent-runner`, `pipeline`, and `retry` tests for new artifact passing, SDK options, MCP resolution, verdict rename, and stage ordering.
