@@ -1037,6 +1037,12 @@ export function createPipeline(options: PipelineOptions): Pipeline {
       const found = findTaskDir(slug);
       if (!found) throw new Error(`Task "${slug}" not found`);
       const state = readRunState(found.dir);
+      if (!newStages.includes(state.currentStage)) {
+        throw new Error(
+          `Cannot remove current stage "${state.currentStage}" from stage list. ` +
+          `The task is currently executing this stage.`,
+        );
+      }
       const oldStages = [...state.stages];
       state.stages = newStages;
       writeRunState(found.dir, state);

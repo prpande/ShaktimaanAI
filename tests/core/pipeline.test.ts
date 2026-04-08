@@ -1314,3 +1314,45 @@ describe("F-5.2: cancel records worktree completion", () => {
     expect(manifest[0].worktreePath).toBe("/worktrees/cancel-wt-task");
   });
 });
+
+// ─── F-5.6: modifyStages validates currentStage ─────────────────────────────
+
+describe("F-5.6: modifyStages rejects removing currentStage", () => {
+  it("throws when new stage list excludes the current stage", async () => {
+    createRuntimeDirs(TEST_DIR);
+    const templatesDir = join(TEST_DIR, "templates");
+    mkdirSync(templatesDir, { recursive: true });
+    writeFileSync(join(templatesDir, "prompt-questions.md"), "template", "utf-8");
+    writeFileSync(join(templatesDir, "prompt-design.md"), "template", "utf-8");
+    writeFileSync(join(templatesDir, "prompt-impl.md"), "template", "utf-8");
+
+    // Use a task that holds at design so we can modify stages while it's paused
+    const taskContent = makeSimpleTask("questions, design, impl", "design");
+    const inboxPath = join(TEST_DIR, "00-inbox", "modify-stage-task.task");
+    writeFileSync(inboxPath, taskContent, "utf-8");
+
+    const config = makeConfig();
+    const registry = createAgentRegistry(3);
+    const pipeline = createPipeline({
+      config,
+      registry,
+      runner: createStubRunner("success"),
+      logger: { info() {}, warn() {}, error() {} },
+    });
+
+    await pipeline.startRun(inboxPath);
+
+    // Task should be on hold after design gate
+    const holdDir = join(TEST_DIR, "12-hold", "modify-stage-task");
+    expect(existsSync(holdDir)).toBe(true);
+
+    const state = readRunState(holdDir);
+    // currentStage is "design" (the stage that completed and triggered the hold)
+    expect(state.currentStage).toBe("design");
+
+    // Try to modify stages to exclude "design" (the current stage) — should throw
+    await expect(
+      pipeline.modifyStages("modify-stage-task", ["questions", "impl"]),
+    ).rejects.toThrow(/Cannot remove current stage/);
+  });
+});
