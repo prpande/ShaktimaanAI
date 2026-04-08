@@ -68,6 +68,7 @@ export function createWatcher(options: WatcherOptions): Watcher {
     // Keep only the last 500 entries to avoid unbounded growth
     if (processedTs.size > 500) {
       const arr = Array.from(processedTs);
+      arr.sort((a, b) => parseFloat(a) - parseFloat(b));
       processedTs = new Set(arr.slice(arr.length - 500));
     }
     writeFileSync(processedTsPath, JSON.stringify(Array.from(processedTs)), "utf-8");

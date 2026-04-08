@@ -1,8 +1,9 @@
-import { appendFileSync, readFileSync, mkdirSync } from "node:fs";
+import { appendFileSync, mkdirSync } from "node:fs";
 import { join, dirname } from "node:path";
 import { randomBytes } from "node:crypto";
 import type { Notifier, NotifyEvent, NotifyLevel } from "./types.js";
 import { shouldNotify } from "./types.js";
+import { loadThreadMap } from "../core/slack-queue.js";
 
 // ─── Options ──────────────────────────────────────────────────────────────────
 
@@ -50,16 +51,6 @@ export function formatEvent(event: NotifyEvent): string {
       return `:fast_forward: *Stage skipped* ${slug} — \`${event.stage}\``;
     case "stages_modified":
       return `:pencil: *Stages modified* ${slug} — old: [${event.oldStages.join(", ")}] new: [${event.newStages.join(", ")}]`;
-  }
-}
-
-// ─── Thread map helpers ─────────────────────────────────────────────────────
-
-function loadThreadMap(runtimeDir: string): Record<string, string> {
-  try {
-    return JSON.parse(readFileSync(join(runtimeDir, "slack-threads.json"), "utf-8"));
-  } catch {
-    return {};
   }
 }
 
