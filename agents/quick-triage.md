@@ -63,6 +63,7 @@ Required fields:
 - `action` — `"answer"`, `"route_pipeline"`, or `"control_command"`
 - `controlOp` — one of `"approve"`, `"cancel"`, `"skip"`, `"pause"`, `"resume"`, `"modify_stages"`, `"restart_stage"`, `"retry"`, or `null`
 - `extractedSlug` — kebab-case slug with 14-digit timestamp suffix, or `null`
+- `taskTitle` — (optional) concise task title, 3-6 words. Based on your analysis of what needs to be done (not the user's exact words). Describes what will be built, fixed, or changed. Used as the task identifier. Only for `route_pipeline` actions, `null` otherwise.
 - `recommendedStages` — array of stage names, or `null`. Valid stages in order: questions, research, design, structure, plan, impl, review, validate, pr
 - `stageHints` — object mapping stage name to instruction override, or `null`. Use key `"*"` to apply a hint to all stages
 - `enrichedContext` — summary of what you discovered during triage, or `null`
