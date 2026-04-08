@@ -111,6 +111,8 @@ export function createRunState(
     validateFailCount: 0,
     stageHints: {},
     retryAttempts: {},
+    requiredMcpServers: taskMeta.requiredMcpServers.length > 0 ? taskMeta.requiredMcpServers : undefined,
+    repoSummary: taskMeta.repoSummary || undefined,
   };
 }
 
@@ -479,6 +481,8 @@ export function createPipeline(options: PipelineOptions): Pipeline {
         stageHints: state.stageHints,
         abortController,
         logger: taskLogger,
+        requiredMcpServers: state.requiredMcpServers,
+        repoSummary: state.repoSummary,
       };
 
       // ─── Pre-stage budget check ──────────────────────────────────────────

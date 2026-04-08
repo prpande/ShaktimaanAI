@@ -17,6 +17,7 @@ const triageResultSchema = z.object({
   stageHints: z.record(z.string(), z.string()).nullable().optional(),
   enrichedContext: z.string().nullable().optional(),
   repoSummary: z.string().nullable().optional(),
+  requiredMcpServers: z.array(z.string()).nullable().optional(),
   confidence: z.number().min(0).max(1),
   reasoning: z.string(),
 });
