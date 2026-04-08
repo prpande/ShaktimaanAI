@@ -41,7 +41,7 @@ export function issueHash(severity: string, description: string): string {
 
 // ─── parseAgentVerdict ───────────────────────────────────────────────────────
 
-const VALIDATE_VERDICTS = ["READY_FOR_REVIEW", "NEEDS_FIXES"] as const;
+const VALIDATE_VERDICTS = ["PASS", "NEEDS_FIXES"] as const;
 const REVIEW_VERDICTS = ["APPROVED_WITH_SUGGESTIONS", "APPROVED", "CHANGES_REQUIRED"] as const;
 
 /**
@@ -105,7 +105,7 @@ export function parseReviewFindings(output: string): ReviewIssue[] {
 /**
  * Decides what to do after the validate stage completes.
  *
- * - READY_FOR_REVIEW → continue
+ * - PASS → continue
  * - NEEDS_FIXES, retryCount < maxRetries → retry impl with feedback
  * - NEEDS_FIXES, retryCount >= maxRetries → fail
  * - unknown verdict → fail (agent did not produce parseable output)
@@ -115,7 +115,7 @@ export function decideAfterValidate(
   retryCount: number,
   maxRetries: number,
 ): RetryDecision {
-  if (outcome.verdict === "READY_FOR_REVIEW") {
+  if (outcome.verdict === "PASS") {
     return { action: "continue", reason: "Validation passed" };
   }
 

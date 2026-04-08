@@ -13,6 +13,7 @@ export interface CreateTaskInput {
   stages?: string[];
   reviewAfter?: string;
   stageHints?: Record<string, string>;
+  requiredMcpServers?: string[];
 }
 
 // ─── helpers ─────────────────────────────────────────────────────────────────
@@ -138,6 +139,12 @@ export function buildTaskFileContent(
     for (const [stageName, hint] of Object.entries(input.stageHints)) {
       lines.push(`${stageName}: ${hint}`);
     }
+    lines.push("");
+  }
+
+  if (input.requiredMcpServers && input.requiredMcpServers.length > 0) {
+    lines.push("## Required MCP Servers");
+    lines.push(input.requiredMcpServers.join(", "));
     lines.push("");
   }
 

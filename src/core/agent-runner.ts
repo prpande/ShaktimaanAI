@@ -4,7 +4,7 @@ import { fileURLToPath } from "node:url";
 import { loadAgentPrompt } from "./agent-config.js";
 import { gatherRepoContext } from "./repo-context.js";
 import { parseTaskFile } from "../task/parser.js";
-import { DEFAULT_STAGE_TOOLS, STAGE_CONTEXT_RULES } from "../config/defaults.js";
+import { DEFAULT_STAGE_TOOLS, STAGE_CONTEXT_RULES, STAGE_ARTIFACT_RULES, MCP_TOOL_PREFIXES } from "../config/defaults.js";
 import { createStreamLogger } from "./stream-logger.js";
 import type { AgentRunOptions, AgentRunResult } from "./types.js";
 import type { ResolvedConfig } from "../config/loader.js";
@@ -78,8 +78,8 @@ export function resolveTimeoutMinutes(stage: string, config: ResolvedConfig): nu
 // ─── System prompt builder ───────────────────────────────────────────────────
 
 /**
- * Composes the system prompt from sections based on stage context rules.
- * No template hydration — sections are assembled directly.
+ * @deprecated Use buildAgentSystemPrompt + buildAgentUserPrompt instead.
+ * Retained for backward compatibility with external callers.
  */
 export function buildSystemPrompt(options: AgentRunOptions): string {
   const { stage, slug, taskContent, previousOutput, outputPath, config } = options;
@@ -172,6 +172,184 @@ export function buildSystemPrompt(options: AgentRunOptions): string {
   return sections.join("\n\n");
 }
 
+// ─── Split prompt builders (SDK isolation) ──────────────────────────────────
+
+/**
+ * Builds the system prompt: per-stage instructions that benefit from prompt
+ * caching across turns within a single agent invocation.
+ * Contains: identity, pipeline context, agent instructions, output instructions.
+ * Does NOT contain: previous output, repo context, stage hints.
+ * Note: includes task metadata (repo path, stage list) so it varies per task,
+ * but remains stable across all turns of a single agent run.
+ */
+export function buildAgentSystemPrompt(options: AgentRunOptions): string {
+  const { stage, slug, taskContent, config, outputPath } = options;
+
+  const agentsDir = resolveAgentsDir(config);
+  const agentInstructions = loadAgentPrompt(agentsDir, stage);
+  const taskMeta = parseTaskFile(taskContent);
+
+  const agentName = config.agents.names[stage] ?? stage;
+  const stageList = (taskMeta.stages.length > 0 ? taskMeta.stages : config.agents.defaultStages).join(", ");
+
+  const sections: string[] = [];
+
+  // Identity
+  sections.push(`# Identity\n\nYou are ${agentName}, the ${stage} agent in the ShaktimaanAI pipeline.`);
+
+  // Pipeline context
+  const EXECUTION_STAGES = new Set(["impl", "validate", "review", "pr"]);
+  const isExecStage = EXECUTION_STAGES.has(stage);
+  let pipelineCtx = `## Pipeline Context\n\nPipeline: ShaktimaanAI | Task: ${slug} | Stage: ${stage}\nStage sequence for this task: ${stageList}`;
+  if (taskMeta.repo) {
+    if (isExecStage && options.cwd !== taskMeta.repo) {
+      pipelineCtx += `\nTarget repository (original): ${taskMeta.repo}`;
+      pipelineCtx += `\nWorking directory (YOUR worktree copy): ${options.cwd}`;
+      pipelineCtx += `\nCRITICAL: You are working in a git worktree. ALL file reads, writes, and edits MUST use paths under your working directory (${options.cwd}), NOT the original repo path. The worktree is a full copy of the repo.`;
+    } else {
+      pipelineCtx += `\nTarget repository: ${taskMeta.repo}`;
+      pipelineCtx += `\nIMPORTANT: Your working directory is NOT the repo root. Use absolute paths when reading repo files.`;
+    }
+    pipelineCtx += `\nIMPORTANT: On Windows, use forward slashes or escaped backslashes in paths. Do NOT use /c/Users/... paths in Node.js — use C:/Users/... instead.`;
+  }
+  sections.push(pipelineCtx);
+
+  // Agent instructions
+  sections.push(`---\n\n${agentInstructions}`);
+
+  // Output instructions
+  const { disallowed } = resolveToolPermissions(stage, config);
+  const canWrite = !disallowed.includes("Write");
+  if (canWrite) {
+    sections.push(`---\n\nWrite your output to: ${outputPath}`);
+  } else {
+    sections.push(
+      `---\n\n## Output Instructions\n\n` +
+      `Output your complete response as text. Do NOT attempt to write files — ` +
+      `the pipeline will capture your text output automatically. ` +
+      `Do NOT use Bash to write files (echo, cat heredoc, python, etc.).`,
+    );
+  }
+
+  return sections.join("\n\n");
+}
+
+/**
+ * Builds the user prompt: dynamic per-invocation content.
+ * Contains: task content, previous stage outputs, repo context, stage hints.
+ */
+export function buildAgentUserPrompt(options: AgentRunOptions): string {
+  const { stage, taskContent, previousOutput, config } = options;
+
+  const rules = STAGE_CONTEXT_RULES[stage] ?? {
+    includeTaskContent: true,
+    previousOutputLabel: "Previous Output",
+    includeRepoContext: true,
+  };
+
+  const artifactRules = STAGE_ARTIFACT_RULES[stage];
+  const taskMeta = parseTaskFile(taskContent);
+
+  const sections: string[] = [];
+
+  // Task content (conditional)
+  if (rules.includeTaskContent) {
+    sections.push(`## Task\n\n${taskContent}`);
+  }
+
+  // Previous output (now scoped via STAGE_ARTIFACT_RULES in pipeline.ts)
+  // previousOutputLabel: null means "do not include previous output at all"
+  if (rules.previousOutputLabel !== null && previousOutput && previousOutput.trim()) {
+    const label = rules.previousOutputLabel ?? "Previous Output";
+    sections.push(`## ${label}\n\n${previousOutput}`);
+  }
+
+  // Repo context — either Astra's cached summary or live gatherRepoContext.
+  // useRepoSummary stages fall back to gatherRepoContext when no summary is available
+  // (e.g., CLI-created tasks that bypass triage).
+  if (artifactRules?.useRepoSummary && options.repoSummary) {
+    sections.push(`## Repo Context\n\n${options.repoSummary}`);
+  } else if (rules.includeRepoContext || (artifactRules?.useRepoSummary && !options.repoSummary)) {
+    const repoContext = gatherRepoContext(taskMeta.repo);
+    sections.push(`## Repo Context\n\n${repoContext}`);
+  }
+
+  // User Guidance (stage hints)
+  const taskFileHint = taskMeta.stageHints[stage];
+  const runtimeHints = options.stageHints?.[stage] ?? [];
+  const allHints: string[] = [
+    ...(taskFileHint ? [taskFileHint] : []),
+    ...runtimeHints,
+  ];
+  if (allHints.length > 0) {
+    const bullets = allHints.map((h) => `- ${h}`).join("\n");
+    sections.push(
+      `## User Guidance\n\nThe user has provided the following instructions for this stage:\n${bullets}`,
+    );
+  }
+
+  return sections.join("\n\n");
+}
+
+
+// ─── MCP tool filtering ─────────────────────────────────────────────────────
+
+/**
+ * Adjusts allowedTools based on Astra's requiredMcpServers.
+ *
+ * Two operations:
+ * 1. ADD: For each required MCP server, adds its wildcard tool pattern
+ *    (e.g., "mcp__claude_ai_Slack__*") if not already present. This ensures
+ *    stages that don't normally have MCP tools can access them when the task
+ *    requires it (e.g., impl needs Figma tools for a Figma-based task).
+ * 2. REMOVE: Strips MCP tool patterns for servers the task doesn't need,
+ *    avoiding unnecessary tool definitions in the prompt.
+ *
+ * Non-MCP tools pass through unchanged. When requiredMcpServers is empty
+ * or undefined (CLI invocations without triage), all tools pass through
+ * unchanged (backward compatible).
+ */
+export function filterMcpToolsByTaskNeeds(
+  allowedTools: string[],
+  requiredMcpServers?: string[],
+): string[] {
+  // No Astra guidance → pass all tools through (backward compatible)
+  if (!requiredMcpServers || requiredMcpServers.length === 0) {
+    return allowedTools;
+  }
+
+  // Build set of required MCP prefixes (normalize to lowercase for resilience)
+  const requiredPrefixes = new Set<string>();
+  for (const serverName of requiredMcpServers) {
+    const prefix = MCP_TOOL_PREFIXES[serverName.toLowerCase().trim()];
+    if (prefix) requiredPrefixes.add(prefix);
+  }
+
+  // Fail-open: if none of the server names mapped to known prefixes,
+  // pass all tools through unchanged to avoid stripping MCP access.
+  if (requiredPrefixes.size === 0) {
+    return allowedTools;
+  }
+
+  // Start with non-MCP tools + MCP tools that match required servers
+  const result = allowedTools.filter(tool => {
+    if (!tool.startsWith("mcp__")) return true;
+    return Array.from(requiredPrefixes).some(prefix =>
+      tool.startsWith(prefix) || tool === prefix + "*",
+    );
+  });
+
+  // Add wildcard patterns for required servers not already covered
+  for (const prefix of requiredPrefixes) {
+    const alreadyCovered = result.some(t => t.startsWith(prefix));
+    if (!alreadyCovered) {
+      result.push(prefix + "*");
+    }
+  }
+
+  return result;
+}
+
 // ─── Agent runner ────────────────────────────────────────────────────────────
 
 /**
@@ -186,7 +364,8 @@ export async function runAgent(options: AgentRunOptions): Promise<AgentRunResult
   const { query } = await import("@anthropic-ai/claude-agent-sdk");
 
   const { allowed: allowedTools, disallowed: disallowedTools } = resolveToolPermissions(stage, config);
-  const systemPrompt = buildSystemPrompt(options);
+  const agentSystemPrompt = buildAgentSystemPrompt(options);
+  const userPrompt = buildAgentUserPrompt(options);
   const streamLogPath = options.outputPath.replace(/\.md$/, "-stream.jsonl");
   const streamLogger = createStreamLogger(streamLogPath);
   const maxTurns = resolveMaxTurns(stage, config);
@@ -211,11 +390,26 @@ export async function runAgent(options: AgentRunOptions): Promise<AgentRunResult
     let outputTokens = 0;
     let receivedResult = false;
 
+    // SDK isolation: settingSources:[] prevents hooks from loading (~40-50k tokens
+    // saved per invocation). Cloud MCPs (Slack, Notion, Figma) load independently
+    // of filesystem settings — verified via testing.
+    //
+    // When Astra provides requiredMcpServers, filterMcpToolsByTaskNeeds:
+    // 1. ADDS MCP tool patterns for servers the task needs (e.g., impl gets
+    //    Figma tools when the task references a Figma design)
+    // 2. REMOVES MCP tool patterns for servers the task doesn't need
+    const effectiveAllowedTools = filterMcpToolsByTaskNeeds(
+      allowedTools,
+      options.requiredMcpServers,
+    );
+
     const messages = query({
-      prompt: systemPrompt,
+      prompt: userPrompt,
       options: {
+        systemPrompt: agentSystemPrompt,
+        settingSources: [],
         ...(model ? { model } : {}),
-        allowedTools,
+        allowedTools: effectiveAllowedTools,
         disallowedTools,
         maxTurns,
         cwd,

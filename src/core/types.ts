@@ -55,6 +55,10 @@ export interface RunState {
   pausedAtStage?: string;
   holdReason?: "budget_exhausted" | "approval_required" | "user_paused";
   holdDetail?: string;
+
+  // Token optimization: Astra-determined MCP requirements and repo summary
+  requiredMcpServers?: string[];
+  repoSummary?: string;
 }
 
 export interface AgentRunOptions {
@@ -69,6 +73,8 @@ export interface AgentRunOptions {
   logger: { info(msg: string): void; warn(msg: string): void; error(msg: string): void };
   stageHints?: Record<string, string[]>;
   model?: string;
+  requiredMcpServers?: string[];
+  repoSummary?: string;
 }
 
 export interface AgentRunResult {
@@ -98,6 +104,7 @@ export interface AstraTriageResult {
   stageHints?: Record<string, string> | null;
   enrichedContext?: string | null;
   repoSummary?: string | null;
+  requiredMcpServers?: string[] | null;
 
   // Metadata
   confidence: number;

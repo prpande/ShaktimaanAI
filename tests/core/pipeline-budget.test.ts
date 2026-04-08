@@ -37,7 +37,7 @@ function makeLogger() {
 function successResult(overrides: Partial<AgentRunResult> = {}): AgentRunResult {
   return {
     success: true,
-    output: "**Verdict:** READY_FOR_REVIEW\n\nAll checks passed.",
+    output: "**Verdict:** PASS\n\nAll checks passed.",
     costUsd: 0.05,
     turns: 3,
     durationMs: 5000,
@@ -62,7 +62,7 @@ Testing only.
 ## Slack Thread
 
 ## Pipeline Config
-stages: validate
+stages: questions
 review_after: design
 `;
 
@@ -165,8 +165,8 @@ describe("Pipeline pre-stage budget enforcement", () => {
     writeHugeUsageForToday("opus", 10_000_000);
     writeHugeUsageForToday("sonnet", 50_000_000);
 
-    // validate stage uses sonnet by default
-    setupTaskInPending(slug, "validate");
+    // questions stage uses sonnet by default
+    setupTaskInPending(slug, "questions");
 
     let runnerCalled = false;
     const pipeline = createPipeline({
@@ -176,7 +176,7 @@ describe("Pipeline pre-stage budget enforcement", () => {
       logger: makeLogger(),
     });
 
-    await pipeline.resumeRun(slug, "08-validate/pending");
+    await pipeline.resumeRun(slug, "01-questions/pending");
 
     expect(runnerCalled).toBe(false);
 
@@ -187,7 +187,7 @@ describe("Pipeline pre-stage budget enforcement", () => {
     expect(holdState.status).toBe("hold");
     expect(holdState.holdReason).toBe("budget_exhausted");
     expect(holdState.holdDetail).toBeTruthy();
-    expect(holdState.pausedAtStage).toBe("validate");
+    expect(holdState.pausedAtStage).toBe("questions");
   });
 
   it("downgrades model when opus is over limit but sonnet is OK", async () => {
@@ -224,7 +224,7 @@ describe("Pipeline pre-stage budget enforcement", () => {
     const config = makeConfig();
     const slug = "test-token-persist";
 
-    setupTaskInPending(slug, "validate", { stages: ["validate"] });
+    setupTaskInPending(slug, "questions", { stages: ["questions"] });
 
     const pipeline = createPipeline({
       config,
@@ -233,17 +233,17 @@ describe("Pipeline pre-stage budget enforcement", () => {
       logger: makeLogger(),
     });
 
-    await pipeline.resumeRun(slug, "08-validate/pending");
+    await pipeline.resumeRun(slug, "01-questions/pending");
 
     const completeDir = join(TEST_DIR, "10-complete", slug);
     expect(existsSync(completeDir)).toBe(true);
     const finalState = readRunState(completeDir);
-    const completed = finalState.completedStages.find(s => s.stage === "validate");
+    const completed = finalState.completedStages.find(s => s.stage === "questions");
 
     expect(completed).toBeDefined();
     expect(completed!.inputTokens).toBe(4500);
     expect(completed!.outputTokens).toBe(1200);
-    expect(completed!.model).toBe("sonnet"); // validate defaults to sonnet
+    expect(completed!.model).toBe("sonnet"); // questions defaults to sonnet
   });
 });
 
@@ -258,7 +258,7 @@ describe("Budget-aware resume", () => {
     writeHugeUsageForToday("opus", 10_000_000);
     writeHugeUsageForToday("sonnet", 50_000_000);
 
-    setupTaskInHold(slug, "validate", {
+    setupTaskInHold(slug, "questions", {
       holdReason: "budget_exhausted",
       holdDetail: "sonnet daily limit at 112%",
     });
@@ -284,8 +284,8 @@ describe("Budget-aware resume", () => {
     const slug = "test-resume-ok";
 
     // No usage entries — budget is fine
-    setupTaskInHold(slug, "validate", {
-      stages: ["validate"],
+    setupTaskInHold(slug, "questions", {
+      stages: ["questions"],
       holdReason: "budget_exhausted",
       holdDetail: "sonnet daily limit at 112%",
     });
@@ -312,8 +312,8 @@ describe("Budget-aware resume", () => {
     // Even with huge usage, non-budget holds should resume normally
     writeHugeUsageForToday("sonnet", 50_000_000);
 
-    setupTaskInHold(slug, "validate", {
-      stages: ["validate"],
+    setupTaskInHold(slug, "questions", {
+      stages: ["questions"],
       // No holdReason — normal pause (not budget)
     });
 
@@ -350,7 +350,7 @@ describe("Post-stage budget warning", () => {
     // The runner returns enough tokens to push the session over the limit
     // (session limit for sonnet = 800K, effective non-peak = 680K, peak = 340K;
     //  we return 750K which exceeds both effective limits post-stage)
-    setupTaskInPending(slug, "validate", { stages: ["validate"] });
+    setupTaskInPending(slug, "questions", { stages: ["questions"] });
 
     const mockLogger = makeLogger();
     const pipeline = createPipeline({
@@ -363,7 +363,7 @@ describe("Post-stage budget warning", () => {
       logger: mockLogger,
     });
 
-    await pipeline.resumeRun(slug, "08-validate/pending");
+    await pipeline.resumeRun(slug, "01-questions/pending");
 
     // Stage should have completed successfully (no rollback)
     const completeDir = join(TEST_DIR, "10-complete", slug);

@@ -104,7 +104,7 @@ describe("DEFAULT_CONFIG", () => {
   });
 
   it("has quick-triage and quick-execute maxTurns entries", () => {
-    expect(DEFAULT_CONFIG.agents.maxTurns["quick-triage"]).toBe(5);
+    expect(DEFAULT_CONFIG.agents.maxTurns["quick-triage"]).toBe(10);
     expect(DEFAULT_CONFIG.agents.maxTurns["quick-execute"]).toBe(40);
     expect(DEFAULT_CONFIG.agents.maxTurns["quick"]).toBe(5);
   });

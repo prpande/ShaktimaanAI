@@ -80,7 +80,7 @@ Tests: <N> passed, <N> failed, <N> skipped
 The final line of your output MUST be in this exact format (the pipeline parses it):
 
 ```
-**Verdict:** READY_FOR_REVIEW
+**Verdict:** PASS
 ```
 
 or
@@ -89,7 +89,7 @@ or
 **Verdict:** NEEDS_FIXES
 ```
 
-Use `READY_FOR_REVIEW` if and only if both build AND tests passed (or build was skipped and tests passed).
+Use `PASS` if and only if both build AND tests passed (or build was skipped and tests passed).
 Use `NEEDS_FIXES` otherwise.
 
 Do NOT include any text after the verdict line.

@@ -21,6 +21,7 @@ import {
   initTaskDir,
   moveTaskDir,
   createPipeline,
+  collectArtifacts,
 } from "../../src/core/pipeline.js";
 
 // ─── helpers ────────────────────────────────────────────────────────────────
@@ -478,12 +479,12 @@ describe("createPipeline", () => {
       }
       if (options.outputPath) {
         mkdirSync(dirname(options.outputPath), { recursive: true });
-        writeFileSync(options.outputPath, `Output for ${options.stage} — **Verdict:** READY_FOR_REVIEW`);
+        writeFileSync(options.outputPath, `Output for ${options.stage} — **Verdict:** PASS`);
       }
       return {
         success: true,
         output: options.stage === "validate"
-          ? "All pass.\n\n**Verdict:** READY_FOR_REVIEW"
+          ? "All pass.\n\n**Verdict:** PASS"
           : `Output for ${options.stage}`,
         costUsd: 0,
         turns: 1,
@@ -527,12 +528,12 @@ describe("createPipeline", () => {
       if (options.stage === "impl") capturedCwd = options.cwd;
       if (options.outputPath) {
         mkdirSync(dirname(options.outputPath), { recursive: true });
-        writeFileSync(options.outputPath, `Output — **Verdict:** READY_FOR_REVIEW`);
+        writeFileSync(options.outputPath, `Output — **Verdict:** PASS`);
       }
       return {
         success: true,
         output: options.stage === "validate"
-          ? "**Verdict:** READY_FOR_REVIEW"
+          ? "**Verdict:** PASS"
           : "done",
         costUsd: 0, turns: 1, inputTokens: 0, outputTokens: 0, durationMs: 10,
       };
@@ -565,11 +566,11 @@ describe("createPipeline", () => {
     const stubRunner = async (options: AgentRunOptions): Promise<AgentRunResult> => {
       if (options.outputPath) {
         mkdirSync(dirname(options.outputPath), { recursive: true });
-        writeFileSync(options.outputPath, `Output — **Verdict:** READY_FOR_REVIEW`);
+        writeFileSync(options.outputPath, `Output — **Verdict:** PASS`);
       }
       return {
         success: true,
-        output: "**Verdict:** READY_FOR_REVIEW",
+        output: "**Verdict:** PASS",
         costUsd: 0, turns: 1, inputTokens: 0, outputTokens: 0, durationMs: 10,
       };
     };
@@ -656,7 +657,7 @@ describe("pipeline retry integration", () => {
       if (options.stage === "validate") {
         validateCallCount++;
         // Fail first time, pass second time
-        const verdict = validateCallCount === 1 ? "NEEDS_FIXES" : "READY_FOR_REVIEW";
+        const verdict = validateCallCount === 1 ? "NEEDS_FIXES" : "PASS";
         const output = `Build output.\n\n**Verdict:** ${verdict}`;
         if (options.outputPath) writeFileSync(options.outputPath, output);
         return { success: true, output, costUsd: 0, turns: 1, inputTokens: 0, outputTokens: 0, durationMs: 10 };
@@ -765,7 +766,7 @@ describe("pipeline retry integration", () => {
         return { success: true, output: out, costUsd: 0, turns: 1, inputTokens: 0, outputTokens: 0, durationMs: 10 };
       }
       // Second validate passes
-      const out = "All clear.\n\n**Verdict:** READY_FOR_REVIEW";
+      const out = "All clear.\n\n**Verdict:** PASS";
       if (options.outputPath) writeFileSync(options.outputPath, out);
       return { success: true, output: out, costUsd: 0, turns: 1, inputTokens: 0, outputTokens: 0, durationMs: 10 };
     };
@@ -813,7 +814,7 @@ describe("pipeline retry integration", () => {
         return { success: true, output: "impl done", costUsd: 0, turns: 1, inputTokens: 0, outputTokens: 0, durationMs: 10 };
       }
       if (options.stage === "validate") {
-        const out = "Tests pass.\n\n**Verdict:** READY_FOR_REVIEW";
+        const out = "Tests pass.\n\n**Verdict:** PASS";
         if (options.outputPath) writeFileSync(options.outputPath, out);
         return { success: true, output: out, costUsd: 0, turns: 1, inputTokens: 0, outputTokens: 0, durationMs: 10 };
       }
@@ -897,7 +898,7 @@ describe("Spec 5a pipeline behavior", () => {
       }
       if (options.stage === "validate") {
         validateCallCount++;
-        const out = "Tests pass.\n\n**Verdict:** READY_FOR_REVIEW";
+        const out = "Tests pass.\n\n**Verdict:** PASS";
         if (options.outputPath) writeFileSync(options.outputPath, out);
         return { success: true, output: out, costUsd: 0, turns: 1, inputTokens: 0, outputTokens: 0, durationMs: 10 };
       }
@@ -960,7 +961,7 @@ describe("Spec 5a pipeline behavior", () => {
         return { success: true, output: out, costUsd: 0, turns: 1, inputTokens: 0, outputTokens: 0, durationMs: 10 };
       }
       if (options.stage === "validate") {
-        const out = "Tests pass.\n\n**Verdict:** READY_FOR_REVIEW";
+        const out = "Tests pass.\n\n**Verdict:** PASS";
         if (options.outputPath) writeFileSync(options.outputPath, out);
         return { success: true, output: out, costUsd: 0, turns: 1, inputTokens: 0, outputTokens: 0, durationMs: 10 };
       }
@@ -1024,7 +1025,7 @@ describe("Spec 5a pipeline behavior", () => {
       if (options.stage === "validate") {
         validateCallCount++;
         // Fail first time, pass second time
-        const verdict = validateCallCount === 1 ? "NEEDS_FIXES" : "READY_FOR_REVIEW";
+        const verdict = validateCallCount === 1 ? "NEEDS_FIXES" : "PASS";
         const out = `Build output.\n\n**Verdict:** ${verdict}`;
         if (options.outputPath) writeFileSync(options.outputPath, out);
         return { success: true, output: out, costUsd: 0, turns: 1, inputTokens: 0, outputTokens: 0, durationMs: 10 };
@@ -1057,5 +1058,94 @@ describe("Spec 5a pipeline behavior", () => {
     expect(state.validateFailCount).toBe(1);
     // suggestionRetryUsed should be false (reset on validate failure)
     expect(state.suggestionRetryUsed).toBe(false);
+  });
+});
+
+// ─── collectArtifacts ──────────────────────────────────────────────────────
+
+describe("collectArtifacts", () => {
+  let artifactsDir: string;
+
+  beforeEach(() => {
+    artifactsDir = join(TEST_DIR, "artifacts-test-" + randomUUID().slice(0, 8));
+    mkdirSync(artifactsDir, { recursive: true });
+    writeFileSync(join(artifactsDir, "questions-output.md"), "Q output", "utf-8");
+    writeFileSync(join(artifactsDir, "research-output.md"), "R output", "utf-8");
+    writeFileSync(join(artifactsDir, "design-output.md"), "D output", "utf-8");
+    writeFileSync(join(artifactsDir, "plan-output.md"), "P output", "utf-8");
+    writeFileSync(join(artifactsDir, "impl-output.md"), "I output", "utf-8");
+    writeFileSync(join(artifactsDir, "review-output.md"), "Rev output", "utf-8");
+    writeFileSync(join(artifactsDir, "retry-feedback-validate-1.md"), "Fix these", "utf-8");
+  });
+
+  const stages = ["questions", "research", "design", "plan", "impl", "review", "validate", "pr"];
+
+  it("returns empty for mode:none stages", () => {
+    expect(collectArtifacts(artifactsDir, "questions", stages)).toBe("");
+    expect(collectArtifacts(artifactsDir, "validate", stages)).toBe("");
+  });
+
+  it("returns all prior alignment outputs for all_prior mode", () => {
+    const result = collectArtifacts(artifactsDir, "design", stages);
+    expect(result).toContain("Q output");
+    expect(result).toContain("R output");
+    expect(result).not.toContain("D output");
+  });
+
+  it("includes all alignment outputs for impl", () => {
+    const result = collectArtifacts(artifactsDir, "impl", stages);
+    expect(result).toContain("Q output");
+    expect(result).toContain("R output");
+    expect(result).toContain("D output");
+    expect(result).toContain("P output");
+    expect(result).not.toContain("I output");
+  });
+
+  it("includes retry feedback for impl", () => {
+    const result = collectArtifacts(artifactsDir, "impl", stages);
+    expect(result).toContain("Fix these");
+  });
+
+  it("returns only specific files for review", () => {
+    const result = collectArtifacts(artifactsDir, "review", stages);
+    expect(result).toContain("P output");
+    expect(result).toContain("D output");
+    expect(result).not.toContain("Q output");
+    expect(result).not.toContain("I output");
+  });
+
+  it("returns impl and review outputs for pr", () => {
+    const result = collectArtifacts(artifactsDir, "pr", stages);
+    expect(result).toContain("I output");
+    expect(result).toContain("Rev output");
+    expect(result).not.toContain("Q output");
+    expect(result).not.toContain("P output");
+  });
+
+  it("excludes execution stage outputs from all_prior", () => {
+    const result = collectArtifacts(artifactsDir, "impl", stages);
+    expect(result).not.toContain("Rev output");
+  });
+
+  it("returns empty for non-existent directory", () => {
+    expect(collectArtifacts("/nonexistent", "design", stages)).toBe("");
+  });
+
+  it("picks latest retry artifact over base in specific mode", () => {
+    writeFileSync(join(artifactsDir, "impl-output-r1.md"), "I retry 1", "utf-8");
+    writeFileSync(join(artifactsDir, "impl-output-r2.md"), "I retry 2", "utf-8");
+    const result = collectArtifacts(artifactsDir, "pr", stages);
+    expect(result).toContain("I retry 2");
+    expect(result).not.toContain("I output");
+    expect(result).not.toContain("I retry 1");
+    expect(result).toContain("Rev output");
+  });
+
+  it("picks latest retry artifact over base in all_prior mode", () => {
+    writeFileSync(join(artifactsDir, "research-output-r1.md"), "R retry 1", "utf-8");
+    const result = collectArtifacts(artifactsDir, "design", stages);
+    expect(result).toContain("Q output");
+    expect(result).toContain("R retry 1");
+    expect(result).not.toContain("R output");
   });
 });

@@ -10,6 +10,8 @@ export interface TaskMeta {
   stages: string[];
   reviewAfter: string;
   stageHints: Record<string, string>;
+  requiredMcpServers: string[];
+  repoSummary: string;
 }
 
 /**
@@ -111,6 +113,15 @@ export function parseTaskFile(content: string): TaskMeta {
     }
   }
 
+  // --- Required MCP Servers ---
+  const mcpBody = sections["Required MCP Servers"] ?? "";
+  const requiredMcpServers = mcpBody
+    ? mcpBody.split(/[,\n]/).map(s => s.trim().toLowerCase()).filter(Boolean)
+    : [];
+
+  // --- Repo Summary (from Astra triage) ---
+  const repoSummary = sections["Repo Summary"] ?? "";
+
   return {
     title,
     description,
@@ -121,5 +132,7 @@ export function parseTaskFile(content: string): TaskMeta {
     stages,
     reviewAfter,
     stageHints,
+    requiredMcpServers,
+    repoSummary,
   };
 }

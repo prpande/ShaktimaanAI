@@ -291,6 +291,7 @@ export function createWatcher(options: WatcherOptions): Watcher {
                 slackThread: entry.thread_ts ?? entry.ts,
                 stages: triageResult.recommendedStages ?? undefined,
                 stageHints: triageResult.stageHints ?? undefined,
+                requiredMcpServers: triageResult.requiredMcpServers ?? undefined,
               },
               runtimeDir,
               config,
