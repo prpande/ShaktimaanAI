@@ -375,9 +375,7 @@ export async function runAgent(options: AgentRunOptions): Promise<AgentRunResult
 
   // Use provided abortController or create our own
   const abortController = externalAbort ?? new AbortController();
-  let timeoutHandle: ReturnType<typeof setTimeout> | undefined;
-
-  timeoutHandle = setTimeout(() => {
+  const timeoutHandle = setTimeout(() => {
     logger.warn(`[agent-runner] Stage "${stage}" timed out after ${timeoutMinutes}m — aborting`);
     abortController.abort();
   }, timeoutMs);

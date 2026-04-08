@@ -27,7 +27,7 @@ ShaktimaanAI is a deterministic TypeScript orchestrator that routes tasks throug
 `questions → research → design → structure → plan`
 
 **Execution (TDD)** — impl has write access:
-`impl ↔ validate → review → pr`
+`impl → review → validate → pr`
 
 The `impl → validate → review` loop retries on failure. The pipeline auto-pauses after a configurable review gate (default: `design`) for human approval before execution begins.
 
