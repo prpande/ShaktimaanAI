@@ -39,18 +39,74 @@ const messages = query({
 - `options.systemPrompt` — static per-stage instructions: identity, pipeline context, agent instructions, output format. Benefits from prompt caching across turns.
 - `prompt` — dynamic per-invocation content: task content, previous stage outputs, repo context, retry feedback.
 
-**Per-stage MCP servers:**
+**Dynamic MCP server selection via Astra:**
 
-| Stage | MCP Servers |
-|-------|------------|
-| research | Slack, Notion |
-| quick-execute | Slack, Notion |
-| slack-io | Slack |
-| All others | none (`{}`) |
+Instead of hardcoding which MCP servers each stage gets, Astra (quick-triage) determines which external systems the task needs during its initial classification. This is a natural extension of Astra's routing role — it already recommends stages and gathers context.
 
-This is derived from the existing `DEFAULT_STAGE_TOOLS` — stages that list `mcp__claude_ai_Slack__*` or `mcp__plugin_notion_notion__*` in their `allowed` tools get the corresponding MCP servers loaded. All other stages get an empty `mcpServers` map.
+**Astra output change** — add `requiredMcpServers` to the triage JSON output:
 
-**Estimated savings:** ~50-70k tokens per agent invocation. Over a 9-stage pipeline run: **~450-630k tokens saved**.
+```json
+{
+  "action": "route_pipeline",
+  "recommendedStages": ["research", "design", "plan", "impl", "review", "validate", "pr"],
+  "requiredMcpServers": ["slack", "notion"],
+  "...": "..."
+}
+```
+
+Valid values: `"slack"`, `"notion"`, `"figma"` (extensible as new MCP servers are added). Astra determines these by analyzing the task content — does it reference Figma designs, Notion pages, Slack threads, or other external systems?
+
+**Pipeline flow:**
+1. Astra outputs `requiredMcpServers` during triage
+2. The pipeline stores this in `RunState.requiredMcpServers`
+3. At each stage, `agent-runner.ts` resolves MCP servers as the **intersection** of:
+   - Astra's `requiredMcpServers` (what the task needs)
+   - The stage's `DEFAULT_STAGE_TOOLS` allowed tools (what the stage is permitted to use)
+
+For example: Astra says `["slack", "figma"]`. The `research` stage allows `mcp__claude_ai_Slack__*` but not Figma tools → only Slack MCP is loaded. The `impl` stage allows all tools → both Slack and Figma MCPs are loaded.
+
+**MCP server registry** — a mapping from short names to SDK `McpServerConfig` objects, defined in `defaults.ts`:
+
+```typescript
+export const MCP_SERVER_REGISTRY: Record<string, McpServerConfig> = {
+  slack:  { /* Slack MCP server config */ },
+  notion: { /* Notion MCP server config */ },
+  figma:  { /* Figma MCP server config */ },
+};
+```
+
+**Resolution function:**
+
+```typescript
+function resolveMcpServers(
+  stage: string,
+  requiredMcpServers: string[],
+  config: ResolvedConfig,
+): Record<string, McpServerConfig> {
+  const stageTools = resolveToolPermissions(stage, config);
+  const result: Record<string, McpServerConfig> = {};
+
+  for (const serverName of requiredMcpServers) {
+    const serverConfig = MCP_SERVER_REGISTRY[serverName];
+    if (!serverConfig) continue;
+
+    // Check if the stage's allowed tools include this server's tool prefix
+    const toolPrefix = MCP_TOOL_PREFIXES[serverName]; // e.g., "mcp__claude_ai_Slack__"
+    const isAllowed = stageTools.allowed.some(t =>
+      t === toolPrefix + '*' || t.startsWith(toolPrefix)
+    );
+    if (isAllowed) {
+      result[serverName] = serverConfig;
+    }
+  }
+
+  return result;
+}
+```
+
+**Fallback:** When `requiredMcpServers` is not set in `RunState` (direct CLI invocations that bypass Astra, backward compatibility), fall back to loading MCP servers based on the stage's `DEFAULT_STAGE_TOOLS` — if the stage allows MCP tool patterns, load the corresponding servers. This preserves current behavior for non-Astra paths.
+
+**Estimated savings:** ~50-70k tokens per agent invocation. Over a 9-stage pipeline run: **~450-630k tokens saved**. Tasks that don't need external systems save even more — zero MCP overhead across all stages.
 
 ### 2. Scoped Artifact Passing
 
@@ -173,6 +229,9 @@ Modify execution stage prompts to align with the new artifact passing strategy:
 
 **`validate` prompt — no changes needed.** The existing prompt already says "discover build and test commands" and works from the repo. It naturally functions without prior pipeline context.
 
+**`quick-triage` prompt modification:**
+> Add `requiredMcpServers` to the output format. Instruct Astra to analyze the task content for references to external systems (Figma URLs, Notion pages, Slack threads, etc.) and output the corresponding server names. Example guidance: "If the task references Figma designs or figma.com URLs, include `figma`. If it references Notion pages or needs Notion queries, include `notion`. If it references Slack threads or needs Slack context, include `slack`. If no external systems are needed, output an empty array."
+
 **Alignment stage prompts (design, structure, plan) — add guidance:**
 > You receive all findings from prior stages. Rely primarily on the most recent stage's output, but reference earlier findings when you need to understand the reasoning behind decisions or verify assumptions.
 
@@ -219,10 +278,13 @@ This separation allows the system prompt to be cached across turns within a sing
 
 ## Files to Modify
 
-1. **`src/core/agent-runner.ts`** — Add SDK isolation options (`settingSources`, `systemPrompt`, `mcpServers`). Split `buildSystemPrompt` into system + user prompts.
-2. **`src/config/defaults.ts`** — Add `STAGE_ARTIFACT_RULES`. Add `STAGE_MCP_SERVERS`. Update default models for research and validate.
-3. **`src/core/pipeline.ts`** — Replace artifact concatenation (lines 407-413) with `collectArtifacts()` function using stage-aware rules.
-4. **`agents/impl.md`** — Add guidance about relying on plan, exploring repo only when needed.
-5. **`agents/review.md`** — Add guidance about inspecting actual code via tools, not relying on impl summary.
-6. **`agents/design.md`**, **`agents/structure.md`**, **`agents/plan.md`** — Add guidance about using full alignment chain context.
-7. **Tests** — Update `agent-runner` and `pipeline` tests for new artifact passing and SDK options.
+1. **`src/core/agent-runner.ts`** — Add SDK isolation options (`settingSources`, `systemPrompt`, `mcpServers`). Split `buildSystemPrompt` into system + user prompts. Add `resolveMcpServers()` function.
+2. **`src/config/defaults.ts`** — Add `STAGE_ARTIFACT_RULES`, `MCP_SERVER_REGISTRY`, `MCP_TOOL_PREFIXES`. Update default models for research and validate.
+3. **`src/core/pipeline.ts`** — Replace artifact concatenation (lines 407-413) with `collectArtifacts()` function. Pass `requiredMcpServers` from `RunState` to agent runner.
+4. **`src/core/types.ts`** — Add `requiredMcpServers?: string[]` to `RunState` and `AgentRunOptions`.
+5. **`agents/quick-triage.md`** — Add `requiredMcpServers` to output format with detection guidance.
+6. **`agents/impl.md`** — Add guidance about relying on plan, exploring repo only when needed.
+7. **`agents/review.md`** — Add guidance about inspecting actual code via tools, not relying on impl summary.
+8. **`agents/design.md`**, **`agents/structure.md`**, **`agents/plan.md`** — Add guidance about using full alignment chain context.
+9. **`src/commands/`** — Update triage response parsing to extract and store `requiredMcpServers`.
+10. **Tests** — Update `agent-runner` and `pipeline` tests for new artifact passing, SDK options, and MCP resolution.
