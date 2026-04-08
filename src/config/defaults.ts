@@ -134,7 +134,6 @@ export interface ShkmnConfig {
     maxConcurrentTotal: number;
     maxTurns: Record<string, number>;
     timeoutsMinutes: Record<string, number>;
-    heartbeatTimeoutMinutes: number;
     retryCount: number;
     maxValidateRetries: number;
     maxSuggestionRetriesPerCycle: number;
@@ -227,7 +226,6 @@ export const DEFAULT_CONFIG: ShkmnConfig = {
       "quick-execute": 30,
       "slack-io": 2,
     },
-    heartbeatTimeoutMinutes: 10,
     retryCount: 1,
     maxValidateRetries: 2,
     maxSuggestionRetriesPerCycle: 1,

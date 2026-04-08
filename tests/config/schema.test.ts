@@ -24,7 +24,6 @@ describe("configSchema", () => {
         maxConcurrentTotal: 2,
         maxTurns: { research: 20 },
         timeoutsMinutes: { research: 30 },
-        heartbeatTimeoutMinutes: 5,
         retryCount: 2,
       },
       schedule: {

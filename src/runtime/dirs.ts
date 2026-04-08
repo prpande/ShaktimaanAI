@@ -3,22 +3,15 @@ import { join } from "node:path";
 
 import { ALL_STAGE_DIRS, STAGES_WITH_PENDING_DONE } from "../core/stage-map.js";
 
-/** @deprecated Use ALL_STAGE_DIRS from stage-map.ts instead */
-export const STAGE_DIRS = ALL_STAGE_DIRS;
-
 function getAllDirPaths(runtimeDir: string): string[] {
   const dirs: string[] = [];
 
-  for (const stage of STAGE_DIRS) {
+  for (const stage of ALL_STAGE_DIRS) {
     dirs.push(join(runtimeDir, stage));
 
     if (STAGES_WITH_PENDING_DONE.includes(stage)) {
       dirs.push(join(runtimeDir, stage, "pending"));
       dirs.push(join(runtimeDir, stage, "done"));
-    }
-
-    if (stage === "06-impl") {
-      dirs.push(join(runtimeDir, stage, "active"));
     }
   }
 
@@ -27,6 +20,7 @@ function getAllDirPaths(runtimeDir: string): string[] {
   dirs.push(join(runtimeDir, "history", "daily-log"));
   dirs.push(join(runtimeDir, "history", "monthly-reports"));
   dirs.push(join(runtimeDir, "interactions"));
+  dirs.push(join(runtimeDir, "diagnostics"));
 
   return dirs;
 }

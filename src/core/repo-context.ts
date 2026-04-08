@@ -365,7 +365,8 @@ function gatherRecentCommits(repoPath: string): string {
       stdio: ["pipe", "pipe", "pipe"],
     }).trim();
     if (!output) return "";
-    return `#### Recent Commits\n\`\`\`\n${output}\n\`\`\``;
+    const truncated = output.length > 500 ? output.slice(0, 500) + "\n... (truncated)" : output;
+    return `#### Recent Commits\n\`\`\`\n${truncated}\n\`\`\``;
   } catch {
     return "";
   }

@@ -159,6 +159,43 @@ describe("buildNaradaPayload", () => {
     expect(payload.outboundPrefix).toBe("🤖 [ShaktimaanAI]");
   });
 
+  it("includes astra-* threads in conversationChecks", () => {
+    writeFileSync(join(TEST_DIR, "slack-cursor.json"), '{"channelTs":"100.0","dmTs":"100.0"}');
+    saveThreadMap(TEST_DIR, {
+      "held-task": "200.0",
+      "astra-1775638845-450169": "300.0",
+      "astra-1775639000-123456": "400.0",
+    });
+
+    const payload = buildNaradaPayload(TEST_DIR, {
+      channelId: "C1",
+      allowDMs: false,
+      dmUserIds: [],
+      heldSlugs: ["held-task"],
+    });
+
+    expect(payload.approvalChecks).toHaveLength(1);
+    expect(payload.conversationChecks).toHaveLength(2);
+    expect(payload.conversationChecks[0].key).toBe("astra-1775638845-450169");
+    expect(payload.conversationChecks[0].thread_ts).toBe("300.0");
+    expect(payload.conversationChecks[1].key).toBe("astra-1775639000-123456");
+    expect(payload.conversationChecks[1].thread_ts).toBe("400.0");
+  });
+
+  it("returns empty conversationChecks when no astra threads exist", () => {
+    writeFileSync(join(TEST_DIR, "slack-cursor.json"), '{"channelTs":"1.0","dmTs":"1.0"}');
+    saveThreadMap(TEST_DIR, { "task-slug": "200.0" });
+
+    const payload = buildNaradaPayload(TEST_DIR, {
+      channelId: "C1",
+      allowDMs: false,
+      dmUserIds: [],
+      heldSlugs: [],
+    });
+
+    expect(payload.conversationChecks).toHaveLength(0);
+  });
+
   it("includes file paths in payload", () => {
     writeFileSync(join(TEST_DIR, "slack-cursor.json"), '{"channelTs":"1.0","dmTs":"1.0"}');
 

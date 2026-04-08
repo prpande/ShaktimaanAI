@@ -1,4 +1,4 @@
-import { execSync } from "node:child_process";
+import { execFileSync } from "node:child_process";
 import { mkdirSync, existsSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 
@@ -39,10 +39,10 @@ export function createWorktree(
   // Build the git worktree add command
   // -b creates a new branch; if baseBranch is given, branch from it
   const baseRef = baseBranch ?? "HEAD";
-  execSync(
-    `git worktree add -b "${branchName}" "${worktreePath}" ${baseRef}`,
-    { cwd: repoPath, stdio: "pipe" },
-  );
+  execFileSync("git", ["worktree", "add", "-b", branchName, worktreePath, baseRef], {
+    cwd: repoPath,
+    stdio: "pipe",
+  });
 
   return worktreePath;
 }
@@ -60,14 +60,14 @@ export function removeWorktree(
 
   // Remove the worktree (--force handles detached HEAD or unclean state)
   try {
-    execSync(`git worktree remove --force "${worktreePath}"`, {
+    execFileSync("git", ["worktree", "remove", "--force", worktreePath], {
       cwd: repoPath,
       stdio: "pipe",
     });
   } catch {
     // If the worktree directory is already gone, git worktree prune will clean metadata
     try {
-      execSync("git worktree prune", { cwd: repoPath, stdio: "pipe" });
+      execFileSync("git", ["worktree", "prune"], { cwd: repoPath, stdio: "pipe" });
     } catch {
       // ignore
     }
@@ -75,7 +75,7 @@ export function removeWorktree(
 
   // Delete the branch
   try {
-    execSync(`git branch -D "${branchName}"`, { cwd: repoPath, stdio: "pipe" });
+    execFileSync("git", ["branch", "-D", branchName], { cwd: repoPath, stdio: "pipe" });
   } catch {
     // Branch may already be deleted — ignore
   }
@@ -88,11 +88,11 @@ export function removeWorktree(
 export function listWorktrees(repoPath: string): WorktreeInfo[] {
   let output: string;
   try {
-    output = execSync("git worktree list --porcelain", {
+    output = execFileSync("git", ["worktree", "list", "--porcelain"], {
       cwd: repoPath,
       encoding: "utf-8",
       stdio: "pipe",
-    });
+    }) as string;
   } catch {
     return [];
   }

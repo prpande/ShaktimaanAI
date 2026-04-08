@@ -11,7 +11,7 @@ import { type AgentRunnerFn } from "./types.js";
 import { stripPrefix } from "../surfaces/slack-surface.js";
 import { runAstraTriage, type AstraInput } from "./astra-triage.js";
 import { createTask } from "./task-creator.js";
-import { buildNaradaPayload, readInbox, clearInbox, readSentLog } from "./slack-queue.js";
+import { buildNaradaPayload, readInbox, clearInbox, readSentLog, loadThreadMap, saveThreadMap } from "./slack-queue.js";
 
 // ─── Control file schema ──────────────────────────────────────────────────────
 
@@ -68,6 +68,7 @@ export function createWatcher(options: WatcherOptions): Watcher {
     // Keep only the last 500 entries to avoid unbounded growth
     if (processedTs.size > 500) {
       const arr = Array.from(processedTs);
+      arr.sort((a, b) => parseFloat(a) - parseFloat(b));
       processedTs = new Set(arr.slice(arr.length - 500));
     }
     writeFileSync(processedTsPath, JSON.stringify(Array.from(processedTs)), "utf-8");
@@ -270,6 +271,12 @@ export function createWatcher(options: WatcherOptions): Watcher {
                   `I ran into a problem while working on that — ${executeResult.error ?? "unknown error"}. Let me know if you'd like me to try again.`,
                 );
               }
+              // Track conversation thread so follow-up replies are visible
+              const answerThreadTs = entry.thread_ts ?? entry.ts;
+              const threadMap = loadThreadMap(runtimeDir);
+              threadMap[`astra-${entry.ts.replace(".", "-")}`] = answerThreadTs;
+              saveThreadMap(runtimeDir, threadMap);
+
               logger.info(`[watcher] Astra: answered message ${entry.ts} directly`);
             } catch (err: unknown) {
               notifySlackError(
@@ -287,7 +294,7 @@ export function createWatcher(options: WatcherOptions): Watcher {
               {
                 source: "slack",
                 content: text,
-                repo: process.cwd(),
+                repo: undefined,
                 slackThread: entry.thread_ts ?? entry.ts,
                 stages: triageResult.recommendedStages ?? undefined,
                 stageHints: triageResult.stageHints ?? undefined,

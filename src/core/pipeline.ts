@@ -17,7 +17,7 @@ import { loadBudgetConfig } from "../config/loader.js";
 import { DEFAULT_BUDGET_CONFIG } from "../config/defaults.js";
 import type { BudgetConfig } from "../config/budget-schema.js";
 
-// Re-export for backwards compatibility
+// Re-exported for external consumers; DIR_STAGE_MAP is not used internally in this module.
 export { STAGE_DIR_MAP, DIR_STAGE_MAP };
 
 // ─── Scoped Artifact Collection ────────────────────────────────────────────
@@ -91,10 +91,22 @@ export function collectArtifacts(
     }
   }
 
+  function parseTrailingNum(filename: string): number {
+    const match = filename.match(/-(\d+)\.md$/);
+    return match ? parseInt(match[1], 10) : 0;
+  }
+
   const outputFiles = [
     ...Array.from(latestPerStage.values()).map(({ file }) => file),
     ...retryFeedbackFiles,
-  ].sort();
+  ].sort((a, b) => {
+    const aIsRetry = a.startsWith("retry-feedback-");
+    const bIsRetry = b.startsWith("retry-feedback-");
+    if (aIsRetry && bIsRetry) return parseTrailingNum(a) - parseTrailingNum(b);
+    if (aIsRetry) return 1;
+    if (bIsRetry) return -1;
+    return a.localeCompare(b);
+  });
 
   return outputFiles
     .map(f => readFileSync(join(artifactsDir, f), 'utf-8'))
@@ -212,7 +224,11 @@ export function moveTaskDir(
         // Wait for file handles to be released (100ms, 200ms, 400ms, 800ms, 1600ms)
         const delayMs = 100 * Math.pow(2, attempt);
         const start = Date.now();
-        while (Date.now() - start < delayMs) { /* spin wait — sync context */ }
+        while (Date.now() - start < delayMs) {
+          // Intentional spin-wait: moveTaskDir must be synchronous because it's called
+          // from both sync and async contexts in the pipeline. This path only executes
+          // on Windows EBUSY/EPERM retry (rare), with max total wait of ~3.1s.
+        }
         continue;
       }
       // If retries exhausted or different error, fall back to copy+delete
@@ -350,6 +366,7 @@ export function createPipeline(options: PipelineOptions): Pipeline {
       if (activeRuns.has(slug)) continue;
 
       logger.info(`[pipeline] Retrying deferred task "${slug}"`);
+      activeRuns.set(slug, state);
       // Fire-and-forget — processStage will re-defer if still at capacity
       processStage(slug, taskDir).catch((err: unknown) => {
         logger.error(
@@ -399,7 +416,7 @@ export function createPipeline(options: PipelineOptions): Pipeline {
     try {
       recordWorktreeCompletion(manifestPath, {
         slug: state.slug,
-        repoPath: state.worktreePath,
+        repoPath: state.repoRoot ?? state.worktreePath,
         worktreePath: state.worktreePath,
         completedAt: new Date().toISOString(),
       });
@@ -422,6 +439,7 @@ export function createPipeline(options: PipelineOptions): Pipeline {
       try {
         const worktreesDir = join(runtimeDir, "worktrees");
         const worktreePath = createWorktree(repoPath, state.slug, worktreesDir);
+        state.repoRoot = repoPath;
         state.worktreePath = worktreePath;
         return worktreePath;
       } catch (err) {
@@ -752,6 +770,7 @@ export function createPipeline(options: PipelineOptions): Pipeline {
       // Check review gate
       if (isReviewGate(stage, state.reviewAfter)) {
         state.status = "hold";
+        state.holdReason = "approval_required";
         writeRunState(doneDir, state);
         moveTaskDir(
           runtimeDir, slug,
@@ -864,8 +883,10 @@ export function createPipeline(options: PipelineOptions): Pipeline {
       if (nextStage === null) {
         state.status = "complete";
         writeRunState(holdDir, state);
+        recordCompletionIfWorktree(state);
         moveTaskDir(runtimeDir, slug, "12-hold", "10-complete");
         activeRuns.set(slug, readRunState(join(runtimeDir, "10-complete", slug)));
+        emitNotify({ type: "task_completed", slug, timestamp: new Date().toISOString() });
         return;
       }
 
@@ -908,6 +929,7 @@ export function createPipeline(options: PipelineOptions): Pipeline {
       const found = findTaskDir(slug);
       if (!found) throw new Error(`Task "${slug}" not found`);
       const state = readRunState(found.dir);
+      recordCompletionIfWorktree(state);
       state.status = "failed";
       state.error = "Cancelled by user";
       writeRunState(found.dir, state);
@@ -961,6 +983,7 @@ export function createPipeline(options: PipelineOptions): Pipeline {
       const state = readRunState(found.dir);
       state.status = "hold";
       state.pausedAtStage = state.currentStage;
+      state.holdReason = "user_paused";
       writeRunState(found.dir, state);
       moveTaskDir(runtimeDir, slug, found.subdir, "12-hold");
       activeRuns.set(slug, readRunState(join(runtimeDir, "12-hold", slug)));
@@ -998,13 +1021,13 @@ export function createPipeline(options: PipelineOptions): Pipeline {
           logger.warn(`[pipeline] Budget still exhausted for "${slug}": ${resolution.reason} — keeping in hold`);
           return;
         }
-        // Budget is now OK — clear hold fields
-        delete state.holdReason;
+        // Budget is now OK — clear hold detail
         delete state.holdDetail;
       }
 
       state.status = "running";
       state.currentStage = resumeStage;
+      delete state.holdReason;
       delete state.pausedAtStage;
       writeRunState(holdDir, state);
       const nextDir = moveTaskDir(runtimeDir, slug, "12-hold", join(STAGE_DIR_MAP[resumeStage], "pending"));
@@ -1033,6 +1056,12 @@ export function createPipeline(options: PipelineOptions): Pipeline {
       const found = findTaskDir(slug);
       if (!found) throw new Error(`Task "${slug}" not found`);
       const state = readRunState(found.dir);
+      if (!newStages.includes(state.currentStage)) {
+        throw new Error(
+          `Cannot remove current stage "${state.currentStage}" from stage list. ` +
+          `The task is currently executing this stage.`,
+        );
+      }
       const oldStages = [...state.stages];
       state.stages = newStages;
       writeRunState(found.dir, state);

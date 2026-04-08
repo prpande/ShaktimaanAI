@@ -27,7 +27,7 @@ ShaktimaanAI is a deterministic TypeScript orchestrator that routes tasks throug
 `questions → research → design → structure → plan`
 
 **Execution (TDD)** — impl has write access:
-`impl ↔ validate → review → pr`
+`impl → review → validate → pr`
 
 The `impl → validate → review` loop retries on failure. The pipeline auto-pauses after a configurable review gate (default: `design`) for human approval before execution begins.
 
@@ -68,3 +68,12 @@ Also in `defaults.ts` (`STAGE_CONTEXT_RULES`): controls what context each stage 
 - **Config path**: `~/.shkmn/runtime/shkmn.config.json` (validated by Zod schema)
 - **Windows EBUSY handling**: retry logic with exponential backoff exists for file operations
 - **Agent prompts**: `agents/*.md` — each file is a self-contained prompt template loaded at runtime
+
+## Pipeline Diagnostics
+
+Run `/pipeline-diagnostics` to audit the pipeline runtime directory. The skill:
+- Reads baselines from source code (stage-map, defaults, retry logic, types)
+- Reads runtime config from `shkmn.config.json`
+- Dispatches 4 parallel sub-agents with 34 checks across: Task Pipeline, Slack Agent, Astra/Quick, Infrastructure
+- Produces a report at `{runtimeDir}/diagnostics/{timestamp}-diagnostic.md`
+- Optionally accepts a task slug to focus the Task Pipeline analysis: `/pipeline-diagnostics <slug>`

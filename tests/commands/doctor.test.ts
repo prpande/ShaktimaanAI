@@ -278,7 +278,7 @@ describe("checkRuntimeDirs", () => {
     createRuntimeDirs(runtimeDir);
     const result = checkRuntimeDirs(runtimeDir);
     expect(result.passed).toBe(true);
-    expect(result.fixable).toBe(true);
+    expect(result.fixable).toBe(false);
     expect(result.message).toMatch(/present/);
   });
 
