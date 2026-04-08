@@ -61,7 +61,15 @@ export function registerStatusCommand(program: Command): void {
           // Use updatedAt for held tasks — it reflects when the task entered hold
           const heldSince = readTimestamp(runStatePath, "updatedAt");
           const duration = heldSince ? ` (held ${formatElapsed(heldSince)})` : "";
-          console.log(`  ${task.slug.padEnd(40)}  → ${task.stage.padEnd(12)}${duration}`);
+          const holdReason = readTimestamp(runStatePath, "holdReason");
+          const holdDetail = readTimestamp(runStatePath, "holdDetail");
+          const reasonTag = holdReason === "budget_exhausted" ? " [budget]"
+            : holdReason === "user_paused" ? " [paused]"
+            : "";
+          console.log(`  ${task.slug.padEnd(40)}  → ${task.stage.padEnd(12)}${duration}${reasonTag}`);
+          if (holdDetail) {
+            console.log(`    ${holdDetail}`);
+          }
         }
       }
     });

@@ -913,7 +913,8 @@ export function createPipeline(options: PipelineOptions): Pipeline {
         if (resolution.action === "hold") {
           state.holdDetail = resolution.reason;
           writeRunState(holdDir, state);
-          throw new Error(`Budget still exhausted for "${slug}": ${resolution.reason}`);
+          logger.warn(`[pipeline] Budget still exhausted for "${slug}": ${resolution.reason} — keeping in hold`);
+          return;
         }
         // Budget is now OK — clear hold fields
         delete state.holdReason;
