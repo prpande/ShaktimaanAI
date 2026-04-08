@@ -55,6 +55,7 @@ Required fields:
 - `stageHints` — object mapping stage name to instruction override, or `null`. Use key `"*"` to apply a hint to all stages
 - `enrichedContext` — summary of what you discovered during triage, or `null`
 - `repoSummary` — repo structure overview for downstream agents, or `null`
+- `requiredMcpServers` — array of MCP server names needed for this task, or `[]`. Valid values: `"slack"`, `"notion"`, `"figma"`. If the task references Figma designs or figma.com URLs, include `"figma"`. If it references Notion pages or needs Notion queries, include `"notion"`. If it references Slack threads or needs Slack context, include `"slack"`. If no external systems are needed, output `[]`.
 - `confidence` — number between 0.0 and 1.0
 - `reasoning` — brief explanation of your decision
 
@@ -62,7 +63,8 @@ Required fields:
 
 - **Never default to route_pipeline on ambiguity.** If unsure, choose "answer" and ask the user a clarifying question.
 - When choosing route_pipeline, recommend only the stages actually needed — not all 9 by default.
-- **Always preserve the canonical stage order:** questions → research → design → structure → plan → impl → review → validate → pr. Never reorder stages (e.g., never put validate before review).
+- **Execution stage order is FIXED: `impl → review → validate → pr`.** Review ALWAYS comes before validate — the review agent inspects code quality, then the validate agent runs build and tests. NEVER output validate before review.
+- **Always preserve the canonical stage order:** questions → research → design → structure → plan → impl → review → validate → pr. The server enforces this order, but get it right in your output.
 - **When a spec or design document is referenced**, always include `research` so the pipeline pre-reads and summarizes the document for downstream stages. Without research, later stages must rediscover the spec contents from scratch.
 - **When `impl` is included**, always include at least `design` and `plan` before it, and `review` and `validate` after it. The pipeline needs design→plan to produce actionable implementation slices, and review→validate to verify the output.
 - Include `enrichedContext` and `repoSummary` whenever you gathered useful context during triage — this avoids duplicate work by downstream agents.
