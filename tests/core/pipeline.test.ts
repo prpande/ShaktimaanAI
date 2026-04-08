@@ -21,6 +21,7 @@ import {
   initTaskDir,
   moveTaskDir,
   createPipeline,
+  collectArtifacts,
 } from "../../src/core/pipeline.js";
 
 // ─── helpers ────────────────────────────────────────────────────────────────
@@ -1057,5 +1058,76 @@ describe("Spec 5a pipeline behavior", () => {
     expect(state.validateFailCount).toBe(1);
     // suggestionRetryUsed should be false (reset on validate failure)
     expect(state.suggestionRetryUsed).toBe(false);
+  });
+});
+
+// ─── collectArtifacts ──────────────────────────────────────────────────────
+
+describe("collectArtifacts", () => {
+  let artifactsDir: string;
+
+  beforeEach(() => {
+    artifactsDir = join(TEST_DIR, "artifacts-test-" + randomUUID().slice(0, 8));
+    mkdirSync(artifactsDir, { recursive: true });
+    writeFileSync(join(artifactsDir, "questions-output.md"), "Q output", "utf-8");
+    writeFileSync(join(artifactsDir, "research-output.md"), "R output", "utf-8");
+    writeFileSync(join(artifactsDir, "design-output.md"), "D output", "utf-8");
+    writeFileSync(join(artifactsDir, "plan-output.md"), "P output", "utf-8");
+    writeFileSync(join(artifactsDir, "impl-output.md"), "I output", "utf-8");
+    writeFileSync(join(artifactsDir, "review-output.md"), "Rev output", "utf-8");
+    writeFileSync(join(artifactsDir, "retry-feedback-validate-1.md"), "Fix these", "utf-8");
+  });
+
+  const stages = ["questions", "research", "design", "plan", "impl", "review", "validate", "pr"];
+
+  it("returns empty for mode:none stages", () => {
+    expect(collectArtifacts(artifactsDir, "questions", stages)).toBe("");
+    expect(collectArtifacts(artifactsDir, "validate", stages)).toBe("");
+  });
+
+  it("returns all prior alignment outputs for all_prior mode", () => {
+    const result = collectArtifacts(artifactsDir, "design", stages);
+    expect(result).toContain("Q output");
+    expect(result).toContain("R output");
+    expect(result).not.toContain("D output");
+  });
+
+  it("includes all alignment outputs for impl", () => {
+    const result = collectArtifacts(artifactsDir, "impl", stages);
+    expect(result).toContain("Q output");
+    expect(result).toContain("R output");
+    expect(result).toContain("D output");
+    expect(result).toContain("P output");
+    expect(result).not.toContain("I output");
+  });
+
+  it("includes retry feedback for impl", () => {
+    const result = collectArtifacts(artifactsDir, "impl", stages);
+    expect(result).toContain("Fix these");
+  });
+
+  it("returns only specific files for review", () => {
+    const result = collectArtifacts(artifactsDir, "review", stages);
+    expect(result).toContain("P output");
+    expect(result).toContain("D output");
+    expect(result).not.toContain("Q output");
+    expect(result).not.toContain("I output");
+  });
+
+  it("returns impl and review outputs for pr", () => {
+    const result = collectArtifacts(artifactsDir, "pr", stages);
+    expect(result).toContain("I output");
+    expect(result).toContain("Rev output");
+    expect(result).not.toContain("Q output");
+    expect(result).not.toContain("P output");
+  });
+
+  it("excludes execution stage outputs from all_prior", () => {
+    const result = collectArtifacts(artifactsDir, "impl", stages);
+    expect(result).not.toContain("Rev output");
+  });
+
+  it("returns empty for non-existent directory", () => {
+    expect(collectArtifacts("/nonexistent", "design", stages)).toBe("");
   });
 });

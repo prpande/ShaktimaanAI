@@ -7,6 +7,7 @@ import { type AgentRunnerFn, type AgentRunOptions, type RunState, type Completed
 import { type AgentRegistry } from "./registry.js";
 import { type TaskLogger, createTaskLogger } from "./logger.js";
 import { STAGE_DIR_MAP, DIR_STAGE_MAP, STAGES_WITH_PENDING_DONE } from "./stage-map.js";
+import { STAGE_ARTIFACT_RULES } from "../config/defaults.js";
 import { type Notifier, type NotifyEvent } from "../surfaces/types.js";
 import { parseAgentVerdict, parseReviewFindings, decideAfterValidate, decideAfterReview } from "./retry.js";
 import { createWorktree, recordWorktreeCompletion } from "./worktree.js";
@@ -18,6 +19,51 @@ import type { BudgetConfig } from "../config/budget-schema.js";
 
 // Re-export for backwards compatibility
 export { STAGE_DIR_MAP, DIR_STAGE_MAP };
+
+// ─── Scoped Artifact Collection ────────────────────────────────────────────
+
+/**
+ * Collects artifact files for a stage based on STAGE_ARTIFACT_RULES.
+ * Replaces the old blanket concatenation of all .md files.
+ */
+export function collectArtifacts(
+  artifactsDir: string,
+  stage: string,
+  stages: string[],
+): string {
+  const rules = STAGE_ARTIFACT_RULES[stage] ?? { mode: 'all_prior' as const };
+
+  if (rules.mode === 'none') return '';
+
+  let files: string[];
+  try {
+    files = readdirSync(artifactsDir).filter(f => f.endsWith('.md')).sort();
+  } catch {
+    return '';
+  }
+
+  if (rules.mode === 'specific') {
+    return files
+      .filter(f => rules.specificFiles!.some(prefix => f.startsWith(prefix)))
+      .map(f => readFileSync(join(artifactsDir, f), 'utf-8'))
+      .join('\n');
+  }
+
+  // mode === 'all_prior': only include outputs from stages before current
+  const stageIdx = stages.indexOf(stage);
+  if (stageIdx <= 0) return '';
+  const priorStages = new Set(stages.slice(0, stageIdx));
+
+  return files
+    .filter(f => {
+      if (rules.includeRetryFeedback && f.startsWith('retry-feedback-')) return true;
+      // Match "{stage}-output.md" or "{stage}-output-r1.md"
+      const stageMatch = f.match(/^([\w-]+?)-output/);
+      return stageMatch ? priorStages.has(stageMatch[1]) : false;
+    })
+    .map(f => readFileSync(join(artifactsDir, f), 'utf-8'))
+    .join('\n');
+}
 
 // ─── Pure Utilities ─────────────────────────────────────────────────────────
 
@@ -405,13 +451,9 @@ export function createPipeline(options: PipelineOptions): Pipeline {
 
       // Collect previous outputs from artifacts/
       const artifactsDir = join(currentTaskDir, "artifacts");
-      let previousOutput = "";
-      if (existsSync(artifactsDir)) {
-        const files = readdirSync(artifactsDir).filter(f => f.endsWith(".md")).sort();
-        for (const file of files) {
-          previousOutput += readFileSync(join(artifactsDir, file), "utf-8") + "\n";
-        }
-      }
+      const previousOutput = existsSync(artifactsDir)
+        ? collectArtifacts(artifactsDir, stage, state.stages)
+        : "";
 
       // Read task content
       const taskContent = readFileSync(join(currentTaskDir, "task.task"), "utf-8");
