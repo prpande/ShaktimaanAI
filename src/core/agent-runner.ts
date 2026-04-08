@@ -375,6 +375,13 @@ export async function runAgent(options: AgentRunOptions): Promise<AgentRunResult
     let outputTokens = 0;
     let receivedResult = false;
 
+    // TODO: Wire resolveMcpServers() here once cloud MCP loading is implemented.
+    // The plumbing exists (requiredMcpServers flows from Astra triage → task file
+    // → RunState → options.requiredMcpServers), but the SDK's mcpServers option
+    // only supports local stdio/sse/http servers. Cloud-hosted MCPs (Slack, Notion,
+    // Figma) use the claudeai-proxy type which requires the plugin system.
+    // When resolved, add: mcpServers: resolveMcpServers(stage, options.requiredMcpServers ?? [], config),
+
     const messages = query({
       prompt: userPrompt,
       options: {
