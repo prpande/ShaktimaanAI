@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import type { ReviewIssue } from "./types.js";
 
 // ─── Interfaces ──────────────────────────────────────────────────────────────
@@ -24,19 +25,11 @@ export interface RetryDecision {
  * Used to track the "same" issue across review iterations.
  */
 export function issueHash(severity: string, description: string): string {
-  // Extract first sentence (up to first period, exclamation, question mark or end)
   const firstSentence = description.split(/[.!?]/)[0] ?? description;
   const normalized = `${severity}|${firstSentence}`
     .toLowerCase()
     .replace(/[\s\W]+/g, "");
-
-  // Simple djb2 hash — good enough for issue identity
-  let hash = 5381;
-  for (let i = 0; i < normalized.length; i++) {
-    hash = ((hash << 5) + hash) ^ normalized.charCodeAt(i);
-    hash = hash >>> 0; // keep as unsigned 32-bit
-  }
-  return hash.toString(16).padStart(8, "0");
+  return createHash("sha256").update(normalized).digest("hex").slice(0, 16);
 }
 
 // ─── parseAgentVerdict ───────────────────────────────────────────────────────

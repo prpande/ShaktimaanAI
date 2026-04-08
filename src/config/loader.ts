@@ -1,5 +1,5 @@
 import { readFileSync, existsSync } from "node:fs";
-import { join } from "node:path";
+import { join, isAbsolute } from "node:path";
 import { configSchema, type ConfigParsed } from "./schema.js";
 import { DEFAULT_CONFIG, DEFAULT_AGENT_NAMES, DEFAULT_BUDGET_CONFIG, type ShkmnConfig } from "./defaults.js";
 import { budgetConfigSchema, type BudgetConfig } from "./budget-schema.js";
@@ -42,7 +42,13 @@ export function loadConfig(configPath: string): ResolvedConfig {
     throw new Error(`Invalid config at "${configPath}": ${messages}`);
   }
 
-  return resolveConfig(result.data);
+  const resolved = resolveConfig(result.data);
+  if (!isAbsolute(resolved.pipeline.runtimeDir)) {
+    throw new Error(
+      `pipeline.runtimeDir must be an absolute path, got: "${resolved.pipeline.runtimeDir}"`,
+    );
+  }
+  return resolved;
 }
 
 /**
