@@ -116,7 +116,7 @@ export function parseTaskFile(content: string): TaskMeta {
   // --- Required MCP Servers ---
   const mcpBody = sections["Required MCP Servers"] ?? "";
   const requiredMcpServers = mcpBody
-    ? mcpBody.split(",").map(s => s.trim()).filter(Boolean)
+    ? mcpBody.split(/[,\n]/).map(s => s.trim().toLowerCase()).filter(Boolean)
     : [];
 
   // --- Repo Summary (from Astra triage) ---

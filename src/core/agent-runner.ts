@@ -318,11 +318,17 @@ export function filterMcpToolsByTaskNeeds(
     return allowedTools;
   }
 
-  // Build set of required MCP prefixes
+  // Build set of required MCP prefixes (normalize to lowercase for resilience)
   const requiredPrefixes = new Set<string>();
   for (const serverName of requiredMcpServers) {
-    const prefix = MCP_TOOL_PREFIXES[serverName];
+    const prefix = MCP_TOOL_PREFIXES[serverName.toLowerCase().trim()];
     if (prefix) requiredPrefixes.add(prefix);
+  }
+
+  // Fail-open: if none of the server names mapped to known prefixes,
+  // pass all tools through unchanged to avoid stripping MCP access.
+  if (requiredPrefixes.size === 0) {
+    return allowedTools;
   }
 
   // Start with non-MCP tools + MCP tools that match required servers

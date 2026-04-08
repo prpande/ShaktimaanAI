@@ -43,8 +43,16 @@ export function collectArtifacts(
   }
 
   if (rules.mode === 'specific') {
-    return files
-      .filter(f => rules.specificFiles!.some(prefix => f.startsWith(prefix)))
+    // For each prefix, pick only the latest file (highest retry suffix or base).
+    // Files are sorted alphabetically, so "impl-output-r2.md" > "impl-output.md".
+    const latestByPrefix = new Map<string, string>();
+    for (const f of files) {
+      const matchedPrefix = rules.specificFiles!.find(prefix => f.startsWith(prefix));
+      if (matchedPrefix) {
+        latestByPrefix.set(matchedPrefix, f); // sorted order → last wins
+      }
+    }
+    return Array.from(latestByPrefix.values())
       .map(f => readFileSync(join(artifactsDir, f), 'utf-8'))
       .join('\n');
   }
