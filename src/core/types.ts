@@ -107,7 +107,8 @@ export interface AstraTriageResult {
 
   // Control command path
   controlOp?: "approve" | "cancel" | "skip" | "pause" |
-              "resume" | "modify_stages" | "restart_stage" | "retry" | null;
+              "resume" | "modify_stages" | "restart_stage" | "retry" | "recover" |
+              "shutdown" | null;
   extractedSlug?: string | null;
 
   // Pipeline routing path
