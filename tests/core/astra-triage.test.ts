@@ -8,6 +8,7 @@ describe("AstraTriageResult", () => {
   it("accepts action=answer shape", () => {
     const result: AstraTriageResult = {
       action: "answer",
+      directAnswer: "Current status: one active task.",
       confidence: 0.95,
       reasoning: "This is a direct question with a clear answer.",
     };
@@ -96,8 +97,28 @@ describe("parseTriageResult", () => {
     expect(parseTriageResult(json)).not.toBeNull();
   });
 
-  it("returns null for invalid JSON", () => {
-    expect(parseTriageResult("not json")).toBeNull();
+  it("returns null for malformed json-like output", () => {
+    expect(parseTriageResult("{bad json")).toBeNull();
+  });
+
+  it("falls back to answer when output is plain non-JSON text", () => {
+    const result = parseTriageResult("Pipeline is healthy. One task is running.");
+    expect(result).not.toBeNull();
+    expect(result!.action).toBe("answer");
+    expect(result!.directAnswer).toContain("Pipeline is healthy");
+  });
+
+  it("falls back to answer when non-JSON text is inside code fences", () => {
+    const result = parseTriageResult("```json\nPipeline is healthy.\n```");
+    expect(result).not.toBeNull();
+    expect(result!.action).toBe("answer");
+    expect(result!.directAnswer).toBe("Pipeline is healthy.");
+  });
+
+  it("strips generic code fences from fallback answer", () => {
+    const result = parseTriageResult("```\nHere is your answer.\n```");
+    expect(result).not.toBeNull();
+    expect(result!.directAnswer).toBe("Here is your answer.");
   });
 
   it("returns null for invalid action value", () => {
@@ -142,13 +163,15 @@ describe("runAstraTriage", () => {
     expect(result).toBeNull();
   });
 
-  it("returns null when runner returns invalid JSON", async () => {
+  it("falls back to direct answer when runner returns non-JSON text", async () => {
     const badRunner = async (): Promise<AgentRunResult> => ({
       success: true, output: "not json", costUsd: 0, turns: 1, durationMs: 100, inputTokens: 0, outputTokens: 0,
     });
 
     const result = await runAstraTriage(mockInput, badRunner, mockConfig, noopLogger);
-    expect(result).toBeNull();
+    expect(result).not.toBeNull();
+    expect(result!.action).toBe("answer");
+    expect(result!.directAnswer).toBe("not json");
   });
 
   it("returns null when runner throws", async () => {

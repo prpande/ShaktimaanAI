@@ -8,6 +8,7 @@ import type { ResolvedConfig } from "../config/loader.js";
 
 const triageResultSchema = z.object({
   action: z.enum(["answer", "route_pipeline", "control_command"]),
+  directAnswer: z.string().nullable().optional(),
   controlOp: z.enum([
     "approve", "cancel", "skip", "pause",
     "resume", "modify_stages", "restart_stage", "retry",
@@ -24,7 +25,8 @@ const triageResultSchema = z.object({
 });
 
 export function parseTriageResult(raw: string): AstraTriageResult | null {
-  let json = raw.trim();
+  const trimmedRaw = raw.trim();
+  let json = trimmedRaw;
 
   // Strip markdown code fences — handles ```json\n...\n``` and variants
   const fenceMatch = json.match(/```(?:json)?\s*\n?([\s\S]*?)\n?\s*```/i);
@@ -45,6 +47,27 @@ export function parseTriageResult(raw: string): AstraTriageResult | null {
     const result = triageResultSchema.parse(parsed);
     return result;
   } catch {
+    // Fallback: some triage runs may directly return a user-facing answer
+    // instead of strict JSON. Preserve service continuity by treating it as
+    // an "answer" action rather than emitting a hard failure to Slack.
+    // Use fence-stripped content so Slack replies never contain backtick markers.
+    const candidate = (fenceMatch ? json : trimmedRaw)
+      .replace(/```\w*\s*\n?/g, "")
+      .replace(/<thinking>[\s\S]*?<\/thinking>/gi, "")
+      .trim();
+
+    if (
+      candidate.length > 0 &&
+      !candidate.startsWith("{") &&
+      !candidate.startsWith("[")
+    ) {
+      return {
+        action: "answer",
+        directAnswer: candidate,
+        confidence: 0.35,
+        reasoning: "Fallback: triage returned non-JSON direct answer text.",
+      };
+    }
     return null;
   }
 }

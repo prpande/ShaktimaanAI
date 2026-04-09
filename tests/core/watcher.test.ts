@@ -129,4 +129,70 @@ describe("createWatcher", () => {
 
     expect(startedFiles).toHaveLength(0);
   }, 10000);
+
+  it("queues an immediate follow-up slack send when triggered during an active poll", async () => {
+    let slackPollCalls = 0;
+    let releaseFirstPoll: (() => void) | null = null;
+
+    const runner: WatcherOptions["runner"] = async (opts) => {
+      if (opts.stage === "slack-io") {
+        slackPollCalls += 1;
+        if (slackPollCalls === 1) {
+          await new Promise<void>((resolve) => {
+            releaseFirstPoll = resolve;
+          });
+        }
+      }
+
+      return {
+        success: true,
+        output: "{}",
+        costUsd: 0,
+        turns: 1,
+        durationMs: 10,
+        inputTokens: 0,
+        outputTokens: 0,
+      };
+    };
+
+    const slackEnabledConfig = {
+      ...DEFAULT_CONFIG,
+      slack: {
+        ...DEFAULT_CONFIG.slack,
+        enabled: true,
+        channelId: "C12345",
+        pollIntervalActiveSec: 3600,
+        pollIntervalIdleSec: 3600,
+      },
+    };
+
+    const watcher = createWatcher({
+      runtimeDir: TEST_DIR,
+      pipeline: makeMockPipeline(),
+      logger: mockLogger,
+      config: slackEnabledConfig,
+      runner,
+    });
+
+    watcher.triggerSlackSend();
+
+    // Wait until the first poll has actually started (releaseFirstPoll is set)
+    const firstPollDeadline = Date.now() + 2000;
+    while (releaseFirstPoll === null && Date.now() < firstPollDeadline) {
+      await delay(20);
+    }
+
+    expect(slackPollCalls).toBe(1);
+    expect(releaseFirstPoll).not.toBeNull();
+
+    watcher.triggerSlackSend(); // should queue a second immediate poll
+    releaseFirstPoll?.();
+
+    const deadline = Date.now() + 2000;
+    while (slackPollCalls < 2 && Date.now() < deadline) {
+      await delay(20);
+    }
+
+    expect(slackPollCalls).toBe(2);
+  });
 });
