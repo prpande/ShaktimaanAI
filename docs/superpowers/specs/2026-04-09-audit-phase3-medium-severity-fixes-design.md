@@ -2,7 +2,7 @@
 
 **Date:** 2026-04-09
 **Source:** [Production-Readiness Audit](../../production-readiness-audit.md) — Phase 3 (P2)
-**Scope:** 12 confirmed medium-severity bugs/gaps for improved reliability and UX
+**Scope:** 10 confirmed medium-severity bugs/gaps for improved reliability and UX
 **Prerequisite:** Phases 1-2 complete
 
 ---
@@ -15,7 +15,7 @@ After code verification (2026-04-09), several Phase 3 items were already fixed o
 |---------|---------|--------|----------|
 | 5.1 | logs -f breaks on rotation | **OPEN** | `logs.ts:20,49-63` — no rotation handling, `--lines 0` treated as 50 |
 | 5.2 | status shows NaN for bad timestamps | **OPEN** | `status.ts:8-13` — NaN propagation in formatElapsed |
-| 5.3 | holdReason values never assigned | **OPEN** | `types.ts:59` — `user_paused` checked but never set |
+| 5.3 | holdReason values never assigned | **FIXED** | `pipeline.ts:1141` — `user_paused` is set by `pause()`; `approval_required` set at line 891 |
 | 5.5 | Deferred tasks invisible in status | **OPEN** | `pipeline.ts:391-399` — scoping bug with `state` variable |
 | 5.6 | processedTs pruning order | **FIXED** | `watcher.ts:74` — sorts by float value |
 | 5.7 | shouldNotify guard is dead | **OPEN** | `types.ts:74` — `stages` level always returns true |
@@ -27,7 +27,7 @@ After code verification (2026-04-09), several Phase 3 items were already fixed o
 | 11.4 | No test coverage reporting | **OPEN** | `vitest.config.ts` — no coverage config |
 | 13.1 | .env template missing SLACK_WEBHOOK_URL | **OPEN** | init.ts omits it, doctor.ts requires it |
 
-**Remaining scope: 12 fixes across 9 modules.**
+**Remaining scope: 10 fixes across 8 modules.**
 
 ---
 
@@ -92,25 +92,7 @@ After code verification (2026-04-09), several Phase 3 items were already fixed o
 
 ## Group 2: Pipeline Core Fixes
 
-### Fix 2.1: `holdReason` Type Cleanup (§5.3)
-
-**File:** `src/core/types.ts`
-
-**Problem:** Line 59: `holdReason` type includes `"user_paused"` which is checked at `pipeline.ts:1012` and `status.ts:67` but is never assigned anywhere in the codebase.
-
-**Required Changes:**
-
-1. Find the `pause` command handler and ensure it sets `state.holdReason = "user_paused"` when pausing a task.
-2. Verify that `approveAndResume` correctly handles the `"user_paused"` hold reason (it already does at `pipeline.ts:1012`).
-
-**Tests:**
-- Test that `shkmn pause <slug>` sets `holdReason` to `"user_paused"`
-- Test that `shkmn resume <slug>` clears the hold reason and resumes correctly
-- Test that `shkmn status` shows `[paused]` tag for user-paused tasks
-
----
-
-### Fix 2.2: Deferred Tasks Invisible in Status (§5.5)
+### Fix 2.1: Deferred Tasks Invisible in Status (§5.5)
 
 **File:** `src/core/pipeline.ts`
 
@@ -138,7 +120,7 @@ After code verification (2026-04-09), several Phase 3 items were already fixed o
 
 ---
 
-### Fix 2.3: `shouldNotify` Dead Guard (§5.7)
+### Fix 2.2: `shouldNotify` Dead Guard (§5.7)
 
 **File:** `src/surfaces/types.ts`
 
@@ -157,7 +139,7 @@ After code verification (2026-04-09), several Phase 3 items were already fixed o
 
 ---
 
-### Fix 2.4: Extract `processStage` to `stage-runner.ts` (§10.1)
+### Fix 2.3: Extract `processStage` to `stage-runner.ts` (§10.1)
 
 **File:** `src/core/pipeline.ts`
 

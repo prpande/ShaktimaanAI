@@ -2,7 +2,7 @@
 
 **Date:** 2026-04-09
 **Source:** [Production-Readiness Audit](../../production-readiness-audit.md) — Phase 2 (P1)
-**Scope:** 5 confirmed high-severity bugs/gaps required for reliable operation
+**Scope:** 6 confirmed high-severity bugs/gaps required for reliable operation
 **Prerequisite:** Phase 1 complete
 
 ---
@@ -99,23 +99,32 @@ Slack-routed tasks (both quick-execute and pipeline) target the correct reposito
 });
 ```
 
-Retry feedback files are sorted numerically (correct), but stage output files use `localeCompare`. At 10+ retries, `design-output-10.md` sorts before `design-output-2.md` lexicographically.
+Retry feedback files are sorted numerically (correct), but stage output files use `localeCompare`. The artifact naming convention uses `-r<N>.md` suffixes (e.g., `impl-output-r2.md`, `impl-output-r10.md`). The `parseRetryNum` function (line 26) extracts the retry number from `-r<N>` suffixes, and `collectArtifacts` already selects only the latest output per stage. However, `parseTrailingNum` (used for the final sort at line 109) matches `-(\d+).md$` — this pattern does **not** match the `-r<N>.md` convention, so the numeric sort for non-retry files is ineffective.
 
 ### Required Changes
 
 **Module: `src/core/pipeline.ts`**
 
-1. Replace the final `a.localeCompare(b)` with numeric-aware sorting using `parseTrailingNum`:
+1. Update `parseTrailingNum` to match the actual `-r<N>.md` artifact naming convention:
+   ```typescript
+   function parseTrailingNum(filename: string): number {
+     const match = filename.match(/-r?(\d+)\.md$/);
+     return match ? parseInt(match[1], 10) : 0;
+   }
+   ```
+   This handles both `retry-feedback-impl-3.md` (plain numeric) and `impl-output-r10.md` (`-r<N>`) formats.
+
+2. Replace the final `a.localeCompare(b)` with numeric-aware sorting:
    ```
    return parseTrailingNum(a) - parseTrailingNum(b) || a.localeCompare(b);
    ```
-   This sorts by numeric suffix first, then alphabetically for files with the same number (or no number).
 
 ### Testing Requirements
 
-- Test sort order with files: `design-output-1.md`, `design-output-2.md`, ..., `design-output-10.md`, `design-output-11.md`
-- Verify `design-output-2.md` sorts before `design-output-10.md`
+- Test sort order with files: `impl-output.md`, `impl-output-r2.md`, ..., `impl-output-r10.md`, `impl-output-r11.md`
+- Verify `impl-output-r2.md` sorts before `impl-output-r10.md`
 - Test mixed retry-feedback and stage-output files maintain correct relative ordering
+- Verify `parseTrailingNum` handles both `-r<N>.md` and `-<N>.md` patterns
 
 ### Success Criteria
 

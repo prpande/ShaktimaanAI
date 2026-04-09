@@ -2,7 +2,7 @@
 
 **Date:** 2026-04-09
 **Source:** [Production-Readiness Audit](../../production-readiness-audit.md) — Phase 4 (P3)
-**Scope:** 11 confirmed polish items for production hardening
+**Scope:** 10 confirmed polish items for production hardening
 **Prerequisite:** Phases 1-3 complete
 
 ---
@@ -17,7 +17,7 @@ After code verification (2026-04-09), several Phase 4 items were already fixed o
 | 9.3 | `history` command stubbed | **OPEN** | Prints "not yet implemented", exits 0 |
 | 9.4 | `task --full` flag unused | **OPEN** | Declared at `task.ts:16`, never referenced |
 | 9.5 | `06-impl/active` unused directory | **NOT AN ISSUE** | Directory never created |
-| 9.6 | `DIR_STAGE_MAP` re-export only | **OPEN** | Intentional, documented with comment |
+| 9.6 | `DIR_STAGE_MAP` re-export only | **OPEN** | Intentional re-export for external consumers; cleanup removes it and updates any importers to use `stage-map.ts` directly |
 | 9.7 | Deprecated `STAGE_DIRS` | **NOT AN ISSUE** | Never existed in codebase |
 | 10.3 | Inconsistent `node:` import prefix | **OPEN** | 2 files use bare `fs`, rest use `node:fs` |
 | 10.4 | Duplicated `loadThreadMap` | **FIXED** | Properly centralized in `slack-queue.ts` |
@@ -30,7 +30,7 @@ After code verification (2026-04-09), several Phase 4 items were already fixed o
 | 10.13 | `stats` accepts invalid calendar dates | **OPEN** | Regex-only validation at `stats.ts:396` |
 | 8.8 | Documentation stage-order inconsistency | **OPEN** | CLAUDE.md text vs code order mismatch |
 
-**Remaining scope: 11 fixes across 8 modules.**
+**Remaining scope: 10 fixes across 8 modules.**
 
 ---
 
@@ -213,15 +213,16 @@ After code verification (2026-04-09), several Phase 4 items were already fixed o
 
 **File:** `CLAUDE.md`
 
-**Problem:** The text description says `impl → review → validate → pr` but the code implements `impl → review → validate → pr` (from `defaultStages` in `defaults.ts`). The diagram shows `impl ↔ validate → review → pr` which is misleading.
+**Problem:** The current mismatch is in the CLAUDE.md text, not the code. CLAUDE.md lists the default stage order as `impl → review → validate → pr`, which matches `defaultStages` in `defaults.ts`, but then describes the retry loop as `impl → validate → review`, incorrectly swapping `review` and `validate`. Any accompanying diagram should also reflect the same forward order and retry behavior.
 
 **Required Changes:**
 
-1. Update the CLAUDE.md diagram and text to match the actual code order:
+1. Update the CLAUDE.md text so both the main stage order and the retry-loop description match the actual code order:
    ```
    impl → review → validate → pr
    ```
-2. The `impl ↔ validate` arrow should clarify: validate failures retry back to impl, but the default forward flow is `impl → review → validate → pr`.
+2. Correct the loop sentence to clarify that validate failures retry back to `impl`; the forward flow remains `impl → review → validate → pr`.
+3. Update any related diagram so it is consistent with that same forward order and retry behavior.
 
 ---
 
