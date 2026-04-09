@@ -22,20 +22,31 @@ export interface LogContext {
   stage?: string;
 }
 
+const NOOP_LOGGER: TaskLogger = {
+  info: () => {},
+  warn: () => {},
+  error: () => {},
+};
+
 export function createTaskLogger(logDir: string, slug: string, context?: LogContext): TaskLogger {
-  mkdirSync(logDir, { recursive: true });
-  const logFile = join(logDir, `${slug}.log`);
+  try {
+    mkdirSync(logDir, { recursive: true });
+    const logFile = join(logDir, `${slug}.log`);
 
-  const logger = pino(
-    { base: context ?? undefined, timestamp: pino.stdTimeFunctions.isoTime },
-    pino.destination({ dest: logFile, append: true, sync: true }),
-  );
+    const logger = pino(
+      { base: context ?? undefined, timestamp: pino.stdTimeFunctions.isoTime },
+      pino.destination({ dest: logFile, append: true, sync: true }),
+    );
 
-  return {
-    info: (msg: string) => logger.info(msg),
-    warn: (msg: string) => logger.warn(msg),
-    error: (msg: string) => logger.error(msg),
-  };
+    return {
+      info: (msg: string) => { try { logger.info(msg); } catch { /* never crash */ } },
+      warn: (msg: string) => { try { logger.warn(msg); } catch { /* never crash */ } },
+      error: (msg: string) => { try { logger.error(msg); } catch { /* never crash */ } },
+    };
+  } catch {
+    // Logging should never crash the pipeline — fall back to no-op logger
+    return NOOP_LOGGER;
+  }
 }
 
 export function createSystemLogger(logDir: string): TaskLogger {

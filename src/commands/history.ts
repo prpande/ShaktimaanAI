@@ -62,9 +62,14 @@ export function registerHistoryCommand(program: Command): void {
     .description("Show recent completed tasks")
     .option("--count <count>", "Number of tasks to show", "10")
     .action((opts: { count: string }) => {
+      const count = parseInt(opts.count, 10);
+      if (!Number.isFinite(count) || count <= 0) {
+        console.error("Invalid --count value. Expected a positive integer.");
+        process.exit(1);
+      }
+
       const configPath = resolveConfigPath();
       const config = loadConfig(configPath);
-      const count = parseInt(opts.count, 10);
       const entries = listCompletedTasks(config.pipeline.runtimeDir, count);
 
       if (entries.length === 0) {
