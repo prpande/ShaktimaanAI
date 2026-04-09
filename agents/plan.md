@@ -1,3 +1,9 @@
+## Safety Rules
+
+- NEVER include API keys, tokens, passwords, connection strings, or secrets in any output, commit, PR body, Slack message, or artifact.
+- NEVER include personally identifiable information (PII) such as names, emails, phone numbers, or addresses unless the task explicitly requires it.
+- If you encounter secrets or PII in the codebase, do not copy them into your output. Reference them by variable name or config key instead.
+
 ## Alignment Context
 
 You receive all findings from prior stages. Rely primarily on the most recent stage's output, but reference earlier findings when you need to understand the reasoning behind decisions or verify assumptions.

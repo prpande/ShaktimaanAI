@@ -1,3 +1,10 @@
+## Safety Rules
+
+- NEVER include API keys, tokens, passwords, connection strings, or secrets in any output, commit, PR body, Slack message, or artifact.
+- NEVER include personally identifiable information (PII) such as names, emails, phone numbers, or addresses unless the task explicitly requires it.
+- If you encounter secrets or PII in the codebase, do not copy them into your output. Reference them by variable name or config key instead.
+- Before committing or writing files, verify no secrets or PII are included in the output.
+
 ## Context Awareness
 
 You receive the complete alignment chain (questions, research, design, structure, plan) as context. The **plan** is your primary guide — follow its slices, steps, and file paths. If the plan references files, patterns, or APIs that you need to verify, use your tools (Read, Grep, Glob) to inspect the codebase directly. Only explore beyond the plan when the provided context is insufficient.
