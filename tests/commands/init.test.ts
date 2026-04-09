@@ -4,6 +4,7 @@ import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { writeInitConfig, writeInitEnv } from "../../src/commands/init.js";
 import { loadConfig } from "../../src/config/loader.js";
+import { REQUIRED_ENV_KEYS } from "../../src/commands/doctor.js";
 
 const TEST_DIR = join(tmpdir(), "shkmn-test-init-" + Date.now());
 
@@ -55,15 +56,24 @@ describe("writeInitConfig", () => {
 });
 
 describe("writeInitEnv", () => {
-  it("writes .env file without SLACK_WEBHOOK_URL", () => {
+  it("writes .env file with all required keys including SLACK_WEBHOOK_URL", () => {
     writeInitEnv(TEST_DIR);
     const envPath = join(TEST_DIR, ".env");
     const content = readFileSync(envPath, "utf-8");
     expect(content).toContain("ADO_PAT=");
     expect(content).toContain("ANTHROPIC_API_KEY=");
-    expect(content).not.toContain("SLACK_WEBHOOK_URL");
+    expect(content).toContain("SLACK_WEBHOOK_URL");
     expect(content).toContain("SLACK_TOKEN=");
     expect(content).toContain("Not required when using MCP-based Slack integration");
+  });
+
+  it("contains all keys checked by doctor (REQUIRED_ENV_KEYS)", () => {
+    writeInitEnv(TEST_DIR);
+    const envPath = join(TEST_DIR, ".env");
+    const content = readFileSync(envPath, "utf-8");
+    for (const key of REQUIRED_ENV_KEYS) {
+      expect(content, `Template should include ${key}`).toContain(key);
+    }
   });
 
   it("does not overwrite existing .env", () => {

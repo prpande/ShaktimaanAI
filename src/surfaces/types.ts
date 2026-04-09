@@ -64,6 +64,18 @@ const BOOKENDS_EVENTS = new Set<NotifyEvent["type"]>([
   "task_cancelled",
 ]);
 
+const STAGES_EVENTS = new Set<NotifyEvent["type"]>([
+  ...BOOKENDS_EVENTS,
+  "stage_started",
+  "stage_completed",
+  "task_approved",
+  "task_paused",
+  "task_resumed",
+  "stage_retried",
+  "stage_skipped",
+  "stages_modified",
+]);
+
 export function shouldNotify(level: NotifyLevel, event: NotifyEvent): boolean {
   switch (level) {
     case "minimal":
@@ -71,6 +83,6 @@ export function shouldNotify(level: NotifyLevel, event: NotifyEvent): boolean {
     case "bookends":
       return BOOKENDS_EVENTS.has(event.type);
     case "stages":
-      return true;
+      return STAGES_EVENTS.has(event.type);
   }
 }
