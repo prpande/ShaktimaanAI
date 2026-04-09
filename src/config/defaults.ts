@@ -1,4 +1,5 @@
 import type { BudgetConfig } from "./budget-schema.js";
+import type { PipelineStage } from "../core/types.js";
 
 export const DEFAULT_AGENT_NAMES = {
   questions: "Gargi",
@@ -37,6 +38,11 @@ export const DEFAULT_STAGE_TOOLS: Record<string, { allowed: string[]; disallowed
   "slack-io":  { allowed: ["mcp__claude_ai_Slack__*","Read","Write"], disallowed: ["Edit","Bash","Glob","Grep"] },
   recovery:   { allowed: ["Read","Glob","Grep","Bash"], disallowed: ["Write","Edit"] },
 };
+
+// Compile-time check: every PipelineStage must have a DEFAULT_STAGE_TOOLS entry.
+// If a stage is added to PipelineStage but not here, this line will error.
+const _stageToolsExhaustive: Record<PipelineStage, { allowed: string[]; disallowed: string[] }> = DEFAULT_STAGE_TOOLS;
+void _stageToolsExhaustive;
 
 export const STAGE_CONTEXT_RULES: Record<string, {
   includeTaskContent: boolean;
