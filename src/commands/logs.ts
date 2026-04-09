@@ -5,6 +5,28 @@ import { resolveConfigPath } from "../config/resolve-path.js";
 import { loadConfig } from "../config/loader.js";
 import { resolveSlugOrExit } from "./resolve-slug-or-exit.js";
 
+/**
+ * Parses the --lines option string into a number.
+ * Returns `defaultValue` only when the input is not a valid integer (NaN).
+ * Explicitly passing 0 is honoured (returns 0, not the default).
+ */
+export function parseLineCount(raw: string, defaultValue = 50): number {
+  const parsed = parseInt(raw, 10);
+  return isNaN(parsed) ? defaultValue : parsed;
+}
+
+/**
+ * Returns the last N lines from a string.
+ * Handles files that end with a trailing newline by ignoring the final empty element.
+ */
+export function lastNLines(content: string, n: number): string[] {
+  if (n <= 0) return [];
+  const lines = content.split(/\r?\n/);
+  // Remove trailing empty line if file ends with newline
+  if (lines[lines.length - 1] === "") lines.pop();
+  return lines.slice(-n);
+}
+
 export function registerLogsCommand(program: Command): void {
   program
     .command("logs")
@@ -17,22 +39,12 @@ export function registerLogsCommand(program: Command): void {
       const config = loadConfig(configPath);
       const resolved = resolveSlugOrExit(slug, config.pipeline.runtimeDir);
 
-      const lineCount = parseInt(opts.lines, 10) || 50;
+      const lineCount = parseLineCount(opts.lines);
       const logFile = join(config.pipeline.runtimeDir, "logs", `${resolved}.log`);
 
       if (!existsSync(logFile)) {
         console.error(`Log file not found: ${logFile}`);
         process.exit(1);
-      }
-
-      /**
-       * Returns the last N lines from a string.
-       */
-      function lastNLines(content: string, n: number): string[] {
-        const lines = content.split(/\r?\n/);
-        // Remove trailing empty line if file ends with newline
-        if (lines[lines.length - 1] === "") lines.pop();
-        return lines.slice(-n);
       }
 
       // Print last N lines
@@ -53,6 +65,10 @@ export function registerLogsCommand(program: Command): void {
       watchFile(logFile, { interval: 500 }, () => {
         try {
           const newSize = statSync(logFile).size;
+          if (newSize < lastSize) {
+            // Log rotation detected: file was truncated or replaced — reset offset
+            lastSize = 0;
+          }
           if (newSize > lastSize) {
             const buf = Buffer.alloc(newSize - lastSize);
             readSync(fd, buf, 0, buf.length, lastSize);
