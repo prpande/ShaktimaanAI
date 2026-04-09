@@ -12,6 +12,7 @@ import {
   formatStatsTable,
   formatStatsJson,
   executeStats,
+  isValidCalendarDate,
   type StageStats,
   type PipelineSummary,
   type CompletedLogEntry,
@@ -483,5 +484,31 @@ describe("executeStats", () => {
     const parsed = JSON.parse(consoleSpy.mock.calls[0][0]);
     expect(parsed.stages[0].avgCostUsd).toBeCloseTo(0.05);
 
+  });
+});
+
+describe("isValidCalendarDate", () => {
+  it("accepts valid date 2026-04-09", () => {
+    expect(isValidCalendarDate("2026-04-09")).toBe(true);
+  });
+
+  it("accepts valid date 2026-02-28", () => {
+    expect(isValidCalendarDate("2026-02-28")).toBe(true);
+  });
+
+  it("rejects impossible date 2026-02-31", () => {
+    expect(isValidCalendarDate("2026-02-31")).toBe(false);
+  });
+
+  it("rejects impossible month 2026-13-01", () => {
+    expect(isValidCalendarDate("2026-13-01")).toBe(false);
+  });
+
+  it("rejects 0000-00-00", () => {
+    expect(isValidCalendarDate("0000-00-00")).toBe(false);
+  });
+
+  it("rejects wrong format", () => {
+    expect(isValidCalendarDate("04-09-2026")).toBe(false);
   });
 });
