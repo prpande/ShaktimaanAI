@@ -1,5 +1,6 @@
-import { mkdirSync, appendFileSync } from "node:fs";
+import { mkdirSync } from "node:fs";
 import { join } from "node:path";
+import pino from "pino";
 
 export interface TaskLogger {
   info(msg: string): void;
@@ -8,29 +9,35 @@ export interface TaskLogger {
 }
 
 export function formatLogLine(level: string, message: string): string {
-  const timestamp = new Date().toISOString();
-  return `[${timestamp}] [${level.toUpperCase()}] ${message}\n`;
+  return JSON.stringify({
+    level,
+    msg: message,
+    time: new Date().toISOString(),
+  });
 }
 
-export function createTaskLogger(logDir: string, slug: string): TaskLogger {
+export interface LogContext {
+  slug?: string;
+  module?: string;
+  stage?: string;
+}
+
+export function createTaskLogger(logDir: string, slug: string, context?: LogContext): TaskLogger {
   mkdirSync(logDir, { recursive: true });
   const logFile = join(logDir, `${slug}.log`);
 
-  function write(level: string, msg: string): void {
-    try {
-      appendFileSync(logFile, formatLogLine(level, msg), "utf8");
-    } catch {
-      // Logging should never crash the pipeline — silently swallow write errors
-    }
-  }
+  const logger = pino(
+    { base: context ?? undefined, timestamp: pino.stdTimeFunctions.isoTime },
+    pino.destination({ dest: logFile, append: true, sync: true }),
+  );
 
   return {
-    info: (msg: string) => write("info", msg),
-    warn: (msg: string) => write("warn", msg),
-    error: (msg: string) => write("error", msg),
+    info: (msg: string) => logger.info(msg),
+    warn: (msg: string) => logger.warn(msg),
+    error: (msg: string) => logger.error(msg),
   };
 }
 
 export function createSystemLogger(logDir: string): TaskLogger {
-  return createTaskLogger(logDir, "heimdall");
+  return createTaskLogger(logDir, "heimdall", { module: "system" });
 }
