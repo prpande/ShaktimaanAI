@@ -123,6 +123,7 @@ export interface ShkmnConfig {
     prefix: string;
     dmUserIds: string[];
     outboundPrefix: string;
+    timezone: string;
   };
   quickTask: {
     requireReview: boolean;
@@ -185,6 +186,7 @@ export const DEFAULT_CONFIG: ShkmnConfig = {
     prefix: "shkmn",
     dmUserIds: [],
     outboundPrefix: "🤖 [ShaktimaanAI]",
+    timezone: "UTC",
   },
   quickTask: {
     requireReview: true,
