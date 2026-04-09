@@ -106,7 +106,7 @@ export function collectArtifacts(
     if (aIsRetry && bIsRetry) return parseTrailingNum(a) - parseTrailingNum(b);
     if (aIsRetry) return 1;
     if (bIsRetry) return -1;
-    return parseTrailingNum(a) - parseTrailingNum(b) || a.localeCompare(b);
+    return a.localeCompare(b);
   });
 
   return outputFiles

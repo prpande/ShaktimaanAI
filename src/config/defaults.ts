@@ -22,7 +22,7 @@ export const DEFAULT_AGENT_NAMES = {
 
 export type AgentRole = keyof typeof DEFAULT_AGENT_NAMES;
 
-export const DEFAULT_STAGE_TOOLS: Record<string, { allowed: string[]; disallowed: string[] }> = {
+export const DEFAULT_STAGE_TOOLS = {
   questions:  { allowed: ["Read","Glob","Grep","Bash","WebSearch","WebFetch"], disallowed: ["Write","Edit"] },
   research:   { allowed: ["Read","Glob","Grep","Bash","WebSearch","WebFetch","mcp__claude_ai_Slack__*","mcp__plugin_notion_notion__*"], disallowed: ["Write","Edit"] },
   design:     { allowed: ["Read","Glob","Grep","Bash"], disallowed: ["Write","Edit"] },
@@ -37,12 +37,7 @@ export const DEFAULT_STAGE_TOOLS: Record<string, { allowed: string[]; disallowed
   "quick-execute": { allowed: ["Read","Write","Edit","Bash","Glob","Grep","WebSearch","WebFetch","mcp__plugin_notion_notion__*","mcp__claude_ai_Slack__*"], disallowed: [] },
   "slack-io":  { allowed: ["mcp__claude_ai_Slack__*","Read","Write"], disallowed: ["Edit","Bash","Glob","Grep"] },
   recovery:   { allowed: ["Read","Glob","Grep","Bash"], disallowed: ["Write","Edit"] },
-};
-
-// Compile-time check: every PipelineStage must have a DEFAULT_STAGE_TOOLS entry.
-// If a stage is added to PipelineStage but not here, this line will error.
-const _stageToolsExhaustive: Record<PipelineStage, { allowed: string[]; disallowed: string[] }> = DEFAULT_STAGE_TOOLS;
-void _stageToolsExhaustive;
+} as const satisfies Record<PipelineStage, { allowed: string[]; disallowed: string[] }>;
 
 export const STAGE_CONTEXT_RULES: Record<string, {
   includeTaskContent: boolean;
