@@ -1,4 +1,4 @@
-import { readdirSync, statSync, existsSync } from "node:fs";
+import { readdirSync, statSync, existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 
 import { STAGE_DIR_MAP } from "./stage-map.js";
@@ -116,6 +116,92 @@ export function scanForRecovery(runtimeDir: string): RecoveryItem[] {
   }
 
   return items;
+}
+
+// ─── Startup Scan Types ─────────────────────────────────────────────────────
+
+export interface UnanalyzedFailure {
+  slug: string;
+  dir: string;
+  stage: string;
+  error: string;
+}
+
+export interface HeldTaskWithIssue {
+  slug: string;
+  dir: string;
+  issueNumber: number;
+  issueUrl: string;
+  reEntryStage: string;
+}
+
+// ─── scanUnanalyzedFailures ─────────────────────────────────────────────────
+
+/**
+ * Scans 11-failed/ for tasks where run-state.json has no terminalFailure,
+ * no recoveryIssueUrl, and no recoveryDiagnosis — i.e., the recovery agent
+ * hasn't analyzed them yet.
+ */
+export function scanUnanalyzedFailures(runtimeDir: string): UnanalyzedFailure[] {
+  const failedDir = join(runtimeDir, "11-failed");
+  const results: UnanalyzedFailure[] = [];
+
+  for (const slug of listDirectories(failedDir)) {
+    const stateFile = join(failedDir, slug, "run-state.json");
+    if (!existsSync(stateFile)) continue;
+
+    try {
+      const state = JSON.parse(readFileSync(stateFile, "utf-8"));
+      if (state.terminalFailure) continue;
+      if (state.recoveryIssueUrl) continue;
+      if (state.recoveryDiagnosis) continue;
+
+      results.push({
+        slug,
+        dir: join(failedDir, slug),
+        stage: state.currentStage ?? "unknown",
+        error: state.error ?? "Unknown error",
+      });
+    } catch {
+      // Corrupted state file — skip
+    }
+  }
+
+  return results;
+}
+
+// ─── scanHeldTasksWithIssues ────────────────────────────────────────────────
+
+/**
+ * Scans 12-hold/ for tasks where holdReason === "awaiting_fix" and
+ * recoveryIssueNumber exists — these are tasks waiting for a fix to be merged.
+ */
+export function scanHeldTasksWithIssues(runtimeDir: string): HeldTaskWithIssue[] {
+  const holdDir = join(runtimeDir, "12-hold");
+  const results: HeldTaskWithIssue[] = [];
+
+  for (const slug of listDirectories(holdDir)) {
+    const stateFile = join(holdDir, slug, "run-state.json");
+    if (!existsSync(stateFile)) continue;
+
+    try {
+      const state = JSON.parse(readFileSync(stateFile, "utf-8"));
+      if (state.holdReason !== "awaiting_fix") continue;
+      if (!state.recoveryIssueNumber) continue;
+
+      results.push({
+        slug,
+        dir: join(holdDir, slug),
+        issueNumber: state.recoveryIssueNumber,
+        issueUrl: state.recoveryIssueUrl ?? "",
+        reEntryStage: state.recoveryReEntryStage ?? state.currentStage ?? "unknown",
+      });
+    } catch {
+      // Corrupted state file — skip
+    }
+  }
+
+  return results;
 }
 
 // ─── runRecovery ─────────────────────────────────────────────────────────────
