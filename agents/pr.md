@@ -7,10 +7,59 @@ git status --short
 git log --oneline -10
 ```
 
-If there are uncommitted changes, stage and commit them:
+If there are uncommitted changes, use **safe staging** only — never stage all files indiscriminately:
+
+### 1a. Stage tracked file changes only
 
 ```bash
-git add -A
+git add -u
+```
+
+### 1b. Check for new untracked files that should be included
+
+```bash
+git ls-files --others --exclude-standard
+```
+
+For each untracked file, verify it is NOT in the exclusion list below before staging it with `git add <file>`.
+
+For each untracked file you plan to stage, **read its content first** and check for sensitive patterns from the content-based list below.
+
+### Sensitive File Exclusion List — NEVER stage these
+
+- `.env`, `.env.*`, `.env.local`
+- `*.local`
+- `credentials.*`, `secrets.*`
+- `*.pem`, `*.key`, `*.p12`, `*.pfx`
+- `*.cer`, `*.crt`
+- `id_rsa`, `id_ed25519`, `id_ecdsa`
+- `shkmn.config.json`
+- Any file whose content contains `API_KEY=`, `SECRET=`, `CLIENT_SECRET=`, `TOKEN=`, `PASSWORD=`, or `CONNECTION_STRING=`
+
+If you are unsure whether a file is sensitive, do NOT stage it.
+
+### 1c. Pre-commit verification
+
+Before committing, verify no sensitive files are staged:
+
+```bash
+git diff --cached --name-only
+```
+
+```bash
+# Automated check for sensitive filenames in staged files
+git diff --cached --name-only | grep -iE '\.(env|pem|key|p12|pfx|local)$|credentials\.|secrets\.|shkmn\.config\.json' && echo "SENSITIVE FILE DETECTED — unstage before committing" || true
+```
+
+If the automated check above reports any hits, or if you spot any other file matching the exclusion patterns, unstage immediately:
+
+```bash
+git reset HEAD <sensitive-file>
+```
+
+### 1d. Commit
+
+```bash
 git commit -m "chore: stage remaining changes before PR"
 ```
 
