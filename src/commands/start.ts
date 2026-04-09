@@ -10,7 +10,7 @@ import { createPipeline } from "../core/pipeline.js";
 import { runAgent } from "../core/agent-runner.js";
 import { createWatcher, type Watcher } from "../core/watcher.js";
 import { createConsoleNotifier } from "../surfaces/console-notifier.js";
-import { runRecovery } from "../core/recovery.js";
+import { runRecovery, runRecoveryStartupScan } from "../core/recovery.js";
 import { cleanupExpired } from "../core/worktree.js";
 
 // ─── Module-level watcher reference ─────────────────────────────────────────
@@ -61,6 +61,24 @@ export function registerStartCommand(program: Command): void {
         runner: runAgent,
         logger,
       });
+
+      // 5b. Run recovery startup scan (diagnose failures, check issues, log pending)
+      // Note: notifiers aren't registered yet, so emitNotify is a no-op logger
+      const scanResult = await runRecoveryStartupScan(
+        config.pipeline.runtimeDir,
+        config,
+        runAgent,
+        logger,
+        (event) => {
+          logger.info(`[startup-scan] Event: ${event.type} slug=${event.slug ?? "n/a"}`);
+        },
+      );
+      if (scanResult.recovered.length || scanResult.terminal.length || scanResult.pending.length) {
+        logger.info(
+          `[startup] Recovery scan: ${scanResult.recovered.length} recovered, ` +
+          `${scanResult.terminal.length} terminal, ${scanResult.pending.length} pending`,
+        );
+      }
 
       // 6. Run crash recovery
       await runRecovery(config.pipeline.runtimeDir, pipeline, logger);
