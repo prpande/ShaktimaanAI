@@ -5,8 +5,10 @@ import { resolveConfigPath } from "../config/resolve-path.js";
 import { loadConfig } from "../config/loader.js";
 import { listActiveSlugs } from "../core/slug-resolver.js";
 
-function formatElapsed(startedAt: string): string {
-  const ms = Date.now() - new Date(startedAt).getTime();
+export function formatElapsed(startedAt: string): string {
+  const start = new Date(startedAt).getTime();
+  if (isNaN(start)) return "unknown";
+  const ms = Date.now() - start;
   const minutes = Math.floor(ms / 60_000);
   if (minutes < 60) return `${minutes}m`;
   const hours = Math.floor(minutes / 60);
