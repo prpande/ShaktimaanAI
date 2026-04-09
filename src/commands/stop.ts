@@ -1,5 +1,5 @@
 import { Command } from "commander";
-import { readFileSync, existsSync, unlinkSync } from "node:fs";
+import { readFileSync, writeFileSync, existsSync, unlinkSync, mkdirSync } from "node:fs";
 import { join } from "node:path";
 import { resolveConfigPath } from "../config/resolve-path.js";
 import { loadConfig } from "../config/loader.js";
@@ -15,7 +15,8 @@ export function registerStopCommand(program: Command): void {
       const configPath = resolveConfigPath();
       const config = loadConfig(configPath);
 
-      const pidFile = join(config.pipeline.runtimeDir, "shkmn.pid");
+      const runtimeDir = config.pipeline.runtimeDir;
+      const pidFile = join(runtimeDir, "shkmn.pid");
 
       // 2. Check for PID file
       if (!existsSync(pidFile)) {
@@ -23,7 +24,6 @@ export function registerStopCommand(program: Command): void {
         process.exit(1);
       }
 
-      // 3. Read PID, send signal, clean up
       let pid: number;
       try {
         const raw = readFileSync(pidFile, "utf-8").trim();
@@ -31,37 +31,89 @@ export function registerStopCommand(program: Command): void {
         if (isNaN(pid)) {
           throw new Error(`Invalid PID value in file: "${raw}"`);
         }
-
-        process.kill(pid, "SIGTERM");
-
-        // Wait briefly and verify the process has stopped
-        const deadline = Date.now() + 3_000;
-        let alive = true;
-        while (Date.now() < deadline) {
-          try {
-            process.kill(pid, 0); // signal 0 = check if alive
-            await new Promise((r) => setTimeout(r, 250));
-          } catch {
-            alive = false;
-            break;
-          }
-        }
-
-        unlinkSync(pidFile);
-
-        if (alive) {
-          console.warn(`Warning: ShaktimaanAI (PID ${pid}) may still be running after SIGTERM.`);
-        } else {
-          console.log(`ShaktimaanAI (PID ${pid}) stopped.`);
-        }
       } catch (err) {
         const message = err instanceof Error ? err.message : String(err);
-        console.error(`Failed to stop ShaktimaanAI: ${message}`);
-        // Clean up stale PID file if it still exists
-        if (existsSync(pidFile)) {
-          unlinkSync(pidFile);
-        }
+        console.error(`Failed to read PID file: ${message}`);
+        if (existsSync(pidFile)) unlinkSync(pidFile);
         process.exit(1);
+        return; // unreachable, for TS
+      }
+
+      // 3. Verify process is alive
+      try {
+        process.kill(pid, 0);
+      } catch {
+        console.error(`ShaktimaanAI (PID ${pid}) is not running. Cleaning up stale PID file.`);
+        unlinkSync(pidFile);
+        process.exit(1);
+        return;
+      }
+
+      // 4. Write shutdown.control file to trigger graceful drain
+      const inboxDir = join(runtimeDir, "00-inbox");
+      mkdirSync(inboxDir, { recursive: true });
+      const controlPath = join(inboxDir, "shutdown.control");
+      writeFileSync(
+        controlPath,
+        JSON.stringify({ operation: "shutdown", slug: "system" }),
+        "utf-8",
+      );
+      console.log("Shutdown signal sent via control file. Waiting for graceful drain...");
+
+      // 5. Poll for process exit (10-minute timeout)
+      const TIMEOUT_MS = 10 * 60 * 1000;
+      const POLL_MS = 1_000;
+      const deadline = Date.now() + TIMEOUT_MS;
+      let alive = true;
+
+      while (Date.now() < deadline) {
+        await new Promise((r) => setTimeout(r, POLL_MS));
+        try {
+          process.kill(pid, 0);
+          // Still alive — keep waiting
+        } catch {
+          alive = false;
+          break;
+        }
+      }
+
+      // 6. Force kill if timeout exceeded
+      if (alive) {
+        console.warn(`Graceful drain timed out after 10 minutes. Sending SIGTERM to PID ${pid}...`);
+        try {
+          process.kill(pid, "SIGTERM");
+          // Wait briefly for forced shutdown
+          const forceDeadline = Date.now() + 5_000;
+          while (Date.now() < forceDeadline) {
+            await new Promise((r) => setTimeout(r, 250));
+            try {
+              process.kill(pid, 0);
+            } catch {
+              alive = false;
+              break;
+            }
+          }
+        } catch {
+          alive = false;
+        }
+
+        if (alive) {
+          console.error(`Process ${pid} still running after force SIGTERM. Manual intervention may be needed.`);
+        }
+      }
+
+      // 7. Clean up PID file
+      if (existsSync(pidFile)) {
+        unlinkSync(pidFile);
+      }
+
+      // Clean up control file if still present
+      if (existsSync(controlPath)) {
+        try { unlinkSync(controlPath); } catch { /* may already be gone */ }
+      }
+
+      if (!alive) {
+        console.log(`ShaktimaanAI (PID ${pid}) stopped.`);
       }
     });
 }

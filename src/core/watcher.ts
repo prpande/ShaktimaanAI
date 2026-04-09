@@ -24,6 +24,7 @@ const controlSchema = z.discriminatedUnion("operation", [
   z.object({ operation: z.literal("modify_stages"), slug: z.string(), stages: z.array(z.string()) }),
   z.object({ operation: z.literal("restart_stage"), slug: z.string(), stage: z.string().optional() }),
   z.object({ operation: z.literal("retry"), slug: z.string(), feedback: z.string() }),
+  z.object({ operation: z.literal("shutdown"), slug: z.string() }),
 ]);
 
 // ─── Types ───────────────────────────────────────────────────────────────────
@@ -386,6 +387,11 @@ export function createWatcher(options: WatcherOptions): Watcher {
       case "modify_stages": await pipeline.modifyStages(cmd.slug, cmd.stages); break;
       case "restart_stage": await pipeline.restartStage(cmd.slug, cmd.stage); break;
       case "retry": await pipeline.retry(cmd.slug, cmd.feedback); break;
+      case "shutdown": {
+        logger.info("[watcher] Received shutdown.control — initiating graceful drain");
+        process.emit("SIGTERM" as any);
+        break;
+      }
     }
 
     // Delete only after successful processing
