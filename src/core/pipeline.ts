@@ -93,7 +93,7 @@ export function collectArtifacts(
   }
 
   function parseTrailingNum(filename: string): number {
-    const match = filename.match(/-(\d+)\.md$/);
+    const match = filename.match(/-r?(\d+)\.md$/);
     return match ? parseInt(match[1], 10) : 0;
   }
 
@@ -106,7 +106,7 @@ export function collectArtifacts(
     if (aIsRetry && bIsRetry) return parseTrailingNum(a) - parseTrailingNum(b);
     if (aIsRetry) return 1;
     if (bIsRetry) return -1;
-    return a.localeCompare(b);
+    return parseTrailingNum(a) - parseTrailingNum(b) || a.localeCompare(b);
   });
 
   return outputFiles
