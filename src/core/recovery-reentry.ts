@@ -49,8 +49,10 @@ function archiveDownstreamArtifacts(taskDir: string, reEntryStage: string): void
     // Skip directories (like pre-recovery itself)
     if (file === "pre-recovery") continue;
 
-    // Check if the artifact belongs to a downstream stage
-    const isDownstream = Array.from(downstreamStages).some((stage) => file.startsWith(stage));
+    // Check if the artifact belongs to a downstream stage (including retry-feedback files)
+    const isDownstream = Array.from(downstreamStages).some(
+      (stage) => file.startsWith(stage) || file.startsWith(`retry-feedback-${stage}-`),
+    );
     if (!isDownstream) continue;
 
     // Move to archive
@@ -114,6 +116,11 @@ export function reenterTask(
   delete state.holdReason;
   delete state.holdDetail;
   delete state.pausedAtStage;
+
+  // Defensively default maps/arrays that may be missing in old state files
+  state.retryAttempts ??= {};
+  state.reviewIssues ??= [];
+  state.stageHints ??= {};
 
   // Clear retry counts for re-entry stage and downstream
   const downstreamStages = getDownstreamStages(reEntryStage);

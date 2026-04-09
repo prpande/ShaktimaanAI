@@ -97,23 +97,24 @@ export function registerStopCommand(program: Command): void {
           alive = false;
         }
 
-        if (alive) {
-          console.error(`Process ${pid} still running after force SIGTERM. Manual intervention may be needed.`);
-        }
       }
 
-      // 7. Clean up PID file
-      if (existsSync(pidFile)) {
-        unlinkSync(pidFile);
-      }
-
-      // Clean up control file if still present
-      if (existsSync(controlPath)) {
-        try { unlinkSync(controlPath); } catch { /* may already be gone */ }
-      }
-
+      // 7. Clean up PID file only if process has exited
       if (!alive) {
+        if (existsSync(pidFile)) {
+          unlinkSync(pidFile);
+        }
+
+        // Clean up control file if still present
+        if (existsSync(controlPath)) {
+          try { unlinkSync(controlPath); } catch { /* may already be gone */ }
+        }
+
         console.log(`ShaktimaanAI (PID ${pid}) stopped.`);
+      } else {
+        // Process still alive after force kill — keep PID file to prevent watchdog double-launch
+        console.error(`Process ${pid} could not be stopped. PID file retained to prevent duplicate instances.`);
+        process.exit(2);
       }
     });
 }

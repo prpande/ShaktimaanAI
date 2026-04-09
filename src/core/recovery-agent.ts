@@ -1,4 +1,4 @@
-import { existsSync, readFileSync, readdirSync } from "node:fs";
+import { existsSync, readFileSync, readdirSync, openSync, statSync, readSync, closeSync } from "node:fs";
 import { join } from "node:path";
 import { execFileSync } from "node:child_process";
 import { type AgentRunnerFn, type RunState } from "./types.js";
@@ -163,7 +163,7 @@ function fileGithubIssue(
   githubRepo: string,
   stage: string,
   issueBody: string,
-): { url: string; number: number } | null {
+): { url: string; number: number | null } | null {
   try {
     const title = `[Recovery] ${stage} stage failure`;
     const result = execFileSync("gh", [
@@ -180,9 +180,10 @@ function fileGithubIssue(
     const numberMatch = output.match(/\/issues\/(\d+)/);
 
     if (urlMatch) {
+      const parsed = numberMatch ? parseInt(numberMatch[1], 10) : NaN;
       return {
         url: urlMatch[0],
-        number: numberMatch ? parseInt(numberMatch[1], 10) : 0,
+        number: parsed > 0 ? parsed : null,
       };
     }
   } catch {
@@ -239,8 +240,27 @@ function buildRecoveryContext(taskDir: string, state: RunState): string {
       );
       if (logFile) {
         const logPath = join(artifactsDir, logFile);
-        const content = readFileSync(logPath, "utf-8");
-        const lines = content.split("\n");
+        const fileSize = statSync(logPath).size;
+        const TAIL_BYTES = 64 * 1024; // 64KB — enough for 200+ lines without loading entire file
+        let tailContent: string;
+
+        if (fileSize <= TAIL_BYTES) {
+          tailContent = readFileSync(logPath, "utf-8");
+        } else {
+          const buf = Buffer.alloc(TAIL_BYTES);
+          const fd = openSync(logPath, "r");
+          try {
+            readSync(fd, buf, 0, TAIL_BYTES, fileSize - TAIL_BYTES);
+          } finally {
+            closeSync(fd);
+          }
+          // Drop first partial line (we likely landed mid-line)
+          const raw = buf.toString("utf-8");
+          const firstNewline = raw.indexOf("\n");
+          tailContent = firstNewline >= 0 ? raw.slice(firstNewline + 1) : raw;
+        }
+
+        const lines = tailContent.split("\n");
         const tail = lines.slice(-200).join("\n");
         sections.push("## JSONL Stream Log (last 200 lines)");
         sections.push("```jsonl");
@@ -351,7 +371,7 @@ export async function runRecoveryAgent(
 
     // 6. Fixable — optionally file/dedupe GitHub issue
     let issueUrl: string | undefined;
-    let issueNumber: number | undefined;
+    let issueNumber: number | null | undefined;
 
     if (config.recovery.fileGithubIssues && ghIsAvailable()) {
       const githubRepo = config.recovery.githubRepo;
@@ -386,7 +406,7 @@ export async function runRecoveryAgent(
     state.recoveryDiagnosis = diagnosis.diagnosis;
     state.recoveryReEntryStage = diagnosis.reEntryStage ?? undefined;
     state.recoveryIssueUrl = issueUrl;
-    state.recoveryIssueNumber = issueNumber;
+    state.recoveryIssueNumber = issueNumber ?? undefined;
     state.status = "hold";
     state.holdReason = "awaiting_fix";
     state.holdDetail = `Recovery: ${diagnosis.diagnosis}`;

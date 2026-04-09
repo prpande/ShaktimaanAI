@@ -56,7 +56,7 @@ export const STAGE_CONTEXT_RULES: Record<string, {
   "quick-triage": { includeTaskContent: true, previousOutputLabel: null,                 includeRepoContext: true },
   "quick-execute": { includeTaskContent: true, previousOutputLabel: null,                includeRepoContext: true },
   "slack-io": { includeTaskContent: true, previousOutputLabel: null,                      includeRepoContext: false },
-  recovery:   { includeTaskContent: false, previousOutputLabel: null,                     includeRepoContext: false },
+  recovery:   { includeTaskContent: true,  previousOutputLabel: null,                     includeRepoContext: false },
 };
 
 // ─── Scoped artifact passing rules ──────────────────────────────────────────

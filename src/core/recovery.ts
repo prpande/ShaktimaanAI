@@ -397,9 +397,10 @@ export async function runRecoveryStartupScan(
           const taskDir = held.dir;
           try {
             const state = readRunState(taskDir);
+            state.status = "failed";
             state.terminalFailure = true;
             state.holdReason = undefined;
-            state.holdDetail = `Issue #${held.issueNumber} closed as NOT_PLANNED`;
+            state.holdDetail = undefined;
             const { writeRunState: writeState } = await import("./pipeline.js");
             writeState(taskDir, state);
             moveTaskDir(runtimeDir, held.slug, "12-hold", "11-failed");
