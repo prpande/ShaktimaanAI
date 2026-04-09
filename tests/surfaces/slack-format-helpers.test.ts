@@ -15,6 +15,13 @@ describe("formatTime", () => {
     // 14:27 UTC = 19:57 IST (UTC+5:30)
     const result = formatTime("2026-01-01T14:27:00.000Z", "Asia/Kolkata");
     expect(result).toMatch(/7:57 PM/);
+    expect(result).toContain("Asia/Kolkata");
+  });
+
+  it("falls back to UTC for invalid timezone", () => {
+    const result = formatTime("2026-01-01T14:27:00.000Z", "Invalid/Zone");
+    expect(result).toMatch(/2:27 PM/);
+    expect(result).toContain("UTC");
   });
 });
 

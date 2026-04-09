@@ -19,13 +19,24 @@ export interface SlackNotifierOptions {
 // ─── Formatting helpers ────────────────────────────────────────────────────────
 
 export function formatTime(iso: string, timezone: string): string {
-  return new Date(iso).toLocaleString("en-US", {
-    timeZone: timezone,
+  const formatOptions: Intl.DateTimeFormatOptions = {
     hour: "numeric",
     minute: "2-digit",
     hour12: true,
-    timeZoneName: "short",
-  });
+  };
+  try {
+    const time = new Intl.DateTimeFormat("en-US", {
+      ...formatOptions,
+      timeZone: timezone,
+    }).format(new Date(iso));
+    return `${time} ${timezone}`;
+  } catch {
+    const time = new Intl.DateTimeFormat("en-US", {
+      ...formatOptions,
+      timeZone: "UTC",
+    }).format(new Date(iso));
+    return `${time} UTC`;
+  }
 }
 
 export function formatDuration(seconds: number): string {
@@ -76,13 +87,13 @@ export function formatEvent(event: NotifyEvent, timezone: string = "UTC"): strin
 
     case "stage_started": {
       const agent = event.agentName ? ` — ${event.agentName}` : "";
-      return `\n${ts}\n▶️ *${event.stage}* started${agent}`;
+      return `\n${ts}\n▶️ *${event.stage}* started ${slug}${agent}`;
     }
 
     case "stage_completed": {
       const model = event.model ? ` (${event.model})` : "";
       const agent = event.agentName ?? event.stage;
-      const lines = [`\n${ts}`, `✅ *${event.stage}* completed — ${agent}${model}`];
+      const lines = [`\n${ts}`, `✅ *${event.stage}* completed ${slug} — ${agent}${model}`];
       if (event.verdict) lines.push(`📋 Verdict: ${event.verdict}`);
       const metrics = formatMetrics(event);
       if (metrics) lines.push(metrics);
@@ -93,15 +104,15 @@ export function formatEvent(event: NotifyEvent, timezone: string = "UTC"): strin
       if (event.holdReason === "budget_exhausted") {
         const model = event.model ? ` (${event.model})` : "";
         const agent = event.agentName ?? event.stage;
-        const lines = [`\n${ts}`, `✋ *${event.stage}* held — ${agent}${model}`];
+        const lines = [`\n${ts}`, `✋ *${event.stage}* held ${slug} — ${agent}${model}`];
         if (event.holdDetail) lines.push(`💸 Budget exhausted: ${event.holdDetail}`);
         return lines.join("\n");
       }
       if (event.holdReason === "approval_required") {
-        return `\n${ts}\n✋ *${event.stage}* completed — awaiting approval`;
+        return `\n${ts}\n✋ *${event.stage}* completed ${slug} — awaiting approval`;
       }
       // Fallback for any other hold reason
-      return `\n${ts}\n✋ *${event.stage}* held — awaiting review`;
+      return `\n${ts}\n✋ *${event.stage}* held ${slug} — awaiting review`;
     }
 
     case "task_approved": {
@@ -134,7 +145,8 @@ export function formatEvent(event: NotifyEvent, timezone: string = "UTC"): strin
 
         lines.push("");
         lines.push(`📊 *Pipeline Summary*`);
-        lines.push(`${totalDurationStr}💰 $${totalCost.toFixed(2)}`);
+        const retryCost = event.completedStages.length > stages.length ? " (incl. retries)" : "";
+        lines.push(`${totalDurationStr}💰 $${totalCost.toFixed(2)}${retryCost}`);
         lines.push("");
         lines.push("| Stage | Agent | Model | Duration | Cost | Tokens |");
         lines.push("|-------|-------|-------|----------|------|--------|");
@@ -155,7 +167,7 @@ export function formatEvent(event: NotifyEvent, timezone: string = "UTC"): strin
     case "task_failed": {
       const model = event.model ? ` (${event.model})` : "";
       const agent = event.agentName ?? event.stage;
-      const lines = [`\n${ts}`, `❌ *${event.stage}* failed — ${agent}${model}`];
+      const lines = [`\n${ts}`, `❌ *${event.stage}* failed ${slug} — ${agent}${model}`];
       lines.push(`⚠️ ${event.error}`);
       const metrics = formatMetrics(event);
       if (metrics) lines.push(metrics);
@@ -172,10 +184,10 @@ export function formatEvent(event: NotifyEvent, timezone: string = "UTC"): strin
       return `\n${ts}\n▶️ *Task resumed* ${slug} by ${event.resumedBy}`;
 
     case "stage_retried":
-      return `\n${ts}\n🔁 *${event.stage}* retried — attempt ${event.attempt}\n📋 feedback: "${event.feedback}"`;
+      return `\n${ts}\n🔁 *${event.stage}* retried ${slug} — attempt ${event.attempt}\n📋 feedback: "${event.feedback}"`;
 
     case "stage_skipped":
-      return `\n${ts}\n⏭ *${event.stage}* skipped`;
+      return `\n${ts}\n⏭ *${event.stage}* skipped ${slug}`;
 
     case "stages_modified":
       return `\n${ts}\n✏️ *Stages modified* ${slug}\n📋 old: ${event.oldStages.join(", ")}\n📋 new: ${event.newStages.join(", ")}`;

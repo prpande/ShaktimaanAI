@@ -135,7 +135,7 @@ describe("formatEvent (enriched)", () => {
       makeEvent("stage_started", "my-task", { stage: "design", agentName: "Vishwakarma" }),
       tz,
     );
-    expect(msg).toContain("▶️ *design* started — Vishwakarma");
+    expect(msg).toContain("▶️ *design* started `my-task` — Vishwakarma");
     expect(msg).toContain("12:00 PM UTC");
     expect(msg).toMatch(/^\n/);
   });
@@ -155,7 +155,7 @@ describe("formatEvent (enriched)", () => {
       }),
       tz,
     );
-    expect(msg).toContain("✅ *design* completed — Vishwakarma (opus)");
+    expect(msg).toContain("✅ *design* completed `my-task` — Vishwakarma (opus)");
     expect(msg).toContain("4m 34s");
     expect(msg).toContain("$0.88");
     expect(msg).toContain("27 turns");
@@ -187,7 +187,7 @@ describe("formatEvent (enriched)", () => {
       }),
       tz,
     );
-    expect(msg).toContain("✋ *impl* held — Karigar (opus)");
+    expect(msg).toContain("✋ *impl* held `my-task` — Karigar (opus)");
     expect(msg).toContain("💸 Budget exhausted: opus task limit at 209%");
   });
 
@@ -201,7 +201,7 @@ describe("formatEvent (enriched)", () => {
       }),
       tz,
     );
-    expect(msg).toContain("✋ *design* completed — awaiting approval");
+    expect(msg).toContain("✋ *design* completed `my-task` — awaiting approval");
   });
 
   it("task_failed includes metrics", () => {
@@ -219,7 +219,7 @@ describe("formatEvent (enriched)", () => {
       }),
       tz,
     );
-    expect(msg).toContain("❌ *validate* failed — Dharma (haiku)");
+    expect(msg).toContain("❌ *validate* failed `my-task` — Dharma (haiku)");
     expect(msg).toContain("Unknown validate verdict");
     expect(msg).toContain("3m 27s");
     expect(msg).toContain("$0.12");
@@ -280,7 +280,7 @@ describe("formatEvent (enriched)", () => {
       makeEvent("stage_retried", "my-task", { stage: "impl", attempt: 2, feedback: "Fix auth tests" }),
       tz,
     );
-    expect(msg).toContain("🔁 *impl* retried — attempt 2");
+    expect(msg).toContain("🔁 *impl* retried `my-task` — attempt 2");
     expect(msg).toContain("Fix auth tests");
   });
 

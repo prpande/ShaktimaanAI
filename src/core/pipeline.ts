@@ -510,7 +510,7 @@ export function createPipeline(options: PipelineOptions): Pipeline {
       const abortController = new AbortController();
       const agentName = config.agents.names[stage] ?? stage;
       const agentId = registry.register(slug, stage, agentName, abortController);
-      emitNotify({ type: "stage_started", slug, stage, agentName: config.agents.names[stage] ?? stage, timestamp: new Date().toISOString() });
+      emitNotify({ type: "stage_started", slug, stage, agentName, timestamp: new Date().toISOString() });
       try {
         appendDailyLogEntry(interactionsDir, {
           timestamp: new Date().toISOString(),
@@ -836,7 +836,7 @@ export function createPipeline(options: PipelineOptions): Pipeline {
 
       emitNotify({
         type: "stage_completed", slug, stage,
-        artifactPath: `${stage}-output${outputSuffix}.md`,
+        artifactPath: outputFileName,
         durationSeconds: Math.round(result.durationMs / 1000),
         costUsd: result.costUsd,
         model: resolvedModel,
