@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, afterEach } from "vitest";
+import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import { mkdirSync, rmSync, readFileSync, writeFileSync, existsSync } from "node:fs";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
@@ -123,6 +123,16 @@ describe("SlackNotifier (file-based outbox)", () => {
       await expect(
         notifier.notify(makeEvent("stage_started", "my-task", { stage: "impl" })),
       ).resolves.toBeUndefined();
+    });
+
+    it("logs a warning when outbox write fails", async () => {
+      const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
+      const notifier = createSlackNotifier({ channelId: "C123", notifyLevel: "stages", runtimeDir: "/\0invalid" });
+      await notifier.notify(makeEvent("task_failed", "test-task", { stage: "impl", error: "boom" }));
+      expect(warnSpy).toHaveBeenCalledWith(
+        expect.stringContaining("[slack-notifier] Failed to write outbox entry:"),
+      );
+      warnSpy.mockRestore();
     });
   });
 });
