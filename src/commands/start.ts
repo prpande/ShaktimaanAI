@@ -83,6 +83,7 @@ export function registerStartCommand(program: Command): void {
           channelId: config.slack.channelId,
           notifyLevel: config.slack.notifyLevel,
           runtimeDir: config.pipeline.runtimeDir,
+          timezone: config.slack.timezone,
           onOutboxWrite: () => activeWatcher?.triggerSlackSend(),
         }));
         logger.info("[start] SlackNotifier registered (file-based outbox, on-demand send)");
