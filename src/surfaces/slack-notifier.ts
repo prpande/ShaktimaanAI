@@ -15,6 +15,54 @@ export interface SlackNotifierOptions {
   onOutboxWrite?: () => void;
 }
 
+// ─── Formatting helpers ────────────────────────────────────────────────────────
+
+export function formatTime(iso: string, timezone: string): string {
+  return new Date(iso).toLocaleString("en-US", {
+    timeZone: timezone,
+    hour: "numeric",
+    minute: "2-digit",
+    hour12: true,
+    timeZoneName: "short",
+  });
+}
+
+export function formatDuration(seconds: number): string {
+  if (seconds < 60) return `${seconds}s`;
+  const m = Math.floor(seconds / 60);
+  const s = seconds % 60;
+  if (m < 60) return s > 0 ? `${m}m ${s}s` : `${m}m`;
+  const h = Math.floor(m / 60);
+  const rm = m % 60;
+  return rm > 0 ? `${h}h ${rm}m` : `${h}h`;
+}
+
+export function formatTokens(input?: number, output?: number): string {
+  const fmt = (n: number) => n.toLocaleString("en-US");
+  return `${fmt(input ?? 0)} in / ${fmt(output ?? 0)} out`;
+}
+
+export function formatMetrics(m: {
+  durationSeconds?: number;
+  costUsd?: number;
+  turns?: number;
+  inputTokens?: number;
+  outputTokens?: number;
+}): string {
+  const parts: string[] = [];
+  if (m.durationSeconds != null) parts.push(`⏱ ${formatDuration(m.durationSeconds)}`);
+  if (m.costUsd != null) parts.push(`💰 $${m.costUsd.toFixed(2)}`);
+  if (m.turns != null) parts.push(`${m.turns} turns`);
+  const line1 = parts.join(" · ");
+
+  const line2 =
+    m.inputTokens != null || m.outputTokens != null
+      ? `📊 ${formatTokens(m.inputTokens, m.outputTokens)}`
+      : "";
+
+  return [line1, line2].filter(Boolean).join("\n");
+}
+
 // ─── formatEvent ─────────────────────────────────────────────────────────────
 
 export function formatEvent(event: NotifyEvent): string {
