@@ -320,6 +320,10 @@ export function createPipeline(options: PipelineOptions): Pipeline {
     state: RunState,
     errorMsg: string,
     fromSubdir: string,
+    metrics?: {
+      durationSeconds?: number; costUsd?: number; model?: string;
+      inputTokens?: number; outputTokens?: number; turns?: number;
+    },
   ): void {
     state.status = "failed";
     state.error = errorMsg;
@@ -336,7 +340,17 @@ export function createPipeline(options: PipelineOptions): Pipeline {
         `Original error: ${state.error}`,
       );
     }
-    emitNotify({ type: "task_failed", slug, stage, error: state.error, timestamp: new Date().toISOString() });
+    emitNotify({
+      type: "task_failed", slug, stage, error: state.error,
+      durationSeconds: metrics?.durationSeconds,
+      costUsd: metrics?.costUsd,
+      model: metrics?.model,
+      inputTokens: metrics?.inputTokens,
+      outputTokens: metrics?.outputTokens,
+      turns: metrics?.turns,
+      agentName: config.agents.names[stage] ?? stage,
+      timestamp: new Date().toISOString(),
+    });
     try {
       appendDailyLogEntry(interactionsDir, {
         timestamp: new Date().toISOString(),
@@ -496,7 +510,7 @@ export function createPipeline(options: PipelineOptions): Pipeline {
       const abortController = new AbortController();
       const agentName = config.agents.names[stage] ?? stage;
       const agentId = registry.register(slug, stage, agentName, abortController);
-      emitNotify({ type: "stage_started", slug, stage, timestamp: new Date().toISOString() });
+      emitNotify({ type: "stage_started", slug, stage, agentName: config.agents.names[stage] ?? stage, timestamp: new Date().toISOString() });
       try {
         appendDailyLogEntry(interactionsDir, {
           timestamp: new Date().toISOString(),
@@ -570,7 +584,14 @@ export function createPipeline(options: PipelineOptions): Pipeline {
           );
         }
         activeRuns.set(slug, readRunState(join(runtimeDir, "12-hold", slug)));
-        emitNotify({ type: "task_held", slug, stage, artifactUrl: "", timestamp: new Date().toISOString() });
+        emitNotify({
+          type: "task_held", slug, stage, artifactUrl: "",
+          holdReason: "budget_exhausted",
+          holdDetail: modelResolution.reason,
+          agentName: config.agents.names[stage] ?? stage,
+          model: runOptions.model,
+          timestamp: new Date().toISOString(),
+        });
         logger.warn(`[pipeline] Budget exhausted for "${slug}" at stage "${stage}": ${modelResolution.reason}`);
         try {
           appendDailyLogEntry(interactionsDir, {
@@ -606,7 +627,14 @@ export function createPipeline(options: PipelineOptions): Pipeline {
       retryDeferredTasks();
 
       if (!result.success) {
-        failTask(slug, stage, currentTaskDir, state, result.error ?? "Agent failed", join(STAGE_DIR_MAP[stage], "pending"));
+        failTask(slug, stage, currentTaskDir, state, result.error ?? "Agent failed", join(STAGE_DIR_MAP[stage], "pending"), {
+          durationSeconds: Math.round(result.durationMs / 1000),
+          costUsd: result.costUsd,
+          model: runOptions.model,
+          inputTokens: result.inputTokens,
+          outputTokens: result.outputTokens,
+          turns: result.turns,
+        });
         recordCompletionIfWorktree(state);
         return;
       }
@@ -623,8 +651,10 @@ export function createPipeline(options: PipelineOptions): Pipeline {
       // decide whether to continue, retry (go back to impl), or fail.
       // Non-verdict stages (impl, questions, etc.) fall through immediately.
 
+      let verdict: string | undefined;
+
       if (stage === "validate" || stage === "review") {
-        const verdict = parseAgentVerdict(result.output, stage);
+        verdict = parseAgentVerdict(result.output, stage);
         const outcome = { stage, success: true, verdict, output: result.output };
 
         let decision;
@@ -673,6 +703,17 @@ export function createPipeline(options: PipelineOptions): Pipeline {
 
           state.status = "failed";
           state.error = decision.reason;
+          emitNotify({
+            type: "task_failed", slug, stage, error: decision.reason,
+            durationSeconds: Math.round(result.durationMs / 1000),
+            costUsd: result.costUsd,
+            model: runOptions.model,
+            inputTokens: result.inputTokens,
+            outputTokens: result.outputTokens,
+            turns: result.turns,
+            agentName: config.agents.names[stage] ?? stage,
+            timestamp: new Date().toISOString(),
+          });
           delete state.holdReason;
           delete state.holdDetail;
           delete state.pausedAtStage;
@@ -792,7 +833,19 @@ export function createPipeline(options: PipelineOptions): Pipeline {
         }
       } catch { /* swallow — post-stage warning is non-critical */ }
 
-      emitNotify({ type: "stage_completed", slug, stage, artifactPath: outputPath, timestamp: new Date().toISOString() });
+      emitNotify({
+        type: "stage_completed", slug, stage,
+        artifactPath: `${stage}-output${outputSuffix}.md`,
+        durationSeconds: Math.round(result.durationMs / 1000),
+        costUsd: result.costUsd,
+        model: resolvedModel,
+        inputTokens: result.inputTokens,
+        outputTokens: result.outputTokens,
+        turns: result.turns,
+        verdict,
+        agentName: config.agents.names[stage] ?? stage,
+        timestamp: new Date().toISOString(),
+      });
       try {
         appendDailyLogEntry(interactionsDir, {
           timestamp: new Date().toISOString(),
@@ -829,7 +882,12 @@ export function createPipeline(options: PipelineOptions): Pipeline {
           "12-hold",
         );
         activeRuns.set(slug, readRunState(join(runtimeDir, "12-hold", slug)));
-        emitNotify({ type: "task_held", slug, stage, artifactUrl: "", timestamp: new Date().toISOString() });
+        emitNotify({
+          type: "task_held", slug, stage, artifactUrl: "",
+          holdReason: "approval_required",
+          agentName: config.agents.names[stage] ?? stage,
+          timestamp: new Date().toISOString(),
+        });
         return;
       }
 
@@ -845,7 +903,13 @@ export function createPipeline(options: PipelineOptions): Pipeline {
           "10-complete",
         );
         activeRuns.set(slug, readRunState(join(runtimeDir, "10-complete", slug)));
-        emitNotify({ type: "task_completed", slug, timestamp: new Date().toISOString() });
+        emitNotify({
+          type: "task_completed", slug,
+          completedStages: state.completedStages,
+          startedAt: state.startedAt,
+          agentNames: config.agents.names,
+          timestamp: new Date().toISOString(),
+        });
         return;
       }
 
@@ -957,7 +1021,13 @@ export function createPipeline(options: PipelineOptions): Pipeline {
         recordCompletionIfWorktree(state);
         moveTaskDir(runtimeDir, slug, "12-hold", "10-complete");
         activeRuns.set(slug, readRunState(join(runtimeDir, "10-complete", slug)));
-        emitNotify({ type: "task_completed", slug, timestamp: new Date().toISOString() });
+        emitNotify({
+          type: "task_completed", slug,
+          completedStages: state.completedStages,
+          startedAt: state.startedAt,
+          agentNames: config.agents.names,
+          timestamp: new Date().toISOString(),
+        });
         return;
       }
 
