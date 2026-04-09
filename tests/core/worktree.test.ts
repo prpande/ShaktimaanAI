@@ -309,3 +309,37 @@ describe("resolveParentRepo", () => {
     expect(normalize(resolved!)).toBe(normalize(bareDir));
   }, TEST_TIMEOUT);
 });
+
+// ─── PR agent prompt safety ──────────────────────────────────────────────────
+
+describe("PR agent prompt safety", () => {
+  it("does not contain 'git add -A' or 'git add .'", () => {
+    const prPrompt = readFileSync(
+      join(__dirname, "../../agents/pr.md"),
+      "utf-8",
+    );
+    expect(prPrompt).not.toMatch(/git add -A/);
+    expect(prPrompt).not.toMatch(/git add \./);
+  });
+
+  it("contains the sensitive file exclusion list", () => {
+    const prPrompt = readFileSync(
+      join(__dirname, "../../agents/pr.md"),
+      "utf-8",
+    );
+    expect(prPrompt).toMatch(/\.env/);
+    expect(prPrompt).toMatch(/\.pem/);
+    expect(prPrompt).toMatch(/\.key/);
+    expect(prPrompt).toMatch(/credentials/);
+    expect(prPrompt).toMatch(/git add -u/);
+  });
+
+  it("contains pre-commit verification step", () => {
+    const prPrompt = readFileSync(
+      join(__dirname, "../../agents/pr.md"),
+      "utf-8",
+    );
+    expect(prPrompt).toMatch(/git diff --cached --name-only/);
+    expect(prPrompt).toMatch(/git reset HEAD/);
+  });
+});
