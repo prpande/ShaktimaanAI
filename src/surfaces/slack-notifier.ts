@@ -191,6 +191,15 @@ export function formatEvent(event: NotifyEvent, timezone: string = "UTC"): strin
 
     case "stages_modified":
       return `\n${ts}\n✏️ *Stages modified* ${slug}\n📋 old: ${event.oldStages.join(", ")}\n📋 new: ${event.newStages.join(", ")}`;
+
+    case "recovery_diagnosed": {
+      if (event.classification === "terminal") {
+        return `\n${ts}\n🔬 *Recovery: terminal failure* ${slug} at *${event.stage}*\n📋 ${event.diagnosis}`;
+      }
+      const issueLine = event.issueUrl ? `\n🔗 Issue: ${event.issueUrl}` : "";
+      const reentryLine = event.reEntryStage ? `\n🔄 Re-entry: \`${event.reEntryStage}\` after fix` : "";
+      return `\n${ts}\n🔬 *Recovery: fixable* ${slug} at *${event.stage}*\n📋 ${event.diagnosis}${issueLine}${reentryLine}\n💡 Reply \`recover\` in this thread after merging the fix.`;
+    }
   }
 }
 

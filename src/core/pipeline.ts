@@ -16,6 +16,7 @@ import { createSessionTracker, resolveModelForStage, checkBudget, type BudgetChe
 import { loadBudgetConfig } from "../config/loader.js";
 import { DEFAULT_BUDGET_CONFIG } from "../config/defaults.js";
 import type { BudgetConfig } from "../config/budget-schema.js";
+import { runRecoveryAgent } from "./recovery-agent.js";
 
 // Re-exported for external consumers; DIR_STAGE_MAP is not used internally in this module.
 export { STAGE_DIR_MAP, DIR_STAGE_MAP };
@@ -363,6 +364,18 @@ export function createPipeline(options: PipelineOptions): Pipeline {
       });
     } catch { /* swallow */ }
     activeRuns.delete(slug);
+
+    // Fire recovery agent asynchronously — does not block the pipeline
+    const failedTaskDir = join(runtimeDir, "11-failed", slug);
+    if (existsSync(failedTaskDir)) {
+      runRecoveryAgent(failedTaskDir, { ...state }, runner, config, logger, (event) => {
+        for (const n of notifiers) {
+          n.notify(event as any).catch(() => {});
+        }
+      }).catch((err) => {
+        logger.error(`[pipeline] Recovery agent error for "${slug}": ${err instanceof Error ? err.message : String(err)}`);
+      });
+    }
   }
 
   // ─── retryDeferredTasks: called after an agent finishes to unblock waiting tasks

@@ -69,6 +69,16 @@ export const configSchema = z.object({
   review: z.object({
     enforceSuggestions: z.boolean().optional().default(true),
   }).optional().default({}),
+  recovery: z.object({
+    enabled: z.boolean().optional().default(true),
+    fileGithubIssues: z.boolean().optional().default(true),
+    githubRepo: z.string().optional().default("prpande/ShaktimaanAI"),
+  }).optional().default({ enabled: true, fileGithubIssues: true, githubRepo: "prpande/ShaktimaanAI" }),
+  service: z.object({
+    mode: z.enum(["source", "package"]).optional().default("source"),
+    repoPath: z.string().optional().default(""),
+    checkIntervalMinutes: z.number().optional().default(5),
+  }).optional().default({ mode: "source", repoPath: "", checkIntervalMinutes: 5 }),
 });
 
 export type ConfigInput = z.input<typeof configSchema>;

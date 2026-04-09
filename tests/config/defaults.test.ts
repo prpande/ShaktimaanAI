@@ -2,8 +2,8 @@ import { describe, it, expect } from "vitest";
 import { DEFAULT_CONFIG, DEFAULT_AGENT_NAMES, DEFAULT_STAGE_TOOLS, STAGE_CONTEXT_RULES } from "../../src/config/defaults.js";
 
 describe("DEFAULT_AGENT_NAMES", () => {
-  it("has all 15 agent name entries", () => {
-    expect(Object.keys(DEFAULT_AGENT_NAMES)).toHaveLength(15);
+  it("has all 16 agent name entries", () => {
+    expect(Object.keys(DEFAULT_AGENT_NAMES)).toHaveLength(16);
   });
 
   it("includes all expected agent roles", () => {
@@ -11,7 +11,7 @@ describe("DEFAULT_AGENT_NAMES", () => {
       "questions", "research", "design", "structure", "plan",
       "workTree", "impl", "validate", "review", "pr",
       "watcher", "taskCreator", "approvalHandler", "quick",
-      "slackIO",
+      "slackIO", "recovery",
     ];
     for (const role of roles) {
       expect(DEFAULT_AGENT_NAMES).toHaveProperty(role);
@@ -117,13 +117,13 @@ describe("DEFAULT_CONFIG", () => {
 });
 
 describe("DEFAULT_STAGE_TOOLS", () => {
-  const ALL_STAGES = ["questions", "research", "design", "structure", "plan", "impl", "validate", "review", "pr", "quick", "quick-triage", "quick-execute", "slack-io"];
+  const ALL_STAGES = ["questions", "research", "design", "structure", "plan", "impl", "validate", "review", "pr", "quick", "quick-triage", "quick-execute", "slack-io", "recovery"];
 
-  it("has entries for all 13 stages", () => {
+  it("has entries for all 14 stages", () => {
     for (const stage of ALL_STAGES) {
       expect(DEFAULT_STAGE_TOOLS).toHaveProperty(stage);
     }
-    expect(Object.keys(DEFAULT_STAGE_TOOLS)).toHaveLength(13);
+    expect(Object.keys(DEFAULT_STAGE_TOOLS)).toHaveLength(14);
   });
 
   it("does not have a classify entry", () => {
@@ -180,13 +180,13 @@ describe("DEFAULT_STAGE_TOOLS", () => {
 });
 
 describe("STAGE_CONTEXT_RULES", () => {
-  const ALL_STAGES = ["questions", "research", "design", "structure", "plan", "impl", "validate", "review", "pr", "quick", "quick-triage", "quick-execute", "slack-io"];
+  const ALL_STAGES = ["questions", "research", "design", "structure", "plan", "impl", "validate", "review", "pr", "quick", "quick-triage", "quick-execute", "slack-io", "recovery"];
 
-  it("has entries for all 13 stages", () => {
+  it("has entries for all 14 stages", () => {
     for (const stage of ALL_STAGES) {
       expect(STAGE_CONTEXT_RULES).toHaveProperty(stage);
     }
-    expect(Object.keys(STAGE_CONTEXT_RULES)).toHaveLength(13);
+    expect(Object.keys(STAGE_CONTEXT_RULES)).toHaveLength(14);
   });
 
   it("does not have a classify entry", () => {

@@ -1,9 +1,15 @@
-import { readdirSync, statSync, existsSync } from "node:fs";
+import { readdirSync, statSync, existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
+import { execFileSync } from "node:child_process";
 
 import { STAGE_DIR_MAP } from "./stage-map.js";
 import { type Pipeline } from "./pipeline.js";
+import { readRunState } from "./pipeline.js";
 import { type TaskLogger } from "./logger.js";
+import { reenterTask } from "./recovery-reentry.js";
+import type { AgentRunnerFn } from "./types.js";
+import type { ResolvedConfig } from "../config/loader.js";
+import { moveTaskDir } from "./pipeline.js";
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -118,6 +124,92 @@ export function scanForRecovery(runtimeDir: string): RecoveryItem[] {
   return items;
 }
 
+// ─── Startup Scan Types ─────────────────────────────────────────────────────
+
+export interface UnanalyzedFailure {
+  slug: string;
+  dir: string;
+  stage: string;
+  error: string;
+}
+
+export interface HeldTaskWithIssue {
+  slug: string;
+  dir: string;
+  issueNumber: number;
+  issueUrl: string;
+  reEntryStage: string;
+}
+
+// ─── scanUnanalyzedFailures ─────────────────────────────────────────────────
+
+/**
+ * Scans 11-failed/ for tasks where run-state.json has no terminalFailure,
+ * no recoveryIssueUrl, and no recoveryDiagnosis — i.e., the recovery agent
+ * hasn't analyzed them yet.
+ */
+export function scanUnanalyzedFailures(runtimeDir: string): UnanalyzedFailure[] {
+  const failedDir = join(runtimeDir, "11-failed");
+  const results: UnanalyzedFailure[] = [];
+
+  for (const slug of listDirectories(failedDir)) {
+    const stateFile = join(failedDir, slug, "run-state.json");
+    if (!existsSync(stateFile)) continue;
+
+    try {
+      const state = JSON.parse(readFileSync(stateFile, "utf-8"));
+      if (state.terminalFailure) continue;
+      if (state.recoveryIssueUrl) continue;
+      if (state.recoveryDiagnosis) continue;
+
+      results.push({
+        slug,
+        dir: join(failedDir, slug),
+        stage: state.currentStage ?? "unknown",
+        error: state.error ?? "Unknown error",
+      });
+    } catch {
+      // Corrupted state file — skip
+    }
+  }
+
+  return results;
+}
+
+// ─── scanHeldTasksWithIssues ────────────────────────────────────────────────
+
+/**
+ * Scans 12-hold/ for tasks where holdReason === "awaiting_fix" and
+ * recoveryIssueNumber exists — these are tasks waiting for a fix to be merged.
+ */
+export function scanHeldTasksWithIssues(runtimeDir: string): HeldTaskWithIssue[] {
+  const holdDir = join(runtimeDir, "12-hold");
+  const results: HeldTaskWithIssue[] = [];
+
+  for (const slug of listDirectories(holdDir)) {
+    const stateFile = join(holdDir, slug, "run-state.json");
+    if (!existsSync(stateFile)) continue;
+
+    try {
+      const state = JSON.parse(readFileSync(stateFile, "utf-8"));
+      if (state.holdReason !== "awaiting_fix") continue;
+      if (!state.recoveryIssueNumber) continue;
+
+      results.push({
+        slug,
+        dir: join(holdDir, slug),
+        issueNumber: state.recoveryIssueNumber,
+        issueUrl: state.recoveryIssueUrl ?? "",
+        reEntryStage: state.recoveryReEntryStage ?? state.currentStage ?? "unknown",
+      });
+    } catch {
+      // Corrupted state file — skip
+    }
+  }
+
+  return results;
+}
+
 // ─── runRecovery ─────────────────────────────────────────────────────────────
 
 /**
@@ -216,4 +308,144 @@ export async function runRecovery(
   }
 
   return result;
+}
+
+// ─── runRecoveryStartupScan ─────────────────────────────────────────────────
+
+/**
+ * Runs BEFORE runRecovery() on startup. Three phases:
+ *
+ * Phase 1: Diagnose unanalyzed failures via recovery agent
+ * Phase 2: Check GitHub issue status for held tasks (if fileGithubIssues)
+ * Phase 3: Log remaining held tasks without issues as pending manual re-entry
+ */
+export async function runRecoveryStartupScan(
+  runtimeDir: string,
+  config: ResolvedConfig,
+  runner: AgentRunnerFn,
+  logger: TaskLogger,
+  emitNotify: (event: Record<string, unknown>) => void,
+): Promise<{ recovered: string[]; terminal: string[]; pending: string[] }> {
+  const recovered: string[] = [];
+  const terminal: string[] = [];
+  const pending: string[] = [];
+
+  if (!config.recovery.enabled) {
+    return { recovered, terminal, pending };
+  }
+
+  // ── Phase 1: Diagnose unanalyzed failures ──────────────────────────────
+  const unanalyzed = scanUnanalyzedFailures(runtimeDir);
+  if (unanalyzed.length > 0) {
+    logger.info(`[startup-scan] Phase 1: Found ${unanalyzed.length} unanalyzed failure(s)`);
+  }
+
+  for (const failure of unanalyzed) {
+    try {
+      const { runRecoveryAgent } = await import("./recovery-agent.js");
+      const taskDir = failure.dir;
+      const state = readRunState(taskDir);
+      await runRecoveryAgent(taskDir, state, runner, config, logger, emitNotify);
+
+      // Re-read state to check outcome
+      const updatedState = readRunState(
+        existsSync(taskDir)
+          ? taskDir
+          : join(runtimeDir, "12-hold", failure.slug),
+      );
+      if (updatedState.terminalFailure) {
+        terminal.push(failure.slug);
+      }
+      // If moved to hold, it will be picked up by Phase 2/3
+    } catch (err) {
+      logger.error(
+        `[startup-scan] Failed to diagnose "${failure.slug}": ${err instanceof Error ? err.message : String(err)}`,
+      );
+    }
+  }
+
+  // ── Phase 2: Check GitHub issue status for held tasks ──────────────────
+  if (config.recovery.fileGithubIssues) {
+    const heldWithIssues = scanHeldTasksWithIssues(runtimeDir);
+    if (heldWithIssues.length > 0) {
+      logger.info(`[startup-scan] Phase 2: Checking ${heldWithIssues.length} held task(s) with GitHub issues`);
+    }
+
+    for (const held of heldWithIssues) {
+      try {
+        const issueJson = execFileSync("gh", [
+          "issue", "view",
+          String(held.issueNumber),
+          "--repo", config.recovery.githubRepo,
+          "--json", "state,stateReason",
+        ], { stdio: "pipe", timeout: 30_000 }).toString("utf-8");
+
+        const issue = JSON.parse(issueJson) as { state: string; stateReason: string };
+
+        if (issue.state === "CLOSED" && issue.stateReason === "COMPLETED") {
+          // Issue closed as completed — re-enter the task
+          const result = reenterTask(runtimeDir, held.slug);
+          if (result.success) {
+            recovered.push(held.slug);
+            logger.info(`[startup-scan] Re-entered "${held.slug}" — issue #${held.issueNumber} closed as COMPLETED`);
+          } else {
+            logger.error(`[startup-scan] Failed to re-enter "${held.slug}": ${result.error}`);
+            pending.push(held.slug);
+          }
+        } else if (issue.state === "CLOSED" && issue.stateReason === "NOT_PLANNED") {
+          // Issue closed as not planned — move to failed as terminal
+          const taskDir = held.dir;
+          try {
+            const state = readRunState(taskDir);
+            state.status = "failed";
+            state.terminalFailure = true;
+            state.holdReason = undefined;
+            state.holdDetail = undefined;
+            const { writeRunState: writeState } = await import("./pipeline.js");
+            writeState(taskDir, state);
+            moveTaskDir(runtimeDir, held.slug, "12-hold", "11-failed");
+            terminal.push(held.slug);
+            logger.info(`[startup-scan] Moved "${held.slug}" to failed — issue #${held.issueNumber} closed as NOT_PLANNED`);
+          } catch (err) {
+            logger.error(
+              `[startup-scan] Failed to move "${held.slug}" to failed: ${err instanceof Error ? err.message : String(err)}`,
+            );
+            pending.push(held.slug);
+          }
+        } else {
+          // Issue still open — leave in hold
+          pending.push(held.slug);
+          logger.info(`[startup-scan] "${held.slug}" — issue #${held.issueNumber} still open, leaving in hold`);
+        }
+      } catch (err) {
+        logger.error(
+          `[startup-scan] Failed to check issue #${held.issueNumber} for "${held.slug}": ${err instanceof Error ? err.message : String(err)}`,
+        );
+        pending.push(held.slug);
+      }
+    }
+  }
+
+  // ── Phase 3: Log remaining held tasks without issues ───────────────────
+  const holdDir = join(runtimeDir, "12-hold");
+  const processedSlugs = new Set([...recovered, ...terminal, ...pending]);
+
+  for (const slug of listDirectories(holdDir)) {
+    if (processedSlugs.has(slug)) continue;
+
+    const stateFile = join(holdDir, slug, "run-state.json");
+    if (!existsSync(stateFile)) continue;
+
+    try {
+      const state = JSON.parse(readFileSync(stateFile, "utf-8"));
+      if (state.holdReason === "awaiting_fix" && !state.recoveryIssueNumber) {
+        pending.push(slug);
+        logger.info(`[startup-scan] "${slug}" in hold without issue — pending manual re-entry`);
+      }
+    } catch {
+      // Corrupted state — skip
+    }
+  }
+
+  return { recovered, terminal, pending };
 }

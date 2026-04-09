@@ -39,7 +39,9 @@ export type NotifyEvent =
   | ({ type: "task_resumed";    resumedBy: string } & EventBase)
   | ({ type: "stage_retried";   stage: string; attempt: number; feedback: string } & EventBase)
   | ({ type: "stage_skipped";   stage: string } & EventBase)
-  | ({ type: "stages_modified"; oldStages: string[]; newStages: string[] } & EventBase);
+  | ({ type: "stages_modified"; oldStages: string[]; newStages: string[] } & EventBase)
+  | ({ type: "recovery_diagnosed"; stage: string; classification: "fixable" | "terminal";
+       diagnosis: string; reEntryStage?: string; issueUrl?: string } & EventBase);
 
 // ─── Notifier interface ───────────────────────────────────────────────────────
 
@@ -52,6 +54,7 @@ export interface Notifier {
 const MINIMAL_EVENTS = new Set<NotifyEvent["type"]>([
   "task_held",
   "task_failed",
+  "recovery_diagnosed",
 ]);
 
 const BOOKENDS_EVENTS = new Set<NotifyEvent["type"]>([
