@@ -33,6 +33,7 @@ export const configSchema = z.object({
     prefix: z.string().optional().default("shkmn"),
     dmUserIds: z.array(z.string()).optional().default([]),
     outboundPrefix: z.string().optional().default("🤖 [ShaktimaanAI]"),
+    timezone: z.string().optional().default("UTC"),
   }).optional().default({}),
   quickTask: z.object({
     requireReview: z.boolean().optional().default(true),

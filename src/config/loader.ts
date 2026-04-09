@@ -87,6 +87,7 @@ export function resolveConfig(parsed: ConfigParsed): ResolvedConfig {
       prefix: parsed.slack?.prefix ?? d.slack.prefix,
       dmUserIds: parsed.slack?.dmUserIds ?? d.slack.dmUserIds,
       outboundPrefix: parsed.slack?.outboundPrefix ?? d.slack.outboundPrefix,
+      timezone: parsed.slack?.timezone ?? d.slack.timezone,
     },
     agents: {
       names: { ...DEFAULT_AGENT_NAMES, ...parsed.agents?.names },
