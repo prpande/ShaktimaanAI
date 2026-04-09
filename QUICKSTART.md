@@ -1,4 +1,4 @@
-# ShaktimaanAI Quickstart
+# 🚀 ShaktimaanAI Quickstart
 
 > Get your first AI-driven PR in ~10 minutes.
 
@@ -6,7 +6,7 @@ ShaktimaanAI automates the full development lifecycle — from task intake throu
 
 ---
 
-## Prerequisites
+## 📋 Prerequisites
 
 Before you begin, make sure the following tools are installed and configured:
 
@@ -22,7 +22,7 @@ Before you begin, make sure the following tools are installed and configured:
 
 ---
 
-## Clone & Install
+## 📦 Clone & Install
 
 ```bash
 git clone https://github.com/prpande/ShaktimaanAI.git
@@ -42,7 +42,7 @@ shkmn --version
 
 ---
 
-## First-Time Setup (`shkmn init`)
+## 🪔 First-Time Setup (`shkmn init`)
 
 Run the interactive setup wizard:
 
@@ -54,15 +54,15 @@ The wizard prompts for 7 values. Only the first is required — press Enter to s
 
 | # | Prompt | Required? | Default / Notes |
 |---|--------|-----------|-----------------|
-| 1 | `runtimeDir` | **Yes** (required) | `~/.shkmn/runtime` — where task files, logs, and config live |
-| 2 | `reposRoot` | No | Parent folder for git repos. Press Enter to skip. |
-| 3 | `adoOrg` | No | Azure DevOps organization. Press Enter to skip. |
-| 4 | `adoProject` | No | Azure DevOps project. Press Enter to skip. |
-| 5 | `adoArea` | No | Azure DevOps area path. Press Enter to skip. |
-| 6 | `dashboardRepoUrl` | No | Dashboard git remote URL. Press Enter to skip. |
-| 7 | `dashboardRepoLocal` | No | Local dashboard repo path. Press Enter to skip. |
+| 1 | `runtimeDir` | ✅ **Yes** | `~/.shkmn/runtime` — where task files, logs, and config live |
+| 2 | `reposRoot` | ⬜ No | Parent folder for git repos. Press Enter to skip. |
+| 3 | `adoOrg` | ⬜ No | Azure DevOps organization. Press Enter to skip. |
+| 4 | `adoProject` | ⬜ No | Azure DevOps project. Press Enter to skip. |
+| 5 | `adoArea` | ⬜ No | Azure DevOps area path. Press Enter to skip. |
+| 6 | `dashboardRepoUrl` | ⬜ No | Dashboard git remote URL. Press Enter to skip. |
+| 7 | `dashboardRepoLocal` | ⬜ No | Local dashboard repo path. Press Enter to skip. |
 
-### Set your API key
+### 🔑 Set your API key
 
 After init completes, open the generated `.env` file and add your Anthropic API key:
 
@@ -79,11 +79,11 @@ Set `ANTHROPIC_API_KEY` to your key (get one at [console.anthropic.com](https://
 ANTHROPIC_API_KEY=sk-ant-...
 ```
 
-> **Tip:** If you've already authenticated Claude Code via `claude login`, the pipeline can use that session instead. But the `.env` key is the most reliable path.
+> **💡 Tip:** If you've already authenticated Claude Code via `claude login`, the pipeline can use that session instead. But the `.env` key is the most reliable path.
 
 ---
 
-## Verify Setup (`shkmn doctor`)
+## 🩺 Verify Setup (`shkmn doctor`)
 
 Before starting the pipeline, run the health check:
 
@@ -92,18 +92,18 @@ shkmn doctor
 ```
 
 `shkmn doctor` validates:
-- Required tools are installed (Node.js, Git, Claude Code, GitHub CLI)
-- Config file exists and is valid
-- Environment variables are present in `.env`
-- GitHub CLI is authenticated (`gh auth status`)
+- ✅ Required tools are installed (Node.js, Git, Claude Code, GitHub CLI)
+- ✅ Config file exists and is valid
+- ✅ Environment variables are present in `.env`
+- ✅ GitHub CLI is authenticated (`gh auth status`)
 
 Fix any reported issues before proceeding.
 
-> **Important:** `shkmn start` does **not** validate environment values — it will start silently even with empty keys. Always run `shkmn doctor` first to catch missing configuration.
+> **⚠️ Important:** `shkmn start` does **not** validate environment values — it will start silently even with empty keys. Always run `shkmn doctor` first to catch missing configuration.
 
 ---
 
-## Start the Pipeline
+## ▶️ Start the Pipeline
 
 Open a **dedicated terminal** and run:
 
@@ -113,13 +113,13 @@ shkmn start
 
 The Heimdall watcher starts in the foreground, monitoring `00-inbox/` for new tasks and control files.
 
-> **Warning:** Run `shkmn start` in **only one terminal**. Running it twice causes race conditions — there is no duplicate-instance guard. If you accidentally start a second instance, stop both and restart with a single `shkmn start`.
+> **⚠️ Warning:** Run `shkmn start` in **only one terminal**. Running it twice causes race conditions — there is no duplicate-instance guard. If you accidentally start a second instance, stop both and restart with a single `shkmn start`.
 
 Leave this terminal running. Use a second terminal for the commands below.
 
 ---
 
-## Submit Your First Task
+## 📝 Submit Your First Task
 
 In a separate terminal:
 
@@ -136,16 +136,16 @@ What happens:
 
 | Flag | Purpose |
 |------|---------|
-| `--quick` | Skip the full pipeline — run a single Astra agent for small changes |
-| `--repo <path>` | Target a specific repository instead of the configured default |
-| `--stages <list>` | Comma-separated custom stage list |
-| `--hints <text>` | Extra context for the agents |
+| `--quick` | ⚡ Skip the full pipeline — Astra triages and executes directly |
+| `--repo <path>` | 📂 Target a specific repository instead of the configured default |
+| `--stages <list>` | 🔧 Comma-separated custom stage list |
+| `--hints <text>` | 💡 Extra context for the agents |
 
-> **Note:** `shkmn task` works independently of `shkmn start` — you can submit tasks before the watcher is running. The task file sits in `00-inbox/` and gets processed when the watcher starts (or restarts).
+> **📌 Note:** `shkmn task` works independently of `shkmn start` — you can submit tasks before the watcher is running. The task file sits in `00-inbox/` and gets processed when the watcher starts (or restarts).
 
 ---
 
-## Monitor Progress
+## 📊 Monitor Progress
 
 ### Check task status
 
@@ -167,11 +167,11 @@ Streams agent output in real time. Supports **prefix matching** — you don't ne
 shkmn logs add-a-he -f
 ```
 
-**Slug discovery:** The slug is printed by `shkmn task` when you create it, and is visible in `shkmn status` output.
+**🔎 Slug discovery:** The slug is printed by `shkmn task` when you create it, and is visible in `shkmn status` output.
 
 ---
 
-## Approve the Design Gate
+## ✅ Approve the Design Gate
 
 After the **design** stage completes, the pipeline pauses. Your task moves to `12-hold/` and `shkmn status` shows it as **"Held (awaiting approval)"**.
 
@@ -191,25 +191,25 @@ shkmn approve <slug>
 
 The pipeline resumes through the remaining stages: **structure → plan → impl → validate → review → pr**.
 
-**Conditional approval:** Use `--feedback` to approve with notes for the agents:
+**💬 Conditional approval:** Use `--feedback` to approve with notes for the agents:
 
 ```bash
 shkmn approve <slug> --feedback "Use PostgreSQL instead of SQLite for the database layer"
 ```
 
-> **Reminder:** `shkmn start` must be running for approval to take effect — the watcher picks up the `.control` file from `00-inbox/` and resumes the pipeline.
+> **📌 Reminder:** `shkmn start` must be running for approval to take effect — the watcher picks up the `.control` file from `00-inbox/` and resumes the pipeline.
 
 ---
 
-## Find Your PR
+## 🎉 Find Your PR
 
 When the **pr** stage completes, Garuda automatically creates a pull request on a `shkmn/{slug}` branch via `gh pr create`.
 
 **Where to find it:**
 
-- **In the logs** — the PR URL is printed as the final output of the pr stage
-- **On GitHub** — check the repository's pull request tab
-- **Via CLI:**
+- **📜 In the logs** — the PR URL is printed as the final output of the pr stage
+- **🌐 On GitHub** — check the repository's pull request tab
+- **💻 Via CLI:**
 
 ```bash
 gh pr list
@@ -217,41 +217,54 @@ gh pr list
 
 ---
 
-## Pipeline Flow Overview
+## 🗺️ Pipeline Flow Overview
 
-```
-Developer                                Pipeline (Heimdall watcher)
-──────────                               ──────────────────────────────
+```mermaid
+sequenceDiagram
+    actor Dev as 👨‍💻 Developer
+    participant CLI as 🖥️ CLI
+    participant Watcher as 🔭 Heimdall
+    participant Align as 🔍 Alignment
+    participant Gate as 🛑 Review Gate
+    participant Exec as ⚡ Execution
 
-shkmn init            →  Creates config + .env template
-  (edit .env)         →  Set ANTHROPIC_API_KEY
-shkmn doctor          →  Validates tools, config, env
+    Dev->>CLI: shkmn init
+    CLI-->>Dev: Config + .env template created
 
-shkmn start           →  Heimdall watcher starts, monitors 00-inbox/
+    Dev->>CLI: shkmn doctor
+    CLI-->>Dev: ✅ All checks pass
 
-shkmn task "..."      →  Brahma writes .task file to 00-inbox/
-                         Watcher picks up → runs pipeline stages:
-                           questions (Narada)
-                             → research (Chitragupta)
-                               → design (Vishwakarma)
+    Dev->>CLI: shkmn start
+    CLI->>Watcher: Heimdall watches 00-inbox/
 
-                      ⏸  Task pauses in 12-hold/ — "Held (awaiting approval)"
+    Dev->>CLI: shkmn task "..."
+    CLI->>Watcher: .task file → 00-inbox/
 
-shkmn approve <slug>  →  .control file written to 00-inbox/
-                         Watcher picks up → pipeline resumes:
-                           structure (Vastu)
-                             → plan (Chanakya)
-                               → impl (Hanuman sets up worktree → Karigar implements)
-                                 → validate (Dharma verifies)
-                                   → review (Drona)
-                                     → pr (Garuda) → PR created on shkmn/{slug}
+    Watcher->>Align: questions (Gargi)
+    Align->>Align: research (Chitragupta)
+    Align->>Align: design (Vishwakarma)
+
+    Align->>Gate: ⏸️ Task held in 12-hold/
+    Gate-->>Dev: "Held (awaiting approval)"
+
+    Dev->>CLI: shkmn approve <slug>
+    CLI->>Watcher: .control file → 00-inbox/
+
+    Watcher->>Align: structure (Vastu)
+    Align->>Align: plan (Chanakya)
+    Align->>Exec: 🌳 Worktree setup (Hanuman)
+
+    Exec->>Exec: impl (Karigar) ↔ validate (Dharma)
+    Exec->>Exec: review (Drona)
+    Exec->>Exec: pr (Garuda)
+    Exec-->>Dev: 🎉 PR created on shkmn/{slug}
 ```
 
 ---
 
-## Troubleshooting
+## 🔧 Troubleshooting
 
-### EBUSY errors on Windows
+### 🪟 EBUSY errors on Windows
 
 **Symptom:** You see `EBUSY: resource busy or locked` errors in the logs during stage transitions.
 
@@ -263,32 +276,41 @@ shkmn approve <slug>  →  .control file written to 00-inbox/
 1. Close editors, terminals, or file explorers that have files open inside the runtime directory
 2. Stop and restart `shkmn start`
 
-### Agent timeout
+### ⏰ Agent timeout
 
 Each pipeline stage has a default timeout:
 
-| Stage | Timeout |
-|-------|---------|
-| questions | 15m |
-| research | 45m |
-| design | 30m |
-| structure | 20m |
-| plan | 30m |
-| impl | 90m |
-| validate | 30m |
-| review | 45m |
-| pr | 15m |
+| Stage | Timeout | Model |
+|-------|---------|-------|
+| questions | 15m | sonnet |
+| research | 45m | sonnet |
+| design | 30m | opus |
+| structure | 20m | sonnet |
+| plan | 30m | opus |
+| impl | 90m | opus |
+| validate | 30m | haiku |
+| review | 45m | sonnet |
+| pr | 15m | sonnet |
 
 **What happens:** When a stage times out, the agent is aborted and the task moves to `11-failed/`.
 
 **Recovery:**
-1. Check the logs for the failure reason: `shkmn logs <slug>`
-2. If the issue is transient (network, API rate limit), manually move the task directory from `11-failed/` back to the appropriate stage directory, or simply re-submit the task with `shkmn task`
-3. If the task was held in `12-hold/` (design gate), you can use `shkmn retry <slug> --feedback "..."` to retry
+1. Check the logs: `shkmn logs <slug>`
+2. If transient (network, API rate limit), use `shkmn retry <slug>` or re-submit with `shkmn task`
+3. If held in `12-hold/` (design gate), use `shkmn retry <slug> --feedback "..."`
 
-> **Note:** `shkmn retry` looks for tasks in `12-hold/`, not `11-failed/`. Timed-out tasks that landed in `11-failed/` require manual directory moves or re-submission.
+### 🩺 Recovery agent diagnosis
 
-### Recovery after crash
+When a task fails, **Chiranjeevi** (the recovery agent) automatically diagnoses the failure. Use `shkmn recover` to see:
+- 📋 Diagnosis summary
+- 🔄 Recommended re-entry stage
+- 🐛 GitHub issue link (if filed)
+
+```bash
+shkmn recover     # list all recovery-held tasks
+```
+
+### 🔄 Recovery after crash
 
 If `shkmn start` crashes or you close the terminal accidentally:
 
@@ -297,34 +319,52 @@ shkmn start
 ```
 
 Just run `shkmn start` again. The recovery system automatically:
-- Scans all pipeline directories (`pending/`, `done/`, `00-inbox/`, `12-hold/`)
-- Resumes in-progress tasks from where they left off
-- Re-registers held tasks awaiting approval
-- Processes unhandled `.task` files from the inbox
+- 🔄 Scans all pipeline directories (`pending/`, `done/`, `00-inbox/`, `12-hold/`)
+- ▶️ Resumes in-progress tasks from where they left off
+- 🩺 Offers recovery re-entry for diagnosed failures in `12-hold/`
+- 📥 Processes unhandled `.task` files from the inbox
 
 **Edge case:** If `run-state.json` inside a task directory is corrupted (e.g., due to a hard crash mid-write), the recovery system logs an error but continues with other tasks. To fix: delete the affected task directory from the runtime folder and re-submit the task.
 
-> **Note:** Recovery has a 2-hour timeout per task. If a task was mid-execution in a very long stage when the crash happened, recovery may time out — in that case, re-submit the task with `shkmn task`.
+> **📌 Note:** Recovery has a 2-hour timeout per task. If a task was mid-execution in a very long stage when the crash happened, recovery may time out — in that case, re-submit with `shkmn task`.
 
 ---
 
-## Quick Reference
+## 📋 Quick Reference
 
 | Command | Description | Key Flags |
 |---------|-------------|-----------|
-| `shkmn init` | Interactive setup wizard — creates config and `.env` template | — |
-| `shkmn doctor` | System health check — validates tools, config, and env | `--fix` to auto-repair |
-| `shkmn start` | Start the Heimdall watcher (foreground, one instance only) | — |
-| `shkmn task` | Submit a new task to the pipeline | `--quick`, `--repo`, `--stages`, `--hints` |
-| `shkmn status` | Show active and held tasks with stage and elapsed time | — |
-| `shkmn logs` | View or tail agent logs for a task | `<slug> -f`, `--lines <n>` |
-| `shkmn approve` | Approve a held task to resume the pipeline | `<slug>`, `--feedback "..."` |
-| `shkmn stop` | Gracefully stop the watcher | — |
+| `shkmn init` | 🪔 Interactive setup wizard | — |
+| `shkmn doctor` | 🩺 System health check | `--fix` to auto-repair |
+| `shkmn start` | ▶️ Start Heimdall watcher (foreground, one instance only) | — |
+| `shkmn task` | 📝 Submit a new task | `--quick`, `--repo`, `--stages`, `--hints` |
+| `shkmn status` | 📊 Show active and held tasks | — |
+| `shkmn logs` | 📜 View or tail agent logs | `<slug> -f`, `--lines <n>` |
+| `shkmn approve` | ✅ Approve a held task | `<slug>`, `--feedback "..."` |
+| `shkmn recover` | 🩺 List and re-enter recovery-held tasks | — |
+| `shkmn stop` | ⏹️ Gracefully stop the watcher | — |
+| `shkmn service` | 🔧 Manage watchdog systemd service | `install`, `uninstall`, `status`, `logs` |
+| `shkmn stats` | 📈 Daily/session pipeline statistics | — |
 
 ---
 
-## What's Next
+## 🔧 Watchdog Service
 
-- **[README.md](README.md)** — Architecture overview, agent descriptions, and full CLI reference
+For always-on operation without keeping a terminal open, install ShaktimaanAI as a systemd service:
+
+```bash
+shkmn service install    # install and start the watchdog
+shkmn service status     # check if running
+shkmn service logs       # view watchdog output
+```
+
+See [README.md — Watchdog Service](README.md#-watchdog-service) for configuration details.
+
+---
+
+## 🗺️ What's Next
+
+- **[README.md](README.md)** — Architecture overview, agent descriptions, full CLI reference, token budgets, and model assignments
 - **`shkmn doctor --fix`** — Run periodically to catch configuration drift and auto-repair common issues
 - **Explore the agents** — See `agents/` for the prompt templates that drive each pipeline stage
+- **`shkmn recover`** — Check for failed tasks that Chiranjeevi has diagnosed and can be re-entered
