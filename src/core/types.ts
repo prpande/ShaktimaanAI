@@ -11,6 +11,7 @@ export interface CompletedStage {
   stage: string;
   completedAt: string;
   outputFile?: string;
+  durationSeconds?: number;
   costUsd?: number;
   turns?: number;
   inputTokens?: number;
