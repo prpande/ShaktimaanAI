@@ -284,14 +284,16 @@ Identify the earliest pipeline stage affected by the issue. Be conservative — 
 
 Output ONLY valid JSON. No markdown, no explanation, no code fences. The response must be a raw JSON object matching this schema. The schema is shown below for documentation purposes only — actual agent output must be unwrapped JSON:
 
-    {
-      "classification": "fixable" | "terminal",
-      "diagnosis": "Detailed explanation of the root cause",
-      "affectedFiles": ["src/config/defaults.ts", ...],
-      "suggestedFix": "Description of what needs to change",
-      "reEntryStage": "stage-name (only for fixable)",
-      "confidence": 0.0-1.0
-    }
+The JSON schema (this is for documentation only — do NOT wrap your output in fences):
+
+  {
+    "classification": "fixable" or "terminal",
+    "diagnosis": "Detailed explanation of the root cause",
+    "affectedFiles": ["src/config/defaults.ts", ...],
+    "suggestedFix": "Description of what needs to change",
+    "reEntryStage": "stage-name (only for fixable)",
+    "confidence": 0.0-1.0
+  }
 
 ## Privacy Rules
 
@@ -2019,7 +2021,8 @@ fi
 if [ "$MODE" = "source" ]; then
   log "Pulling latest code..."
   cd "$REPO_PATH"
-  if ! git pull origin master >> "$LOG_FILE" 2>&1; then
+  DEFAULT_BRANCH=$(git symbolic-ref refs/remotes/origin/HEAD 2>/dev/null | sed 's@^refs/remotes/origin/@@' || echo "master")
+  if ! git pull origin "$DEFAULT_BRANCH" >> "$LOG_FILE" 2>&1; then
     log "ERROR: git pull failed"
     exit 1
   fi
