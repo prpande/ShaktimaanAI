@@ -5,7 +5,7 @@ import { tmpdir } from "node:os";
 import { randomUUID } from "node:crypto";
 
 import { createRuntimeDirs } from "../../src/runtime/dirs.js";
-import { createWatcher, type Watcher, type WatcherOptions } from "../../src/core/watcher.js";
+import { createWatcher, resolveSlackRepoCwd, type Watcher, type WatcherOptions } from "../../src/core/watcher.js";
 import { type Pipeline } from "../../src/core/pipeline.js";
 import { type TaskLogger } from "../../src/core/logger.js";
 import { DEFAULT_CONFIG } from "../../src/config/defaults.js";
@@ -194,5 +194,44 @@ describe("createWatcher", () => {
     }
 
     expect(slackPollCalls).toBe(2);
+  });
+});
+
+// ─── resolveSlackRepoCwd tests ────────────────────────────────────────────────
+
+describe("resolveSlackRepoCwd", () => {
+  it("returns config.repos.root when no repo hint", () => {
+    const result = resolveSlackRepoCwd(undefined, {
+      repos: { root: "/home/user/code", aliases: {} },
+    } as any);
+    expect(result).toBe("/home/user/code");
+  });
+
+  it("resolves a repo alias to its path", () => {
+    const result = resolveSlackRepoCwd("myapp", {
+      repos: { root: "/home/user/code", aliases: { myapp: { path: "/home/user/myapp" } } },
+    } as any);
+    expect(result).toBe("/home/user/myapp");
+  });
+
+  it("returns the repo name as-is if it looks like an absolute path", () => {
+    const result = resolveSlackRepoCwd("/explicit/repo/path", {
+      repos: { root: "/home/user/code", aliases: {} },
+    } as any);
+    expect(result).toBe("/explicit/repo/path");
+  });
+
+  it("falls back to process.cwd() when no config root and no repo hint", () => {
+    const result = resolveSlackRepoCwd(undefined, {
+      repos: { root: "", aliases: {} },
+    } as any);
+    expect(result).toBe(process.cwd());
+  });
+
+  it("resolves non-alias non-path repo hint under repos.root", () => {
+    const result = resolveSlackRepoCwd("some-repo", {
+      repos: { root: "/home/user/code", aliases: {} },
+    } as any);
+    expect(result).toBe("/home/user/code/some-repo");
   });
 });
