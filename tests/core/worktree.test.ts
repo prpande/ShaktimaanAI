@@ -184,6 +184,52 @@ describe("cleanupExpired", () => {
     const removed = cleanupExpired(manifestPath, 7);
     expect(removed).toEqual([]);
   }, TEST_TIMEOUT);
+
+  it("successfully cleans up when repoPath was derived from worktree metadata", () => {
+    const worktreesDir = join(TEST_DIR, "worktrees");
+    const manifestPath = join(TEST_DIR, "worktree-manifest.json");
+    const worktreePath = createWorktree(REPO_DIR, "derived-repo-task", worktreesDir);
+
+    const derivedRepo = resolveParentRepo(worktreePath);
+    expect(derivedRepo).not.toBeNull();
+
+    const oldDate = new Date();
+    oldDate.setDate(oldDate.getDate() - 8);
+    recordWorktreeCompletion(manifestPath, {
+      slug: "derived-repo-task",
+      repoPath: derivedRepo!,
+      worktreePath,
+      completedAt: oldDate.toISOString(),
+    });
+
+    const removed = cleanupExpired(manifestPath, 7);
+    expect(removed).toContain(worktreePath);
+    expect(existsSync(worktreePath)).toBe(false);
+
+    const branches = execSync("git branch", { cwd: REPO_DIR, encoding: "utf-8" });
+    expect(branches).not.toContain("shkmn/derived-repo-task");
+  }, TEST_TIMEOUT);
+
+  it("fails cleanup when repoPath is the worktree itself (demonstrates the bug)", () => {
+    const worktreesDir = join(TEST_DIR, "worktrees");
+    const manifestPath = join(TEST_DIR, "worktree-manifest.json");
+    const worktreePath = createWorktree(REPO_DIR, "bad-repo-task", worktreesDir);
+
+    const oldDate = new Date();
+    oldDate.setDate(oldDate.getDate() - 8);
+    recordWorktreeCompletion(manifestPath, {
+      slug: "bad-repo-task",
+      repoPath: worktreePath,
+      worktreePath,
+      completedAt: oldDate.toISOString(),
+    });
+
+    const removed = cleanupExpired(manifestPath, 7);
+    expect(removed).toContain(worktreePath);
+    // Branch is NOT cleaned up because cwd was wrong
+    const branches = execSync("git branch", { cwd: REPO_DIR, encoding: "utf-8" });
+    expect(branches).toContain("shkmn/bad-repo-task");
+  }, TEST_TIMEOUT);
 });
 
 // ─── Shell injection prevention ─────────────────────────────────────────────
