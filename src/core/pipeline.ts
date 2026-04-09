@@ -6,7 +6,7 @@ import { type ResolvedConfig } from "../config/loader.js";
 import { type AgentRunnerFn, type AgentRunOptions, type RunState, type CompletedStage, type ReviewIssue } from "./types.js";
 import { type AgentRegistry } from "./registry.js";
 import { type TaskLogger, createTaskLogger } from "./logger.js";
-import { STAGE_DIR_MAP, DIR_STAGE_MAP, STAGES_WITH_PENDING_DONE } from "./stage-map.js";
+import { STAGE_DIR_MAP, STAGES_WITH_PENDING_DONE } from "./stage-map.js";
 import { STAGE_ARTIFACT_RULES } from "../config/defaults.js";
 import { type Notifier, type NotifyEvent } from "../surfaces/types.js";
 import { parseAgentVerdict, parseReviewFindings, decideAfterValidate, decideAfterReview } from "./retry.js";
@@ -18,8 +18,8 @@ import { DEFAULT_BUDGET_CONFIG } from "../config/defaults.js";
 import type { BudgetConfig } from "../config/budget-schema.js";
 import { runRecoveryAgent } from "./recovery-agent.js";
 
-// Re-exported for external consumers; DIR_STAGE_MAP is not used internally in this module.
-export { STAGE_DIR_MAP, DIR_STAGE_MAP };
+// Re-exported for external consumers.
+export { STAGE_DIR_MAP };
 
 // ─── Scoped Artifact Collection ────────────────────────────────────────────
 

@@ -124,6 +124,30 @@ describe("loadCursor", () => {
     expect(cursor).toEqual({ channelTs: "now", dmTs: "now" });
     fs.rmdirSync(tmpDir, { recursive: true } as fs.RmDirOptions);
   });
+
+  it("returns defaults when JSON has wrong shape (missing fields)", () => {
+    const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "shai-test-"));
+    fs.writeFileSync(path.join(tmpDir, "slack-cursor.json"), JSON.stringify({ foo: "bar" }));
+    const cursor = loadCursor(tmpDir);
+    expect(cursor).toEqual({ channelTs: "now", dmTs: "now" });
+    fs.rmSync(tmpDir, { recursive: true, force: true });
+  });
+
+  it("returns defaults when field types are wrong", () => {
+    const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "shai-test-"));
+    fs.writeFileSync(path.join(tmpDir, "slack-cursor.json"), JSON.stringify({ channelTs: 123, dmTs: true }));
+    const cursor = loadCursor(tmpDir);
+    expect(cursor).toEqual({ channelTs: "now", dmTs: "now" });
+    fs.rmSync(tmpDir, { recursive: true, force: true });
+  });
+
+  it("loads a valid cursor correctly", () => {
+    const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "shai-test-"));
+    fs.writeFileSync(path.join(tmpDir, "slack-cursor.json"), JSON.stringify({ channelTs: "1234.5678", dmTs: "9876.5432" }));
+    const cursor = loadCursor(tmpDir);
+    expect(cursor).toEqual({ channelTs: "1234.5678", dmTs: "9876.5432" });
+    fs.rmSync(tmpDir, { recursive: true, force: true });
+  });
 });
 
 describe("saveCursor / loadCursor round-trip", () => {

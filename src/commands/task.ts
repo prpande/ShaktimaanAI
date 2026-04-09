@@ -13,14 +13,12 @@ export function registerTaskCommand(program: Command): void {
     .option("--stages <stages>", "Comma-separated list of stages to run")
     .option("--hints <hints...>", 'Stage hints in "stage:hint" format (repeatable)')
     .option("--quick", "Quick task mode (no review)")
-    .option("--full", "Full task mode (all stages)")
     .action((description: string, opts: {
       repo?: string;
       ado?: string;
       stages?: string;
       hints?: string[];
       quick?: boolean;
-      full?: boolean;
     }) => {
       const configPath = resolveConfigPath();
       const config = loadConfig(configPath);

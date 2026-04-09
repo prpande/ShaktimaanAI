@@ -395,6 +395,14 @@ export function executeStats(options: StatsOptions): void {
 
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 
+export function isValidCalendarDate(dateStr: string): boolean {
+  if (!DATE_RE.test(dateStr)) return false;
+  const date = new Date(dateStr + "T00:00:00Z");
+  if (isNaN(date.getTime())) return false;
+  const [y, m, d] = dateStr.split("-").map(Number);
+  return date.getUTCFullYear() === y && date.getUTCMonth() + 1 === m && date.getUTCDate() === d;
+}
+
 export function registerStatsCommand(program: Command): void {
   program
     .command("stats")
@@ -404,12 +412,12 @@ export function registerStatsCommand(program: Command): void {
     .option("--from <date>", "Start date (YYYY-MM-DD, inclusive)")
     .option("--to <date>", "End date (YYYY-MM-DD, inclusive)")
     .action((opts: { json: boolean; task?: string; from?: string; to?: string }) => {
-      if (opts.from && !DATE_RE.test(opts.from)) {
-        console.error("Invalid date format for --from. Use YYYY-MM-DD.");
+      if (opts.from && !isValidCalendarDate(opts.from)) {
+        console.error("Invalid date for --from. Must be a valid calendar date (YYYY-MM-DD).");
         process.exit(1);
       }
-      if (opts.to && !DATE_RE.test(opts.to)) {
-        console.error("Invalid date format for --to. Use YYYY-MM-DD.");
+      if (opts.to && !isValidCalendarDate(opts.to)) {
+        console.error("Invalid date for --to. Must be a valid calendar date (YYYY-MM-DD).");
         process.exit(1);
       }
 

@@ -22,12 +22,14 @@ import { registerStatsCommand } from "./commands/stats.js";
 import { registerRecoverCommand } from "./commands/recover.js";
 import { registerServiceCommand } from "./commands/service.js";
 
+declare const __VERSION__: string;
+
 const program = new Command();
 
 program
   .name("shkmn")
   .description("ShaktimaanAI — Agentic development pipeline")
-  .version("0.1.0");
+  .version(__VERSION__);
 
 program
   .command("init")

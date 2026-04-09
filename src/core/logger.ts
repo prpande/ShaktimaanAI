@@ -1,5 +1,6 @@
-import { mkdirSync, appendFileSync } from "fs";
-import { join } from "path";
+import { mkdirSync } from "node:fs";
+import { join } from "node:path";
+import pino from "pino";
 
 export interface TaskLogger {
   info(msg: string): void;
@@ -8,29 +9,46 @@ export interface TaskLogger {
 }
 
 export function formatLogLine(level: string, message: string): string {
-  const timestamp = new Date().toISOString();
-  return `[${timestamp}] [${level.toUpperCase()}] ${message}\n`;
+  return JSON.stringify({
+    level,
+    msg: message,
+    time: new Date().toISOString(),
+  });
 }
 
-export function createTaskLogger(logDir: string, slug: string): TaskLogger {
-  mkdirSync(logDir, { recursive: true });
-  const logFile = join(logDir, `${slug}.log`);
+export interface LogContext {
+  slug?: string;
+  module?: string;
+  stage?: string;
+}
 
-  function write(level: string, msg: string): void {
-    try {
-      appendFileSync(logFile, formatLogLine(level, msg), "utf8");
-    } catch {
-      // Logging should never crash the pipeline — silently swallow write errors
-    }
+const NOOP_LOGGER: TaskLogger = {
+  info: () => {},
+  warn: () => {},
+  error: () => {},
+};
+
+export function createTaskLogger(logDir: string, slug: string, context?: LogContext): TaskLogger {
+  try {
+    mkdirSync(logDir, { recursive: true });
+    const logFile = join(logDir, `${slug}.log`);
+
+    const logger = pino(
+      { base: context ?? undefined, timestamp: pino.stdTimeFunctions.isoTime },
+      pino.destination({ dest: logFile, append: true, sync: true }),
+    );
+
+    return {
+      info: (msg: string) => { try { logger.info(msg); } catch { /* never crash */ } },
+      warn: (msg: string) => { try { logger.warn(msg); } catch { /* never crash */ } },
+      error: (msg: string) => { try { logger.error(msg); } catch { /* never crash */ } },
+    };
+  } catch {
+    // Logging should never crash the pipeline — fall back to no-op logger
+    return NOOP_LOGGER;
   }
-
-  return {
-    info: (msg: string) => write("info", msg),
-    warn: (msg: string) => write("warn", msg),
-    error: (msg: string) => write("error", msg),
-  };
 }
 
 export function createSystemLogger(logDir: string): TaskLogger {
-  return createTaskLogger(logDir, "heimdall");
+  return createTaskLogger(logDir, "heimdall", { module: "system" });
 }

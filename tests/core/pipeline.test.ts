@@ -12,7 +12,6 @@ import { createAgentRegistry } from "../../src/core/registry.js";
 import { type AgentRunOptions, type AgentRunResult } from "../../src/core/types.js";
 import {
   STAGE_DIR_MAP,
-  DIR_STAGE_MAP,
   getNextStage,
   isReviewGate,
   createRunState,
@@ -23,6 +22,7 @@ import {
   createPipeline,
   collectArtifacts,
 } from "../../src/core/pipeline.js";
+import { DIR_STAGE_MAP } from "../../src/core/stage-map.js";
 
 // ─── helpers ────────────────────────────────────────────────────────────────
 
