@@ -1356,3 +1356,43 @@ describe("F-5.6: modifyStages rejects removing currentStage", () => {
     ).rejects.toThrow(/Cannot remove current stage/);
   });
 });
+
+describe("collectArtifacts — numeric sort for r<N> suffixes", () => {
+  it("sorts retry-feedback files numerically at 10+", () => {
+    const artifactsDir = join(TEST_DIR, "artifacts-sort-test");
+    mkdirSync(artifactsDir, { recursive: true });
+
+    writeFileSync(join(artifactsDir, "questions-output.md"), "questions content");
+    writeFileSync(join(artifactsDir, "retry-feedback-impl-1.md"), "feedback 1");
+    writeFileSync(join(artifactsDir, "retry-feedback-impl-3.md"), "feedback 3");
+    writeFileSync(join(artifactsDir, "retry-feedback-impl-10.md"), "feedback 10");
+
+    const stages = ["questions", "research", "design", "structure", "plan", "impl", "review"];
+    const result = collectArtifacts(artifactsDir, "impl", stages);
+
+    // Verify numeric ordering: feedback 1 before feedback 3 before feedback 10
+    const idx1 = result.indexOf("feedback 1");
+    const idx3 = result.indexOf("feedback 3");
+    const idx10 = result.indexOf("feedback 10");
+    expect(idx1).toBeLessThan(idx3);
+    expect(idx3).toBeLessThan(idx10);
+    // Stage outputs appear before retry feedback
+    const idxQuestions = result.indexOf("questions content");
+    expect(idxQuestions).toBeLessThan(idx1);
+  });
+
+  it("collectArtifacts deduplicates to latest retry per stage", () => {
+    const artifactsDir = join(TEST_DIR, "artifacts-trailing-test");
+    mkdirSync(artifactsDir, { recursive: true });
+
+    writeFileSync(join(artifactsDir, "questions-output.md"), "q base");
+    writeFileSync(join(artifactsDir, "questions-output-r2.md"), "q r2");
+    writeFileSync(join(artifactsDir, "questions-output-r10.md"), "q r10");
+
+    const stages = ["questions", "research", "design"];
+    const result = collectArtifacts(artifactsDir, "research", stages);
+    expect(result).toContain("q r10");
+    expect(result).not.toContain("q base");
+    expect(result).not.toContain("q r2");
+  });
+});

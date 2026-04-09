@@ -57,3 +57,35 @@ describe("setConfigValue", () => {
     expect(raw.agents.names.research).toBe("Scout");
   });
 });
+
+describe("setConfigValue — Zod validation", () => {
+  it("rejects a value that violates the Zod schema", () => {
+    // pipeline.runtimeDir is z.string().min(1) — setting it to "" should fail
+    expect(() => {
+      setConfigValue(configPath, "pipeline.runtimeDir", "");
+    }).toThrow(/Invalid config/);
+  });
+
+  it("does not overwrite the config file on validation failure", () => {
+    const before = readFileSync(configPath, "utf-8");
+    try {
+      setConfigValue(configPath, "pipeline.runtimeDir", "");
+    } catch {
+      // expected
+    }
+    const after = readFileSync(configPath, "utf-8");
+    expect(after).toBe(before);
+  });
+
+  it("accepts a valid value and writes it", () => {
+    setConfigValue(configPath, "pipeline.runtimeDir", "/new/path");
+    const raw = JSON.parse(readFileSync(configPath, "utf-8"));
+    expect(raw.pipeline.runtimeDir).toBe("/new/path");
+  });
+
+  it("accepts a valid nested value", () => {
+    setConfigValue(configPath, "agents.retryCount", 2);
+    const raw = JSON.parse(readFileSync(configPath, "utf-8"));
+    expect(raw.agents.retryCount).toBe(2);
+  });
+});

@@ -13,6 +13,33 @@ import { runAstraTriage, type AstraInput } from "./astra-triage.js";
 import { createTask } from "./task-creator.js";
 import { buildNaradaPayload, readInbox, clearInbox, readSentLog, loadThreadMap, saveThreadMap } from "./slack-queue.js";
 
+// ─── resolveSlackRepoCwd ──────────────────────────────────────────────────────
+
+/**
+ * Resolves the target repo CWD for Slack-routed tasks.
+ * Priority: explicit repo hint > config alias > config.repos.root > process.cwd()
+ */
+export function resolveSlackRepoCwd(
+  repoHint: string | undefined,
+  config: ResolvedConfig,
+): string {
+  // 1. Explicit repo hint — check if it's an alias
+  if (repoHint) {
+    const alias = config.repos.aliases[repoHint];
+    if (alias) return alias.path;
+    // If it looks like an absolute path, use directly
+    if (repoHint.startsWith("/") || /^[a-zA-Z]:[\\/]/.test(repoHint)) return repoHint;
+    // Resolve under repos.root
+    if (config.repos.root) return join(config.repos.root, repoHint).replace(/\\/g, "/");
+  }
+
+  // 2. Configured repos root
+  if (config.repos.root) return config.repos.root;
+
+  // 3. Last resort
+  return process.cwd();
+}
+
 // ─── Control file schema ──────────────────────────────────────────────────────
 
 const controlSchema = z.discriminatedUnion("operation", [
@@ -303,7 +330,7 @@ export function createWatcher(options: WatcherOptions): Watcher {
                 taskContent: astraInput.message,
                 previousOutput: triageResult.enrichedContext ?? "",
                 outputPath: join(outputDir, `${entry.ts.replace(".", "-")}.md`),
-                cwd: process.cwd(),
+                cwd: resolveSlackRepoCwd(undefined, config),
                 config,
                 logger: { info() {}, warn() {}, error() {} },
               });
