@@ -1,5 +1,5 @@
-import { mkdirSync, appendFileSync } from "fs";
-import { join } from "path";
+import { mkdirSync, appendFileSync } from "node:fs";
+import { join } from "node:path";
 
 export interface TaskLogger {
   info(msg: string): void;

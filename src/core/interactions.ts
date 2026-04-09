@@ -1,5 +1,5 @@
-import { mkdirSync, existsSync, readFileSync, appendFileSync, readdirSync } from "fs";
-import { join } from "path";
+import { mkdirSync, existsSync, readFileSync, appendFileSync, readdirSync } from "node:fs";
+import { join } from "node:path";
 
 // ---------------------------------------------------------------------------
 // Types
