@@ -387,8 +387,9 @@ export function createPipeline(options: PipelineOptions): Pipeline {
     for (const { slug, taskDir } of toRetry) {
       // Verify the task is still in pending/ (not cancelled, failed, or already running)
       if (!existsSync(taskDir)) continue;
+      let state: RunState;
       try {
-        const state = readRunState(taskDir);
+        state = readRunState(taskDir);
         if (state.status !== "running") continue;
       } catch {
         continue;
