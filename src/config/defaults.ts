@@ -16,6 +16,7 @@ export const DEFAULT_AGENT_NAMES = {
   approvalHandler: "Indra",
   quick: "Astra",
   slackIO: "Narada",
+  recovery: "Chiranjeevi",
 } as const satisfies Record<string, string>;
 
 export type AgentRole = keyof typeof DEFAULT_AGENT_NAMES;
@@ -34,6 +35,7 @@ export const DEFAULT_STAGE_TOOLS: Record<string, { allowed: string[]; disallowed
   "quick-triage": { allowed: ["Read","Glob","Grep","Bash","WebSearch","WebFetch","mcp__plugin_notion_notion__*","mcp__claude_ai_Slack__slack_read_*"], disallowed: ["Write","Edit"] },
   "quick-execute": { allowed: ["Read","Write","Edit","Bash","Glob","Grep","WebSearch","WebFetch","mcp__plugin_notion_notion__*","mcp__claude_ai_Slack__*"], disallowed: [] },
   "slack-io":  { allowed: ["mcp__claude_ai_Slack__*","Read","Write"], disallowed: ["Edit","Bash","Glob","Grep"] },
+  recovery:   { allowed: ["Read","Glob","Grep","Bash"], disallowed: ["Write","Edit"] },
 };
 
 export const STAGE_CONTEXT_RULES: Record<string, {
@@ -54,6 +56,7 @@ export const STAGE_CONTEXT_RULES: Record<string, {
   "quick-triage": { includeTaskContent: true, previousOutputLabel: null,                 includeRepoContext: true },
   "quick-execute": { includeTaskContent: true, previousOutputLabel: null,                includeRepoContext: true },
   "slack-io": { includeTaskContent: true, previousOutputLabel: null,                      includeRepoContext: false },
+  recovery:   { includeTaskContent: false, previousOutputLabel: null,                     includeRepoContext: false },
 };
 
 // ─── Scoped artifact passing rules ──────────────────────────────────────────
@@ -79,6 +82,7 @@ export const STAGE_ARTIFACT_RULES: Record<string, StageArtifactRule> = {
   "quick-triage":  { mode: 'none' },
   "quick-execute": { mode: 'none' },
   "slack-io":      { mode: 'none' },
+  recovery:        { mode: 'all_prior' },
 };
 
 // ─── MCP tool prefix mapping ────────────────────────────────────────────────
@@ -156,6 +160,16 @@ export interface ShkmnConfig {
   review: {
     enforceSuggestions: boolean;
   };
+  recovery: {
+    enabled: boolean;
+    fileGithubIssues: boolean;
+    githubRepo: string;
+  };
+  service: {
+    mode: "source" | "package";
+    repoPath: string;
+    checkIntervalMinutes: number;
+  };
 }
 
 export const DEFAULT_CONFIG: ShkmnConfig = {
@@ -213,6 +227,7 @@ export const DEFAULT_CONFIG: ShkmnConfig = {
       quick: 5,
       "quick-execute": 40,
       "slack-io": 15,
+      recovery: 60,
     },
     timeoutsMinutes: {
       questions: 15,
@@ -228,6 +243,7 @@ export const DEFAULT_CONFIG: ShkmnConfig = {
       quick: 2,
       "quick-execute": 30,
       "slack-io": 2,
+      recovery: 30,
     },
     retryCount: 1,
     maxValidateRetries: 2,
@@ -248,6 +264,7 @@ export const DEFAULT_CONFIG: ShkmnConfig = {
       quick: "haiku",
       "quick-execute": "sonnet",
       "slack-io": "haiku",
+      recovery: "opus",
     },
   },
   schedule: {
@@ -263,6 +280,16 @@ export const DEFAULT_CONFIG: ShkmnConfig = {
   },
   review: {
     enforceSuggestions: true,
+  },
+  recovery: {
+    enabled: true,
+    fileGithubIssues: true,
+    githubRepo: "prpande/ShaktimaanAI",
+  },
+  service: {
+    mode: "source",
+    repoPath: "",
+    checkIntervalMinutes: 5,
   },
 };
 

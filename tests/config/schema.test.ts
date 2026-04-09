@@ -81,3 +81,43 @@ describe("configSchema", () => {
     expect(result.slack.outboundPrefix).toBe("🤖 [ShaktimaanAI]");
   });
 });
+
+describe("recovery config", () => {
+  it("accepts recovery config with defaults", () => {
+    const parsed = configSchema.parse({
+      pipeline: { runtimeDir: "/tmp/test" },
+    });
+    expect(parsed.recovery).toEqual({
+      enabled: true,
+      fileGithubIssues: true,
+      githubRepo: "prpande/ShaktimaanAI",
+    });
+  });
+
+  it("accepts explicit recovery config", () => {
+    const parsed = configSchema.parse({
+      pipeline: { runtimeDir: "/tmp/test" },
+      recovery: {
+        enabled: false,
+        fileGithubIssues: false,
+        githubRepo: "some/other-repo",
+      },
+    });
+    expect(parsed.recovery.enabled).toBe(false);
+    expect(parsed.recovery.fileGithubIssues).toBe(false);
+    expect(parsed.recovery.githubRepo).toBe("some/other-repo");
+  });
+});
+
+describe("service config", () => {
+  it("accepts service config with defaults", () => {
+    const parsed = configSchema.parse({
+      pipeline: { runtimeDir: "/tmp/test" },
+    });
+    expect(parsed.service).toEqual({
+      mode: "source",
+      repoPath: "",
+      checkIntervalMinutes: 5,
+    });
+  });
+});
