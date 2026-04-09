@@ -56,13 +56,20 @@ export interface RunState {
   stageHints: Record<string, string[]>;
   retryAttempts: Record<string, number>;
   pausedAtStage?: string;
-  holdReason?: "budget_exhausted" | "approval_required" | "user_paused";
+  holdReason?: "budget_exhausted" | "approval_required" | "user_paused" | "awaiting_fix";
   holdDetail?: string;
   budgetResetAtIndex?: number;
 
   // Token optimization: Astra-determined MCP requirements and repo summary
   requiredMcpServers?: string[];
   repoSummary?: string;
+
+  // Recovery agent fields
+  terminalFailure?: boolean;
+  recoveryDiagnosis?: string;
+  recoveryReEntryStage?: string;
+  recoveryIssueUrl?: string;
+  recoveryIssueNumber?: number;
 }
 
 export interface AgentRunOptions {
