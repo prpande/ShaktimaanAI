@@ -2,6 +2,19 @@ import { execFileSync } from "node:child_process";
 import { mkdirSync, existsSync, readFileSync, writeFileSync, statSync, realpathSync } from "node:fs";
 import { join, dirname, sep } from "node:path";
 
+const SENSITIVE_GITIGNORE_PATTERNS = [
+  ".env",
+  ".env.*",
+  "*.local",
+  "credentials.*",
+  "secrets.*",
+  "*.pem",
+  "*.key",
+  "*.p12",
+  "*.pfx",
+  "shkmn.config.json",
+];
+
 export interface WorktreeInfo {
   path: string;
   branch: string;
@@ -32,6 +45,9 @@ export function createWorktree(
 
   // If the worktree path already exists, assume it's a crash-recovery scenario — reuse it.
   if (existsSync(worktreePath)) {
+    try {
+      ensureSensitiveGitignore(worktreePath);
+    } catch { /* non-fatal */ }
     return worktreePath;
   }
 
@@ -55,6 +71,11 @@ export function createWorktree(
       createdAt: new Date().toISOString(),
     });
   } catch { /* intentionally ignore manifest write failures to avoid failing worktree creation */ }
+
+  // Ensure .gitignore excludes sensitive files
+  try {
+    ensureSensitiveGitignore(worktreePath);
+  } catch { /* non-fatal: gitignore enforcement is defense-in-depth */ }
 
   return worktreePath;
 }
@@ -166,6 +187,30 @@ export function resolveParentRepo(worktreePath: string): string | null {
   } catch {
     return null;
   }
+}
+
+/**
+ * Ensures that the worktree's .gitignore includes all sensitive-file patterns.
+ * Appends missing patterns without duplicating existing ones.
+ */
+function ensureSensitiveGitignore(worktreePath: string): void {
+  const gitignorePath = join(worktreePath, ".gitignore");
+  let existing = "";
+  try {
+    existing = readFileSync(gitignorePath, "utf-8");
+  } catch {
+    // No .gitignore yet
+  }
+
+  const existingLines = new Set(existing.split(/\r?\n/).map(l => l.trim()));
+  const missing = SENSITIVE_GITIGNORE_PATTERNS.filter(p => !existingLines.has(p));
+
+  if (missing.length === 0) return;
+
+  const leadingNewline = existing.length > 0 ? "\n" : "";
+  const separator = existing.length > 0 && !existing.endsWith("\n") ? "\n" : "";
+  const block = `${separator}${leadingNewline}# ShaktimaanAI: sensitive file exclusions\n${missing.join("\n")}\n`;
+  writeFileSync(gitignorePath, existing + block, "utf-8");
 }
 
 // ─── Manifest helpers ──────────────────────────────────────────────────────

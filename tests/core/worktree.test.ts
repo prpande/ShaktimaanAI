@@ -81,6 +81,48 @@ describe("createWorktree", () => {
     const worktreePath = createWorktree(REPO_DIR, "branched-task", worktreesDir, "feature/base");
     expect(existsSync(worktreePath)).toBe(true);
   }, TEST_TIMEOUT);
+
+  it("ensures .gitignore in worktree excludes sensitive patterns", () => {
+    const worktreesDir = join(TEST_DIR, "worktrees");
+    const worktreePath = createWorktree(REPO_DIR, "gitignore-test", worktreesDir);
+
+    const gitignorePath = join(worktreePath, ".gitignore");
+    expect(existsSync(gitignorePath)).toBe(true);
+
+    const content = readFileSync(gitignorePath, "utf-8");
+    expect(content).toContain(".env");
+    expect(content).toContain("*.pem");
+    expect(content).toContain("*.key");
+    expect(content).toContain("credentials.*");
+    expect(content).toContain("shkmn.config.json");
+  }, TEST_TIMEOUT);
+
+  it("appends missing patterns to an existing .gitignore", () => {
+    writeFileSync(join(REPO_DIR, ".gitignore"), "node_modules/\n");
+    execSync("git add .gitignore", { cwd: REPO_DIR, stdio: "pipe" });
+    execSync('git commit -m "add gitignore"', { cwd: REPO_DIR, stdio: "pipe" });
+
+    const worktreesDir = join(TEST_DIR, "worktrees");
+    const worktreePath = createWorktree(REPO_DIR, "existing-gitignore", worktreesDir);
+
+    const content = readFileSync(join(worktreePath, ".gitignore"), "utf-8");
+    expect(content).toContain("node_modules/");
+    expect(content).toContain(".env");
+    expect(content).toContain("*.key");
+  }, TEST_TIMEOUT);
+
+  it("does not duplicate patterns in existing .gitignore", () => {
+    writeFileSync(join(REPO_DIR, ".gitignore"), ".env\nnode_modules/\n");
+    execSync("git add .gitignore", { cwd: REPO_DIR, stdio: "pipe" });
+    execSync('git commit -m "add gitignore with .env"', { cwd: REPO_DIR, stdio: "pipe" });
+
+    const worktreesDir = join(TEST_DIR, "worktrees");
+    const worktreePath = createWorktree(REPO_DIR, "no-dup-gitignore", worktreesDir);
+
+    const content = readFileSync(join(worktreePath, ".gitignore"), "utf-8");
+    const envMatches = content.match(/^\.env$/gm);
+    expect(envMatches).toHaveLength(1);
+  }, TEST_TIMEOUT);
 });
 
 // ─── removeWorktree ──────────────────────────────────────────────────────────
