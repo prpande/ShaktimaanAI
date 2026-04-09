@@ -13,12 +13,27 @@ interface EventBase {
 
 export type NotifyEvent =
   | ({ type: "task_created";    title: string; source: string; stages: string[]; slackThread?: string } & EventBase)
-  | ({ type: "stage_started";   stage: string } & EventBase)
-  | ({ type: "stage_completed"; stage: string; artifactPath: string } & EventBase)
-  | ({ type: "task_held";       stage: string; artifactUrl: string } & EventBase)
+  | ({ type: "stage_started";   stage: string; agentName?: string } & EventBase)
+  | ({ type: "stage_completed"; stage: string; artifactPath: string;
+       durationSeconds?: number; costUsd?: number; model?: string;
+       inputTokens?: number; outputTokens?: number; turns?: number;
+       verdict?: string; agentName?: string } & EventBase)
+  | ({ type: "task_held";       stage: string; artifactUrl: string;
+       holdReason?: string; holdDetail?: string;
+       durationSeconds?: number; costUsd?: number; model?: string;
+       inputTokens?: number; outputTokens?: number; turns?: number;
+       agentName?: string } & EventBase)
   | ({ type: "task_approved";   approvedBy: string; feedback?: string } & EventBase)
-  | ({ type: "task_completed";  prUrl?: string } & EventBase)
-  | ({ type: "task_failed";     stage: string; error: string } & EventBase)
+  | ({ type: "task_completed";  prUrl?: string;
+       completedStages?: Array<{ stage: string; completedAt: string;
+         costUsd?: number; turns?: number; inputTokens?: number;
+         outputTokens?: number; model?: string }>;
+       startedAt?: string;
+       agentNames?: Record<string, string> } & EventBase)
+  | ({ type: "task_failed";     stage: string; error: string;
+       durationSeconds?: number; costUsd?: number; model?: string;
+       inputTokens?: number; outputTokens?: number; turns?: number;
+       agentName?: string } & EventBase)
   | ({ type: "task_cancelled";  cancelledBy: string } & EventBase)
   | ({ type: "task_paused";     pausedBy: string } & EventBase)
   | ({ type: "task_resumed";    resumedBy: string } & EventBase)
