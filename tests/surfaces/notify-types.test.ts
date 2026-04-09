@@ -1,5 +1,6 @@
 import { describe, it, expect } from "vitest";
 import type { NotifyEvent } from "../../src/surfaces/types.js";
+import { shouldNotify } from "../../src/surfaces/types.js";
 
 describe("NotifyEvent enriched fields", () => {
   it("stage_started accepts agentName", () => {
@@ -94,5 +95,84 @@ describe("NotifyEvent enriched fields", () => {
     expect(event.completedStages).toHaveLength(2);
     expect(event.startedAt).toBe("2026-01-01T00:00:00Z");
     expect(event.agentNames?.questions).toBe("Gargi");
+  });
+});
+
+describe("shouldNotify", () => {
+  it("stages level returns true for task_created", () => {
+    const event: NotifyEvent = {
+      type: "task_created",
+      slug: "test-task",
+      title: "Test Task",
+      source: "inbox",
+      stages: ["questions", "impl"],
+      timestamp: "2026-01-01T00:00:00Z",
+    };
+    expect(shouldNotify("stages", event)).toBe(true);
+  });
+
+  it("stages level returns true for stage_started", () => {
+    const event: NotifyEvent = {
+      type: "stage_started",
+      slug: "test-task",
+      stage: "design",
+      timestamp: "2026-01-01T00:00:00Z",
+    };
+    expect(shouldNotify("stages", event)).toBe(true);
+  });
+
+  it("stages level returns true for recovery_diagnosed", () => {
+    const event: NotifyEvent = {
+      type: "recovery_diagnosed",
+      slug: "test-task",
+      stage: "impl",
+      classification: "fixable",
+      diagnosis: "Missing dependency",
+      timestamp: "2026-01-01T00:00:00Z",
+    };
+    expect(shouldNotify("stages", event)).toBe(true);
+  });
+
+  it("minimal level returns false for stage_started", () => {
+    const event: NotifyEvent = {
+      type: "stage_started",
+      slug: "test-task",
+      stage: "design",
+      timestamp: "2026-01-01T00:00:00Z",
+    };
+    expect(shouldNotify("minimal", event)).toBe(false);
+  });
+
+  it("bookends level returns true for task_created", () => {
+    const event: NotifyEvent = {
+      type: "task_created",
+      slug: "test-task",
+      title: "Test Task",
+      source: "inbox",
+      stages: ["questions", "impl"],
+      timestamp: "2026-01-01T00:00:00Z",
+    };
+    expect(shouldNotify("bookends", event)).toBe(true);
+  });
+
+  it("bookends level returns false for stage_started", () => {
+    const event: NotifyEvent = {
+      type: "stage_started",
+      slug: "test-task",
+      stage: "design",
+      timestamp: "2026-01-01T00:00:00Z",
+    };
+    expect(shouldNotify("bookends", event)).toBe(false);
+  });
+
+  it("minimal level returns true for task_failed", () => {
+    const event: NotifyEvent = {
+      type: "task_failed",
+      slug: "test-task",
+      stage: "impl",
+      error: "Build failed",
+      timestamp: "2026-01-01T00:00:00Z",
+    };
+    expect(shouldNotify("minimal", event)).toBe(true);
   });
 });
