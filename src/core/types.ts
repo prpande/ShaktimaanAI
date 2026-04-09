@@ -97,6 +97,7 @@ export type AgentRunnerFn = (options: AgentRunOptions) => Promise<AgentRunResult
 
 export interface AstraTriageResult {
   action: "answer" | "route_pipeline" | "control_command";
+  directAnswer?: string | null;
 
   // Control command path
   controlOp?: "approve" | "cancel" | "skip" | "pause" |

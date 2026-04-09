@@ -52,6 +52,7 @@ export function createWatcher(options: WatcherOptions): Watcher {
   let fsWatcher: FSWatcher | null = null;
   const processingFiles = new Set<string>();
   let slackPollInProgress = false;
+  let slackSendRequested = false;
   let slackInterval: ReturnType<typeof setTimeout> | null = null;
 
   // Deduplication: track processed Slack message timestamps
@@ -117,9 +118,17 @@ export function createWatcher(options: WatcherOptions): Watcher {
 
   async function triggerNaradaSend(): Promise<void> {
     if (!runner) return;
-    // Reuse pollSlack which handles both outbox sends and inbox reads
-    if (slackPollInProgress) return;
-    await pollSlack();
+    // If a poll is already running, queue one immediate follow-up run.
+    if (slackPollInProgress) {
+      slackSendRequested = true;
+      return;
+    }
+
+    // Drain all queued trigger requests before returning.
+    do {
+      slackSendRequested = false;
+      await pollSlack();
+    } while (slackSendRequested);
   }
 
   async function pollSlack(): Promise<void> {
@@ -270,6 +279,19 @@ export function createWatcher(options: WatcherOptions): Watcher {
           }
 
           case "answer": {
+            if (triageResult.directAnswer?.trim()) {
+              writeOutboxEntry(
+                entry.channel,
+                triageResult.directAnswer,
+                entry.thread_ts ?? entry.ts,
+              );
+              triggerNaradaSend().catch((err: unknown) => {
+                logger.error(`[watcher] Failed to trigger Narada send: ${err instanceof Error ? err.message : String(err)}`);
+              });
+              logger.info(`[watcher] Astra: used direct triage answer for message ${entry.ts}`);
+              break;
+            }
+
             try {
               const outputDir = join(runtimeDir, "astra-responses");
               mkdirSync(outputDir, { recursive: true });
@@ -457,17 +479,11 @@ export function createWatcher(options: WatcherOptions): Watcher {
 
         const schedulePoll = () => {
           slackInterval = setTimeout(() => {
-            if (slackPollInProgress) {
-              schedulePoll();
-              return;
-            }
-            slackPollInProgress = true;
-            pollSlack()
+            triggerNaradaSend()
               .catch((err: unknown) => {
                 logger.error(`[watcher] Slack poll error: ${err instanceof Error ? err.message : String(err)}`);
               })
               .finally(() => {
-                slackPollInProgress = false;
                 schedulePoll();
               });
           }, getInterval());
@@ -475,6 +491,9 @@ export function createWatcher(options: WatcherOptions): Watcher {
 
         schedulePoll();
         logger.info(`[watcher] Slack adaptive polling enabled (active: ${config.slack.pollIntervalActiveSec}s, idle: ${config.slack.pollIntervalIdleSec}s)`);
+        triggerNaradaSend().catch((err: unknown) => {
+          logger.error(`[watcher] Initial Slack poll error: ${err instanceof Error ? err.message : String(err)}`);
+        });
       }
 
       running = true;

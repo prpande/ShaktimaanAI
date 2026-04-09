@@ -8,6 +8,7 @@ import type { ResolvedConfig } from "../config/loader.js";
 
 const triageResultSchema = z.object({
   action: z.enum(["answer", "route_pipeline", "control_command"]),
+  directAnswer: z.string().nullable().optional(),
   controlOp: z.enum([
     "approve", "cancel", "skip", "pause",
     "resume", "modify_stages", "restart_stage", "retry",
@@ -24,7 +25,8 @@ const triageResultSchema = z.object({
 });
 
 export function parseTriageResult(raw: string): AstraTriageResult | null {
-  let json = raw.trim();
+  const trimmedRaw = raw.trim();
+  let json = trimmedRaw;
 
   // Strip markdown code fences — handles ```json\n...\n``` and variants
   const fenceMatch = json.match(/```(?:json)?\s*\n?([\s\S]*?)\n?\s*```/i);
@@ -45,6 +47,28 @@ export function parseTriageResult(raw: string): AstraTriageResult | null {
     const result = triageResultSchema.parse(parsed);
     return result;
   } catch {
+    // Fallback: some triage runs may directly return a user-facing answer
+    // instead of strict JSON. Preserve service continuity by treating it as
+    // an "answer" action rather than emitting a hard failure to Slack.
+    if (
+      trimmedRaw.length > 0 &&
+      !trimmedRaw.startsWith("{") &&
+      !trimmedRaw.startsWith("[") &&
+      !/```json/i.test(trimmedRaw)
+    ) {
+      const directAnswer = trimmedRaw
+        .replace(/<thinking>[\s\S]*?<\/thinking>/gi, "")
+        .trim();
+
+      if (directAnswer.length > 0) {
+        return {
+          action: "answer",
+          directAnswer,
+          confidence: 0.35,
+          reasoning: "Fallback: triage returned non-JSON direct answer text.",
+        };
+      }
+    }
     return null;
   }
 }
