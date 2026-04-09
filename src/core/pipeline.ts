@@ -453,7 +453,16 @@ export function createPipeline(options: PipelineOptions): Pipeline {
       repoPath = resolveParentRepo(state.worktreePath);
     }
     if (!repoPath && config.repos.root) {
-      repoPath = config.repos.root;
+      const rootGitPath = join(config.repos.root, ".git");
+      if (existsSync(rootGitPath)) {
+        repoPath = config.repos.root;
+      } else {
+        logger.warn(
+          `[pipeline] Configured repos.root is not a git repo; ` +
+          `skipping fallback manifest recording for "${state.slug}". ` +
+          `repos.root="${config.repos.root}"`,
+        );
+      }
     }
 
     // Guard: if repoPath is still null or equals worktreePath, skip recording
@@ -475,7 +484,8 @@ export function createPipeline(options: PipelineOptions): Pipeline {
       });
     } catch (err) {
       logger.warn(
-        `[pipeline] Failed to record worktree completion for "${state.slug}": ${err}`,
+        `[pipeline] Failed to record worktree completion for "${state.slug}": ` +
+        `${err instanceof Error ? err.message : String(err)}`,
       );
     }
   }

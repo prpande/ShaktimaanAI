@@ -10,8 +10,15 @@ const SENSITIVE_GITIGNORE_PATTERNS = [
   "secrets.*",
   "*.pem",
   "*.key",
+  "*.cer",
+  "*.crt",
   "*.p12",
   "*.pfx",
+  "id_rsa",
+  "id_dsa",
+  "id_ecdsa",
+  "id_ed25519",
+  "id_xmss",
   "shkmn.config.json",
 ];
 
@@ -207,9 +214,8 @@ function ensureSensitiveGitignore(worktreePath: string): void {
 
   if (missing.length === 0) return;
 
-  const leadingNewline = existing.length > 0 ? "\n" : "";
-  const separator = existing.length > 0 && !existing.endsWith("\n") ? "\n" : "";
-  const block = `${separator}${leadingNewline}# ShaktimaanAI: sensitive file exclusions\n${missing.join("\n")}\n`;
+  const prefix = existing.length === 0 ? "" : existing.endsWith("\n") ? "\n" : "\n\n";
+  const block = `${prefix}# ShaktimaanAI: sensitive file exclusions\n${missing.join("\n")}\n`;
   writeFileSync(gitignorePath, existing + block, "utf-8");
 }
 

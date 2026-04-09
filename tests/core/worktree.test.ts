@@ -252,7 +252,7 @@ describe("cleanupExpired", () => {
     expect(branches).not.toContain("shkmn/derived-repo-task");
   }, TEST_TIMEOUT);
 
-  it("fails cleanup when repoPath is the worktree itself (demonstrates the bug)", () => {
+  it("reports removal but leaves branch when repoPath is the worktree itself (pre-fix bug)", () => {
     const worktreesDir = join(TEST_DIR, "worktrees");
     const manifestPath = join(TEST_DIR, "worktree-manifest.json");
     const worktreePath = createWorktree(REPO_DIR, "bad-repo-task", worktreesDir);
