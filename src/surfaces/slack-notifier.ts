@@ -11,6 +11,7 @@ export interface SlackNotifierOptions {
   channelId: string;
   notifyLevel: NotifyLevel;
   runtimeDir: string;
+  timezone?: string;
   /** Called after writing to outbox — wire to triggerNaradaSend for immediate delivery. */
   onOutboxWrite?: () => void;
 }
@@ -65,40 +66,117 @@ export function formatMetrics(m: {
 
 // ─── formatEvent ─────────────────────────────────────────────────────────────
 
-export function formatEvent(event: NotifyEvent): string {
+export function formatEvent(event: NotifyEvent, timezone: string = "UTC"): string {
   const slug = `\`${event.slug}\``;
+  const ts = `🕐 ${formatTime(event.timestamp, timezone)}`;
 
   switch (event.type) {
     case "task_created":
-      return `:rocket: *Task created* ${slug} — *${event.title}* (source: ${event.source}) stages: [${event.stages.join(", ")}]`;
-    case "stage_started":
-      return `:arrow_forward: *Stage started* ${slug} — \`${event.stage}\``;
-    case "stage_completed":
-      return `:white_check_mark: *Stage completed* ${slug} — \`${event.stage}\` artifact: ${event.artifactPath}`;
-    case "task_held":
-      return `:hand: *Task held* ${slug} — stage \`${event.stage}\` awaiting review: ${event.artifactUrl}`;
+      return `\n${ts}\n🚀 *Task created* ${slug}\n📋 stages: ${event.stages.join(", ")}`;
+
+    case "stage_started": {
+      const agent = event.agentName ? ` — ${event.agentName}` : "";
+      return `\n${ts}\n▶️ *${event.stage}* started${agent}`;
+    }
+
+    case "stage_completed": {
+      const model = event.model ? ` (${event.model})` : "";
+      const agent = event.agentName ?? event.stage;
+      const lines = [`\n${ts}`, `✅ *${event.stage}* completed — ${agent}${model}`];
+      if (event.verdict) lines.push(`📋 Verdict: ${event.verdict}`);
+      const metrics = formatMetrics(event);
+      if (metrics) lines.push(metrics);
+      return lines.join("\n");
+    }
+
+    case "task_held": {
+      if (event.holdReason === "budget_exhausted") {
+        const model = event.model ? ` (${event.model})` : "";
+        const agent = event.agentName ?? event.stage;
+        const lines = [`\n${ts}`, `✋ *${event.stage}* held — ${agent}${model}`];
+        if (event.holdDetail) lines.push(`💸 Budget exhausted: ${event.holdDetail}`);
+        return lines.join("\n");
+      }
+      if (event.holdReason === "approval_required") {
+        return `\n${ts}\n✋ *${event.stage}* completed — awaiting approval`;
+      }
+      // Fallback for any other hold reason
+      return `\n${ts}\n✋ *${event.stage}* held — awaiting review`;
+    }
+
     case "task_approved": {
-      const fb = event.feedback != null ? ` — feedback: "${event.feedback}"` : "";
-      return `:thumbsup: *Task approved* ${slug} by ${event.approvedBy}${fb}`;
+      const fb = event.feedback ? `\n📋 "${event.feedback}"` : "";
+      return `\n${ts}\n👍 *Task approved* ${slug} by ${event.approvedBy}${fb}`;
     }
+
     case "task_completed": {
-      const pr = event.prUrl != null ? ` PR: ${event.prUrl}` : "";
-      return `:tada: *Task completed* ${slug}${pr}`;
+      const lines = [`\n${ts}`, `🎉 *Task completed* ${slug}`];
+      if (event.prUrl) lines[1] += ` PR: ${event.prUrl}`;
+
+      if (event.completedStages && event.completedStages.length > 0) {
+        // Dedup: keep last entry per stage (handles retries)
+        const stageMap = new Map<string, typeof event.completedStages[number]>();
+        for (const s of event.completedStages) {
+          stageMap.set(s.stage, s);
+        }
+        const stages = [...stageMap.values()];
+
+        const totalCost = stages.reduce((sum, s) => sum + (s.costUsd ?? 0), 0);
+        // Total duration from startedAt to event timestamp
+        let totalDurationStr = "";
+        if (event.startedAt) {
+          const totalSec = Math.round(
+            (new Date(event.timestamp).getTime() - new Date(event.startedAt).getTime()) / 1000,
+          );
+          if (totalSec > 0) totalDurationStr = `⏱ Total: ${formatDuration(totalSec)} · `;
+        }
+
+        lines.push("");
+        lines.push(`📊 *Pipeline Summary*`);
+        lines.push(`${totalDurationStr}💰 $${totalCost.toFixed(2)}`);
+        lines.push("");
+        lines.push("| Stage | Agent | Model | Duration | Cost | Tokens |");
+        lines.push("|-------|-------|-------|----------|------|--------|");
+
+        for (const s of stages) {
+          const agentName = event.agentNames?.[s.stage] ?? s.stage;
+          const model = s.model ?? "-";
+          const totalTokens = ((s.inputTokens ?? 0) + (s.outputTokens ?? 0)).toLocaleString("en-US");
+          const cost = s.costUsd != null ? `$${s.costUsd.toFixed(2)}` : "-";
+          lines.push(`| ${s.stage} | ${agentName} | ${model} | - | ${cost} | ${totalTokens} |`);
+        }
+      }
+
+      return lines.join("\n");
     }
-    case "task_failed":
-      return `:x: *Task failed* ${slug} — stage \`${event.stage}\` error: "${event.error}"`;
+
+    case "task_failed": {
+      const model = event.model ? ` (${event.model})` : "";
+      const agent = event.agentName ?? event.stage;
+      const lines = [`\n${ts}`, `❌ *${event.stage}* failed — ${agent}${model}`];
+      lines.push(`⚠️ ${event.error}`);
+      const metrics = formatMetrics(event);
+      if (metrics) lines.push(metrics);
+      return lines.join("\n");
+    }
+
     case "task_cancelled":
-      return `:no_entry_sign: *Task cancelled* ${slug} by ${event.cancelledBy}`;
+      return `\n${ts}\n🚫 *Task cancelled* ${slug} by ${event.cancelledBy}`;
+
     case "task_paused":
-      return `:double_vertical_bar: *Task paused* ${slug} by ${event.pausedBy}`;
+      return `\n${ts}\n⏸ *Task paused* ${slug} by ${event.pausedBy}`;
+
     case "task_resumed":
-      return `:arrow_forward: *Task resumed* ${slug} by ${event.resumedBy}`;
+      return `\n${ts}\n▶️ *Task resumed* ${slug} by ${event.resumedBy}`;
+
     case "stage_retried":
-      return `:repeat: *Stage retried* ${slug} — \`${event.stage}\` attempt ${event.attempt} feedback: "${event.feedback}"`;
+      return `\n${ts}\n🔁 *${event.stage}* retried — attempt ${event.attempt}\n📋 feedback: "${event.feedback}"`;
+
     case "stage_skipped":
-      return `:fast_forward: *Stage skipped* ${slug} — \`${event.stage}\``;
+      return `\n${ts}\n⏭ *${event.stage}* skipped`;
+
     case "stages_modified":
-      return `:pencil: *Stages modified* ${slug} — old: [${event.oldStages.join(", ")}] new: [${event.newStages.join(", ")}]`;
+      return `\n${ts}\n✏️ *Stages modified* ${slug}\n📋 old: ${event.oldStages.join(", ")}\n📋 new: ${event.newStages.join(", ")}`;
   }
 }
 
@@ -112,7 +190,7 @@ export function createSlackNotifier(options: SlackNotifierOptions): Notifier {
     async notify(event: NotifyEvent): Promise<void> {
       if (!shouldNotify(notifyLevel, event)) return;
 
-      const text = formatEvent(event);
+      const text = formatEvent(event, options.timezone);
       const threadMap = loadThreadMap(runtimeDir);
 
       let thread_ts: string | null = null;
