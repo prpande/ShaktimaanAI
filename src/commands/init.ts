@@ -88,6 +88,7 @@ export function writeInitEnv(dir: string): void {
     "ADO_PAT=",
     "GITHUB_PAT=",
     "SLACK_TOKEN=  # Not required when using MCP-based Slack integration",
+    "SLACK_WEBHOOK_URL=  # Optional — Slack webhook for notifications",
     "ANTHROPIC_API_KEY=",
     "",
   ].join("\n");
