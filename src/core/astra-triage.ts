@@ -50,24 +50,23 @@ export function parseTriageResult(raw: string): AstraTriageResult | null {
     // Fallback: some triage runs may directly return a user-facing answer
     // instead of strict JSON. Preserve service continuity by treating it as
     // an "answer" action rather than emitting a hard failure to Slack.
-    if (
-      trimmedRaw.length > 0 &&
-      !trimmedRaw.startsWith("{") &&
-      !trimmedRaw.startsWith("[") &&
-      !/```json/i.test(trimmedRaw)
-    ) {
-      const directAnswer = trimmedRaw
-        .replace(/<thinking>[\s\S]*?<\/thinking>/gi, "")
-        .trim();
+    // Use fence-stripped content so Slack replies never contain backtick markers.
+    const candidate = (fenceMatch ? json : trimmedRaw)
+      .replace(/```\w*\s*\n?/g, "")
+      .replace(/<thinking>[\s\S]*?<\/thinking>/gi, "")
+      .trim();
 
-      if (directAnswer.length > 0) {
-        return {
-          action: "answer",
-          directAnswer,
-          confidence: 0.35,
-          reasoning: "Fallback: triage returned non-JSON direct answer text.",
-        };
-      }
+    if (
+      candidate.length > 0 &&
+      !candidate.startsWith("{") &&
+      !candidate.startsWith("[")
+    ) {
+      return {
+        action: "answer",
+        directAnswer: candidate,
+        confidence: 0.35,
+        reasoning: "Fallback: triage returned non-JSON direct answer text.",
+      };
     }
     return null;
   }

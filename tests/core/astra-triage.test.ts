@@ -108,6 +108,19 @@ describe("parseTriageResult", () => {
     expect(result!.directAnswer).toContain("Pipeline is healthy");
   });
 
+  it("falls back to answer when non-JSON text is inside code fences", () => {
+    const result = parseTriageResult("```json\nPipeline is healthy.\n```");
+    expect(result).not.toBeNull();
+    expect(result!.action).toBe("answer");
+    expect(result!.directAnswer).toBe("Pipeline is healthy.");
+  });
+
+  it("strips generic code fences from fallback answer", () => {
+    const result = parseTriageResult("```\nHere is your answer.\n```");
+    expect(result).not.toBeNull();
+    expect(result!.directAnswer).toBe("Here is your answer.");
+  });
+
   it("returns null for invalid action value", () => {
     expect(parseTriageResult(JSON.stringify({ action: "bad", confidence: 0.5, reasoning: "x" }))).toBeNull();
   });

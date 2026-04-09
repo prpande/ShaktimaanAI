@@ -175,11 +175,17 @@ describe("createWatcher", () => {
     });
 
     watcher.triggerSlackSend();
-    await delay(20); // let first poll begin
-    watcher.triggerSlackSend(); // should queue a second immediate poll
+
+    // Wait until the first poll has actually started (releaseFirstPoll is set)
+    const firstPollDeadline = Date.now() + 2000;
+    while (releaseFirstPoll === null && Date.now() < firstPollDeadline) {
+      await delay(20);
+    }
 
     expect(slackPollCalls).toBe(1);
     expect(releaseFirstPoll).not.toBeNull();
+
+    watcher.triggerSlackSend(); // should queue a second immediate poll
     releaseFirstPoll?.();
 
     const deadline = Date.now() + 2000;
