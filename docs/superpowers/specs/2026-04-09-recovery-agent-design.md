@@ -266,15 +266,14 @@ Keep the pipeline alive and up-to-date. A pure shell script (no Node.js, no pipe
 ### Watchdog Logic
 
 ```
-1. Read PID from `${runtimeDir}/shkmn.pid`
+1. Read PID from {runtimeDir}/shkmn.pid
 2. Check if PID is a running process
 3. If running → exit
 4. If not running:
-   a. Source mode:  resolve the checkout's configured/current branch, then run
-      `git pull origin <branch> && npm run build`
-      Package mode: `npm update -g shaktimaanai`
-   b. `shkmn start`  (writes PID file on startup)
-   c. Log restart event to `~/.shkmn/watchdog.log` with timestamp
+   a. Source mode:  resolve the default branch, then git pull origin <branch> && npm run build
+      Package mode: npm update -g shaktimaanai
+   b. shkmn start  (writes PID file on startup)
+   c. Log restart event to ~/.shkmn/watchdog.log with timestamp
 ```
 
 ### Crash Loop Protection
@@ -286,7 +285,7 @@ Track consecutive failed starts (pipeline exits within 60 seconds of starting):
 
 ### PID File Contract
 
-- `shkmn start` writes PID to `${runtimeDir}/shkmn.pid` on startup (where `runtimeDir` is configured in `shkmn.config.json`, defaulting to `~/.shkmn/runtime`)
+- `shkmn start` writes PID to `{runtimeDir}/shkmn.pid` on startup (consistent with current implementation in `src/commands/start.ts`)
 - `shkmn start` deletes PID file on graceful shutdown (SIGINT, SIGTERM)
 - Watchdog validates PID is alive (handles stale PID from crash — process no longer exists)
 
@@ -396,7 +395,7 @@ The complete loop for a fixable pipeline failure:
    ↓
 9. Watchdog detects pipeline is down (within checkIntervalMinutes)
    ↓
-10. Watchdog: git pull → npm run build → shkmn run
+10. Watchdog: git pull → npm run build → shkmn start
     ↓
 11. Startup scan: checks 12-hold/, sees issue is closed
     ↓
