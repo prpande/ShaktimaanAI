@@ -16,3 +16,19 @@ for (const file of files) {
 }
 
 console.log(`Copied ${files.length} agent prompt(s) to dist/agents/`);
+
+// Copy templates
+const templatesSrc = join(root, "templates");
+const templatesDest = join(root, "dist", "templates");
+try {
+  const templateFiles = readdirSync(templatesSrc);
+  if (templateFiles.length > 0) {
+    mkdirSync(templatesDest, { recursive: true });
+    for (const tf of templateFiles) {
+      copyFileSync(join(templatesSrc, tf), join(templatesDest, tf));
+    }
+    console.log(`Copied ${templateFiles.length} template(s) to dist/templates/`);
+  }
+} catch {
+  // templates dir may not exist — non-fatal
+}

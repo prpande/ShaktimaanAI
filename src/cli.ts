@@ -20,6 +20,7 @@ import { registerRetryCommand } from "./commands/retry.js";
 import { registerDoctorCommand } from "./commands/doctor.js";
 import { registerStatsCommand } from "./commands/stats.js";
 import { registerRecoverCommand } from "./commands/recover.js";
+import { registerServiceCommand } from "./commands/service.js";
 
 const program = new Command();
 
@@ -86,5 +87,6 @@ registerRetryCommand(program);
 registerDoctorCommand(program);
 registerStatsCommand(program);
 registerRecoverCommand(program);
+registerServiceCommand(program);
 
 program.parse();
