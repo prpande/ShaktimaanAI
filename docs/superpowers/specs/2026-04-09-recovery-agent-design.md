@@ -214,7 +214,46 @@ Narada (slack-io agent) routes these commands. Thread replies extract the slug f
 - Task not in `12-hold/`: "Task `{slug}` is not awaiting a fix. Current location: `{actual directory}`."
 - No slug provided in standalone: "Usage: `@shkmn recover <slug>`"
 
-## 9. Watchdog Service
+## 9. Graceful Shutdown (`shkmn stop`)
+
+The pipeline needs an explicit shutdown mechanism so maintainers can trigger a code update cycle without terminal access.
+
+### Mechanism
+
+A `shutdown.control` file written to `00-inbox/` — the watcher already monitors for `.control` files. The pipeline reads the control file and initiates a graceful drain.
+
+### Drain Sequence
+
+1. Stop accepting new tasks from inbox
+2. Wait for all in-flight agents to complete (including recovery agent if running), respecting their individual timeouts
+3. Write final state for any in-progress tasks (so they can be resumed on next startup)
+4. Delete PID file (`~/.shkmn/shkmn.pid`)
+5. Exit process
+
+### CLI: `shkmn stop`
+
+- Writes `shutdown.control` to `00-inbox/`
+- Waits for the pipeline process to exit (polls PID file, 10 min hard timeout)
+- If pipeline doesn't exit within timeout: logs warning, force kills via PID
+- Output: "Pipeline stopped gracefully." or "Pipeline force-killed after timeout."
+
+### Slack: `@shkmn stop` or `shutdown`
+
+- Narada routes the command, writes the same `shutdown.control` file
+- Pipeline drains and exits
+- Slack confirmation before shutdown: "Pipeline shutting down gracefully. Watchdog will restart with latest code within {checkIntervalMinutes} minutes."
+
+### Integration with Self-Healing Loop
+
+The clean update cycle becomes: merge fix → `@shkmn stop` (or `shkmn stop`) → watchdog restarts with new code → startup scan recovers held tasks. No SSH or terminal access needed.
+
+### New Files
+
+| File | Purpose |
+|---|---|
+| `src/commands/stop.ts` | `shkmn stop` CLI command handler |
+
+## 10. Watchdog Service
 
 ### Purpose
 
@@ -259,7 +298,7 @@ Track consecutive failed starts (pipeline exits within 60 seconds of starting):
 | `shkmn service status` | Show: registered or not, last run time, last restart event, current interval, crash loop state |
 | `shkmn service logs` | Tail `~/.shkmn/watchdog.log` |
 
-## 10. Configuration
+## 11. Configuration
 
 New section in `shkmn.config.json` (validated by Zod schema in `src/config/schema.ts`):
 
@@ -294,7 +333,7 @@ New section in `shkmn.config.json` (validated by Zod schema in `src/config/schem
 | `repoPath` | string | — | Path to the ShaktimaanAI repo clone. Required in source mode. |
 | `checkIntervalMinutes` | number | `5` | How often the watchdog checks if the pipeline is alive. |
 
-## 11. Run-State Extensions
+## 12. Run-State Extensions
 
 New fields added to the `RunState` interface in `src/core/types.ts`:
 
@@ -309,17 +348,18 @@ recoveryIssueNumber?: number;        // GitHub issue number (if filed)
 
 These fields are set by the recovery agent and read by the startup scan and CLI/Slack commands.
 
-## 12. New Files
+## 13. New Files
 
 | File | Purpose |
 |---|---|
 | `src/core/recovery-agent.ts` | Recovery agent invocation, diagnostic flow, classification logic, issue filing |
 | `src/commands/recover.ts` | `shkmn recover` CLI command handler |
+| `src/commands/stop.ts` | `shkmn stop` CLI command handler — writes `shutdown.control`, waits for exit |
 | `src/commands/service.ts` | `shkmn service install/uninstall/status/logs` CLI command handler |
 | `agents/recovery.md` | Prompt template for the Chiranjeevi recovery agent |
 | `templates/shkmn-watchdog.sh` | Watchdog shell script template (interpolated with config values at install time) |
 
-## 13. Modified Files
+## 14. Modified Files
 
 | File | Change |
 |---|---|
@@ -328,10 +368,11 @@ These fields are set by the recovery agent and read by the startup scan and CLI/
 | `src/core/types.ts` | Add `RunState` fields (Section 11), add `holdReason: "awaiting_fix"` to union |
 | `src/config/schema.ts` | Add Zod schema for `recovery` and `service` config sections |
 | `src/config/defaults.ts` | Add `recovery` stage to tool permissions, context rules, model/timeout defaults |
-| `src/commands/index.ts` | Register `recover` and `service` commands |
+| `src/commands/index.ts` | Register `recover`, `stop`, and `service` commands |
+| `src/core/watcher.ts` | Handle `shutdown.control` file — trigger drain sequence |
 | `src/core/slack-notifier.ts` | Add formatting for recovery diagnosis Slack messages (thread follow-ups) |
 
-## 14. Self-Healing Loop (End-to-End)
+## 15. Self-Healing Loop (End-to-End)
 
 The complete loop for a fixable pipeline failure:
 
@@ -350,9 +391,9 @@ The complete loop for a fixable pipeline failure:
    ↓
 7. Maintainer picks up issue, writes fix, merges to master
    ↓
-8. Pipeline stops (crash, manual stop, or natural shutdown)
+8. Pipeline stops (shkmn stop / @shkmn stop / crash / natural shutdown)
    ↓
-9. Watchdog detects pipeline is down (within 5 minutes)
+9. Watchdog detects pipeline is down (within checkIntervalMinutes)
    ↓
 10. Watchdog: git pull → npm run build → shkmn run
     ↓
@@ -367,7 +408,7 @@ The complete loop for a fixable pipeline failure:
 
 For the `fileGithubIssues: false` path, steps 7–11 are replaced by: maintainer fixes + releases new version → watchdog updates package → human triggers `shkmn recover <slug> --reenter` or Slack `recover` → pipeline resumes.
 
-## 15. Budget
+## 16. Budget
 
 The recovery agent uses the pipeline's existing daily budget system. No separate per-analysis cap.
 
@@ -375,7 +416,7 @@ The recovery agent uses the pipeline's existing daily budget system. No separate
 - On next startup with fresh budget: the Phase 1 unanalyzed scan picks it up
 - Recovery agent cost is tracked in `interactions/` like any other agent (duration, cost, tokens, turns)
 
-## 16. Edge Cases
+## 17. Edge Cases
 
 | Scenario | Behavior |
 |---|---|
