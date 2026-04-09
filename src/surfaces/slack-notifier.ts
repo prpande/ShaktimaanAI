@@ -136,15 +136,16 @@ export function formatEvent(event: NotifyEvent, timezone: string = "UTC"): strin
         lines.push(`📊 *Pipeline Summary*`);
         lines.push(`${totalDurationStr}💰 $${totalCost.toFixed(2)}`);
         lines.push("");
-        lines.push("| Stage | Agent | Model | Cost | Tokens |");
-        lines.push("|-------|-------|-------|------|--------|");
+        lines.push("| Stage | Agent | Model | Duration | Cost | Tokens |");
+        lines.push("|-------|-------|-------|----------|------|--------|");
 
         for (const s of stages) {
           const agentName = event.agentNames?.[s.stage] ?? s.stage;
           const model = s.model ?? "-";
+          const duration = s.durationSeconds != null ? formatDuration(s.durationSeconds) : "-";
           const totalTokens = ((s.inputTokens ?? 0) + (s.outputTokens ?? 0)).toLocaleString("en-US");
           const cost = s.costUsd != null ? `$${s.costUsd.toFixed(2)}` : "-";
-          lines.push(`| ${s.stage} | ${agentName} | ${model} | ${cost} | ${totalTokens} |`);
+          lines.push(`| ${s.stage} | ${agentName} | ${model} | ${duration} | ${cost} | ${totalTokens} |`);
         }
       }
 

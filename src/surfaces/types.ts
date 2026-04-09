@@ -26,8 +26,8 @@ export type NotifyEvent =
   | ({ type: "task_approved";   approvedBy: string; feedback?: string } & EventBase)
   | ({ type: "task_completed";  prUrl?: string;
        completedStages?: Array<{ stage: string; completedAt: string;
-         costUsd?: number; turns?: number; inputTokens?: number;
-         outputTokens?: number; model?: string }>;
+         durationSeconds?: number; costUsd?: number; turns?: number;
+         inputTokens?: number; outputTokens?: number; model?: string }>;
        startedAt?: string;
        agentNames?: Record<string, string> } & EventBase)
   | ({ type: "task_failed";     stage: string; error: string;

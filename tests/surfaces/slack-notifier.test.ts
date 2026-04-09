@@ -242,8 +242,8 @@ describe("formatEvent (enriched)", () => {
     const msg = formatEvent(
       makeEvent("task_completed", "spec4-dashboard", {
         completedStages: [
-          { stage: "questions", completedAt: "2026-01-01T12:03:00Z", costUsd: 0.38, turns: 5, inputTokens: 500, outputTokens: 4064, model: "sonnet" },
-          { stage: "impl", completedAt: "2026-01-01T12:15:00Z", costUsd: 3.74, turns: 40, inputTokens: 2000, outputTokens: 39194, model: "opus" },
+          { stage: "questions", completedAt: "2026-01-01T12:03:00Z", durationSeconds: 179, costUsd: 0.38, turns: 5, inputTokens: 500, outputTokens: 4064, model: "sonnet" },
+          { stage: "impl", completedAt: "2026-01-01T12:15:00Z", durationSeconds: 720, costUsd: 3.74, turns: 40, inputTokens: 2000, outputTokens: 39194, model: "opus" },
         ],
         startedAt: "2026-01-01T12:00:00Z",
         agentNames: { questions: "Gargi", impl: "Karigar" },
@@ -253,8 +253,8 @@ describe("formatEvent (enriched)", () => {
     expect(msg).toContain("🎉 *Task completed* `spec4-dashboard`");
     expect(msg).toContain("📊 *Pipeline Summary*");
     expect(msg).toContain("$4.12");
-    expect(msg).toContain("| questions | Gargi | sonnet |");
-    expect(msg).toContain("| impl | Karigar | opus |");
+    expect(msg).toContain("| questions | Gargi | sonnet | 2m 59s |");
+    expect(msg).toContain("| impl | Karigar | opus | 12m |");
   });
 
   it("task_completed without completedStages falls back gracefully", () => {

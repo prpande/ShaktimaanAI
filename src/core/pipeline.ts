@@ -805,6 +805,7 @@ export function createPipeline(options: PipelineOptions): Pipeline {
         stage,
         completedAt: new Date().toISOString(),
         outputFile: outputFileName,
+        durationSeconds: Math.round(result.durationMs / 1000),
         costUsd: result.costUsd,
         turns: result.turns,
         inputTokens: result.inputTokens,
