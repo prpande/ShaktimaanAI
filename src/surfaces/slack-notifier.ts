@@ -121,7 +121,8 @@ export function formatEvent(event: NotifyEvent, timezone: string = "UTC"): strin
         }
         const stages = [...stageMap.values()];
 
-        const totalCost = stages.reduce((sum, s) => sum + (s.costUsd ?? 0), 0);
+        // Sum ALL entries including retries for accurate total cost
+        const totalCost = event.completedStages.reduce((sum, s) => sum + (s.costUsd ?? 0), 0);
         // Total duration from startedAt to event timestamp
         let totalDurationStr = "";
         if (event.startedAt) {
@@ -135,15 +136,15 @@ export function formatEvent(event: NotifyEvent, timezone: string = "UTC"): strin
         lines.push(`📊 *Pipeline Summary*`);
         lines.push(`${totalDurationStr}💰 $${totalCost.toFixed(2)}`);
         lines.push("");
-        lines.push("| Stage | Agent | Model | Duration | Cost | Tokens |");
-        lines.push("|-------|-------|-------|----------|------|--------|");
+        lines.push("| Stage | Agent | Model | Cost | Tokens |");
+        lines.push("|-------|-------|-------|------|--------|");
 
         for (const s of stages) {
           const agentName = event.agentNames?.[s.stage] ?? s.stage;
           const model = s.model ?? "-";
           const totalTokens = ((s.inputTokens ?? 0) + (s.outputTokens ?? 0)).toLocaleString("en-US");
           const cost = s.costUsd != null ? `$${s.costUsd.toFixed(2)}` : "-";
-          lines.push(`| ${s.stage} | ${agentName} | ${model} | - | ${cost} | ${totalTokens} |`);
+          lines.push(`| ${s.stage} | ${agentName} | ${model} | ${cost} | ${totalTokens} |`);
         }
       }
 
