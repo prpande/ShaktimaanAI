@@ -1,4 +1,5 @@
 import { readFileSync, writeFileSync } from "node:fs";
+import { configSchema } from "../config/schema.js";
 
 export function getConfigValue(configPath: string, dotPath: string): unknown {
   const raw = JSON.parse(readFileSync(configPath, "utf-8"));
@@ -23,7 +24,8 @@ export function setConfigValue(configPath: string, dotPath: string, value: unkno
   }
 
   const raw = JSON.parse(readFileSync(configPath, "utf-8"));
-  let current: Record<string, unknown> = raw;
+  const draft: Record<string, unknown> = JSON.parse(JSON.stringify(raw));
+  let current: Record<string, unknown> = draft;
   for (let i = 0; i < keys.length - 1; i++) {
     const key = keys[i];
     if (!(key in current)) {
@@ -37,5 +39,12 @@ export function setConfigValue(configPath: string, dotPath: string, value: unkno
     current = current[key] as Record<string, unknown>;
   }
   current[keys[keys.length - 1]] = value;
-  writeFileSync(configPath, JSON.stringify(raw, null, 2) + "\n", "utf-8");
+
+  const result = configSchema.safeParse(draft);
+  if (!result.success) {
+    const messages = result.error.issues.map((e) => `${e.path.join(".")}: ${e.message}`).join("; ");
+    throw new Error(`Invalid config: ${messages}`);
+  }
+
+  writeFileSync(configPath, JSON.stringify(draft, null, 2) + "\n", "utf-8");
 }
