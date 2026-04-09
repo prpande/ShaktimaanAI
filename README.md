@@ -274,8 +274,10 @@ If the pipeline crashes mid-implementation, the git worktree at `shkmn/<task-slu
 ## Documentation
 
 - [System Design Document](docs/superpowers/specs/2026-04-04-shaktimaanai-system-design.md) — full architecture, agent roster, pipeline stages, concurrency model, crash recovery
-- [Implementation Plans](docs/superpowers/plans/) — spec-by-spec implementation plans
+- [Specs](docs/specs/) — feature specifications organized by lifecycle (`new/`, `pending/`, `done/`)
+- [Plans](docs/plans/) — implementation plans organized by lifecycle (`new/`, `pending/`, `done/`)
 - [Agent Prompts](agents/) — the `.md` files that define each agent's behavior (authoritative source for agent roles)
+- [Production Readiness Audit](docs/production-readiness-audit.md) — audit findings and status
 - [0th Draft](docs/0thDraft/) — original brainstorming documents
 
 ## License
