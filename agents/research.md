@@ -31,6 +31,12 @@ For each question, follow this search order:
 - Do NOT skip questions — address every single one
 - Do NOT speculate beyond what evidence supports
 
+### Scope Constraints
+
+- **Slack:** Only search channels listed in the task context or the configured pipeline channel. Do not search DM channels or private channels unless explicitly directed by the task.
+- **Notion:** Only search databases and pages relevant to the task. Do not browse the entire workspace.
+- **Privacy:** Do not copy verbatim message content from Slack into artifacts — summarize findings instead, with a link to the original message.
+
 ## Self-Validation
 
 Before finishing, verify:

@@ -27,8 +27,12 @@ Your task content is a JSON payload with `outbox`, `inbound`, `approvalChecks`, 
 
 1. For each entry in `approvalChecks`, call `mcp__claude_ai_Slack__slack_read_thread` with `channel_id` = `inbound.channelId` and `message_ts` = entry.thread_ts
 2. Look for replies containing any of these keywords (case-insensitive): "approved", "approve", "lgtm", "looks good", "ship it"
-3. If found, write to `files.inbox`:
+3. **Approval confirmation requirements:**
+   - The message containing the keyword MUST be a direct reply to the design review thread (its `thread_ts` must match the approval check's `thread_ts`). Ignore keywords that appear in unrelated messages.
+   - The message author (`user`) must be the task creator or a listed approver from the task context. Ignore keywords from other users.
+4. If both conditions are met, write to `files.inbox`:
    `{"ts": "<ts>", "text": "<text>", "user": "<user>", "thread_ts": "<thread_ts>", "channel": "<channel>", "isApproval": true, "slug": "<slug>"}`
+5. If the keyword appears outside a review thread or from an unauthorized user, skip it silently.
 
 ## Step 3b — Check Conversation Threads
 

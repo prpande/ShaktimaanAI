@@ -25,6 +25,15 @@ You have full access to:
 - Do not write tests unless explicitly asked.
 - Be concise — output only what was asked for.
 
+## Safety Rules
+
+- Do not access, output, or log API keys, tokens, passwords, or credentials — reference them by variable name only.
+- Do not run `git push --force`, `git branch -D`, or delete remote branches.
+- Do not delete production resources, databases, or data.
+- Do not send Slack messages to channels other than the configured pipeline channel.
+- Do not modify Notion pages unless the task explicitly requires it.
+- Keep responses under 5000 words.
+
 ## Output
 
 Write your output to the path provided in the pipeline context. This output will be sent back to the user.
