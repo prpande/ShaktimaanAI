@@ -282,7 +282,7 @@ Identify the earliest pipeline stage affected by the issue. Be conservative — 
 
 ## Output Format
 
-Output ONLY valid JSON. No markdown, no explanation, no code fences. The response must be a raw JSON object matching this schema (shown here for documentation only — do NOT wrap output in fences):
+Output ONLY valid JSON. No markdown, no explanation, no code fences. The response must be a raw JSON object matching this schema. The schema is shown below for documentation purposes only — actual agent output must be unwrapped JSON:
 
     {
       "classification": "fixable" | "terminal",
