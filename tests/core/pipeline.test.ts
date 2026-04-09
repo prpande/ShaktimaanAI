@@ -1376,9 +1376,12 @@ describe("collectArtifacts — numeric sort for r<N> suffixes", () => {
     const idx10 = result.indexOf("feedback 10");
     expect(idx1).toBeLessThan(idx3);
     expect(idx3).toBeLessThan(idx10);
+    // Stage outputs appear before retry feedback
+    const idxQuestions = result.indexOf("questions content");
+    expect(idxQuestions).toBeLessThan(idx1);
   });
 
-  it("collectArtifacts picks only the latest -r<N> per stage", () => {
+  it("collectArtifacts deduplicates to latest retry per stage", () => {
     const artifactsDir = join(TEST_DIR, "artifacts-trailing-test");
     mkdirSync(artifactsDir, { recursive: true });
 
