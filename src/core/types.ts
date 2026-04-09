@@ -3,7 +3,8 @@ import type { ResolvedConfig } from "../config/loader.js";
 export type PipelineStage =
   | "questions" | "research" | "design" | "structure" | "plan"
   | "impl" | "review" | "validate" | "pr"
-  | "quick" | "quick-triage" | "quick-execute" | "slack-io";
+  | "quick" | "quick-triage" | "quick-execute" | "slack-io"
+  | "recovery";
 
 export type RunStatus = "running" | "hold" | "complete" | "failed";
 

@@ -1,5 +1,6 @@
 import * as fs from "node:fs";
 import * as path from "node:path";
+import { z } from "zod";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -57,11 +58,17 @@ export function stripPrefix(text: string, prefix: string): string {
 const CURSOR_FILENAME = "slack-cursor.json";
 const DEFAULT_CURSOR: SlackCursor = { channelTs: "now", dmTs: "now" };
 
+const slackCursorSchema = z.object({
+  channelTs: z.string(),
+  dmTs: z.string(),
+});
+
 export function loadCursor(runtimeDir: string): SlackCursor {
   const filePath = path.join(runtimeDir, CURSOR_FILENAME);
   try {
     const raw = fs.readFileSync(filePath, "utf8");
-    return JSON.parse(raw) as SlackCursor;
+    const parsed = slackCursorSchema.safeParse(JSON.parse(raw));
+    return parsed.success ? parsed.data : { ...DEFAULT_CURSOR };
   } catch {
     return { ...DEFAULT_CURSOR };
   }

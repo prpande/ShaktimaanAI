@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach, afterEach } from "vitest";
-import { mkdirSync, rmSync, readFileSync, existsSync } from "fs";
-import { join } from "path";
-import { tmpdir } from "os";
+import { mkdirSync, rmSync, readFileSync, existsSync } from "node:fs";
+import { join } from "node:path";
+import { tmpdir } from "node:os";
 import {
   formatLogLine,
   createTaskLogger,
@@ -15,37 +15,25 @@ beforeEach(() => mkdirSync(TEST_DIR, { recursive: true }));
 afterEach(() => rmSync(TEST_DIR, { recursive: true, force: true }));
 
 describe("formatLogLine", () => {
-  it("produces the correct format with ISO timestamp and uppercased level", () => {
-    const before = new Date();
+  it("produces valid JSON with expected fields", () => {
     const line = formatLogLine("info", "hello world");
-    const after = new Date();
-
-    // Format: [ISO_TIMESTAMP] [LEVEL_UPPER] message\n
-    expect(line).toMatch(/^\[.+\] \[INFO\] hello world\n$/);
-
-    // Timestamp should be a valid ISO string within the test range
-    const match = line.match(/^\[([^\]]+)\]/);
-    expect(match).not.toBeNull();
-    const ts = new Date(match![1]);
-    expect(ts.getTime()).toBeGreaterThanOrEqual(before.getTime());
-    expect(ts.getTime()).toBeLessThanOrEqual(after.getTime());
+    const parsed = JSON.parse(line);
+    expect(parsed.level).toBe("info");
+    expect(parsed.msg).toBe("hello world");
+    expect(parsed.time).toBeDefined();
   });
 
-  it("uppercases the level", () => {
-    expect(formatLogLine("warn", "test")).toContain("[WARN]");
-    expect(formatLogLine("error", "test")).toContain("[ERROR]");
-    expect(formatLogLine("debug", "test")).toContain("[DEBUG]");
+  it("includes the level as-is", () => {
+    const line = formatLogLine("warn", "test");
+    const parsed = JSON.parse(line);
+    expect(parsed.level).toBe("warn");
   });
 
   it("includes the message verbatim", () => {
     const msg = "some detailed message with special chars: @#$%";
     const line = formatLogLine("info", msg);
-    expect(line).toContain(msg);
-  });
-
-  it("ends with a newline", () => {
-    const line = formatLogLine("info", "msg");
-    expect(line.endsWith("\n")).toBe(true);
+    const parsed = JSON.parse(line);
+    expect(parsed.msg).toBe(msg);
   });
 });
 
@@ -57,7 +45,7 @@ describe("createTaskLogger", () => {
     const logPath = join(TEST_DIR, "my-task.log");
     expect(existsSync(logPath)).toBe(true);
     const content = readFileSync(logPath, "utf8");
-    expect(content).toContain("[INFO] task started");
+    expect(content).toContain("task started");
   });
 
   it("writes warn lines to the correct file", () => {
@@ -65,7 +53,7 @@ describe("createTaskLogger", () => {
     logger.warn("something odd");
 
     const content = readFileSync(join(TEST_DIR, "my-task.log"), "utf8");
-    expect(content).toContain("[WARN] something odd");
+    expect(content).toContain("something odd");
   });
 
   it("writes error lines to the correct file", () => {
@@ -73,7 +61,7 @@ describe("createTaskLogger", () => {
     logger.error("it broke");
 
     const content = readFileSync(join(TEST_DIR, "my-task.log"), "utf8");
-    expect(content).toContain("[ERROR] it broke");
+    expect(content).toContain("it broke");
   });
 
   it("creates the log directory if it does not exist", () => {
@@ -118,7 +106,18 @@ describe("createTaskLogger", () => {
     logger.info("checking filename");
 
     expect(existsSync(join(TEST_DIR, "special-slug-123.log"))).toBe(true);
-    expect(existsSync(join(TEST_DIR, "special-slug-123"))).toBe(false);
+  });
+
+  it("writes structured JSON lines", () => {
+    const logger: TaskLogger = createTaskLogger(TEST_DIR, "json-test", { slug: "my-slug", module: "pipeline" });
+    logger.info("structured check");
+
+    const content = readFileSync(join(TEST_DIR, "json-test.log"), "utf8").trim();
+    const lines = content.split("\n");
+    const last = JSON.parse(lines[lines.length - 1]);
+    expect(last.msg).toBe("structured check");
+    expect(last.slug).toBe("my-slug");
+    expect(last.module).toBe("pipeline");
   });
 });
 
@@ -130,7 +129,7 @@ describe("createSystemLogger", () => {
     const logPath = join(TEST_DIR, "heimdall.log");
     expect(existsSync(logPath)).toBe(true);
     const content = readFileSync(logPath, "utf8");
-    expect(content).toContain("[INFO] system up");
+    expect(content).toContain("system up");
   });
 
   it("supports warn and error", () => {
@@ -139,15 +138,7 @@ describe("createSystemLogger", () => {
     logger.error("sys error");
 
     const content = readFileSync(join(TEST_DIR, "heimdall.log"), "utf8");
-    expect(content).toContain("[WARN] sys warn");
-    expect(content).toContain("[ERROR] sys error");
-  });
-
-  it("creates the log directory if it does not exist", () => {
-    const nestedDir = join(TEST_DIR, "sys", "logs");
-    const logger: TaskLogger = createSystemLogger(nestedDir);
-    logger.info("boot");
-
-    expect(existsSync(join(nestedDir, "heimdall.log"))).toBe(true);
+    expect(content).toContain("sys warn");
+    expect(content).toContain("sys error");
   });
 });

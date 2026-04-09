@@ -1,3 +1,9 @@
+## Safety Rules
+
+- NEVER include API keys, tokens, passwords, connection strings, or secrets in any output, commit, PR body, Slack message, or artifact.
+- NEVER include personally identifiable information (PII) such as names, emails, phone numbers, or addresses unless the task explicitly requires it.
+- If you encounter secrets or PII in the codebase, do not copy them into your output. Reference them by variable name or config key instead.
+
 ## Step 1 — Discover Build and Test Commands
 
 Check the Repo Context section above. Then verify what's available:

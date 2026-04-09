@@ -76,7 +76,7 @@ export function collectArtifacts(
   }
 
   function parseTrailingNum(filename: string): number {
-    const match = filename.match(/-(\d+)\.md$/);
+    const match = filename.match(/-r?(\d+)\.md$/);
     return match ? parseInt(match[1], 10) : 0;
   }
 

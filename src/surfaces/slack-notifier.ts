@@ -238,8 +238,8 @@ export function createSlackNotifier(options: SlackNotifierOptions): Notifier {
         mkdirSync(dirname(outboxPath), { recursive: true });
         appendFileSync(outboxPath, JSON.stringify(entry) + "\n", "utf-8");
         onOutboxWrite?.();
-      } catch {
-        // swallow errors silently — never crash the pipeline
+      } catch (err) {
+        console.warn(`[slack-notifier] Failed to write outbox entry: ${(err as Error).message}`);
       }
     },
   };

@@ -6,9 +6,9 @@ import { type ResolvedConfig } from "../config/loader.js";
 import { type AgentRunnerFn, type RunState } from "./types.js";
 import { type AgentRegistry } from "./registry.js";
 import { type TaskLogger } from "./logger.js";
-import { STAGE_DIR_MAP, DIR_STAGE_MAP, STAGES_WITH_PENDING_DONE } from "./stage-map.js";
+import { STAGE_DIR_MAP, STAGES_WITH_PENDING_DONE } from "./stage-map.js";
 import { type Notifier, type NotifyEvent } from "../surfaces/types.js";
-import { createWorktree, recordWorktreeCompletion } from "./worktree.js";
+import { createWorktree, recordWorktreeCompletion, resolveParentRepo } from "./worktree.js";
 import { appendDailyLogEntry, appendInteraction } from "./interactions.js";
 import { createSessionTracker, resolveModelForStage, type BudgetCheckContext } from "./budget.js";
 import { loadBudgetConfig } from "../config/loader.js";
@@ -18,8 +18,8 @@ import { runRecoveryAgent } from "./recovery-agent.js";
 import { runStage, type StageContext } from "./stage-runner.js";
 import { readRunState, writeRunState, moveTaskDir, collectArtifacts, getNextStage, isReviewGate } from "./pipeline-utils.js";
 
-// Re-exported for external consumers; DIR_STAGE_MAP is not used internally in this module.
-export { STAGE_DIR_MAP, DIR_STAGE_MAP };
+// Re-exported for external consumers.
+export { STAGE_DIR_MAP };
 
 // Re-export pipeline utilities for backward compatibility (moved to pipeline-utils.ts)
 export { readRunState, writeRunState, moveTaskDir, collectArtifacts, getNextStage, isReviewGate } from "./pipeline-utils.js";
@@ -244,6 +244,56 @@ export function createPipeline(options: PipelineOptions): Pipeline {
     }
 
     return null;
+  }
+
+  function recordCompletionIfWorktree(state: RunState): void {
+    if (!state.worktreePath) return;
+    const manifestPath = join(runtimeDir, "worktree-manifest.json");
+
+    // Resolution chain for repoPath:
+    // 1. state.repoRoot (set when task had explicit repo)
+    // 2. Derive from worktree .git metadata
+    // 3. Fall back to config.repos.root
+    let repoPath = state.repoRoot ?? null;
+    if (!repoPath) {
+      repoPath = resolveParentRepo(state.worktreePath);
+    }
+    if (!repoPath && config.repos.root) {
+      const rootGitPath = join(config.repos.root, ".git");
+      if (existsSync(rootGitPath)) {
+        repoPath = config.repos.root;
+      } else {
+        logger.warn(
+          `[pipeline] Configured repos.root is not a git repo; ` +
+          `skipping fallback manifest recording for "${state.slug}". ` +
+          `repos.root="${config.repos.root}"`,
+        );
+      }
+    }
+
+    // Guard: if repoPath is still null or equals worktreePath, skip recording
+    if (!repoPath || repoPath === state.worktreePath) {
+      logger.warn(
+        `[pipeline] Cannot determine parent repo for worktree "${state.slug}" — ` +
+        `skipping manifest recording to avoid broken cleanup. ` +
+        `worktreePath="${state.worktreePath}"`,
+      );
+      return;
+    }
+
+    try {
+      recordWorktreeCompletion(manifestPath, {
+        slug: state.slug,
+        repoPath,
+        worktreePath: state.worktreePath,
+        completedAt: new Date().toISOString(),
+      });
+    } catch (err) {
+      logger.warn(
+        `[pipeline] Failed to record worktree completion for "${state.slug}": ` +
+        `${err instanceof Error ? err.message : String(err)}`,
+      );
+    }
   }
 
   function resolveWorkDir(state: RunState, taskMeta: TaskMeta): string {

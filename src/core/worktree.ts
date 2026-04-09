@@ -1,6 +1,26 @@
 import { execFileSync } from "node:child_process";
-import { mkdirSync, existsSync, readFileSync, writeFileSync } from "node:fs";
-import { join, dirname } from "node:path";
+import { mkdirSync, existsSync, readFileSync, writeFileSync, statSync, realpathSync } from "node:fs";
+import { join, dirname, sep } from "node:path";
+
+const SENSITIVE_GITIGNORE_PATTERNS = [
+  ".env",
+  ".env.*",
+  "*.local",
+  "credentials.*",
+  "secrets.*",
+  "*.pem",
+  "*.key",
+  "*.cer",
+  "*.crt",
+  "*.p12",
+  "*.pfx",
+  "id_rsa",
+  "id_dsa",
+  "id_ecdsa",
+  "id_ed25519",
+  "id_xmss",
+  "shkmn.config.json",
+];
 
 export interface WorktreeInfo {
   path: string;
@@ -32,6 +52,9 @@ export function createWorktree(
 
   // If the worktree path already exists, assume it's a crash-recovery scenario — reuse it.
   if (existsSync(worktreePath)) {
+    try {
+      ensureSensitiveGitignore(worktreePath);
+    } catch { /* non-fatal */ }
     return worktreePath;
   }
 
@@ -55,6 +78,11 @@ export function createWorktree(
       createdAt: new Date().toISOString(),
     });
   } catch { /* intentionally ignore manifest write failures to avoid failing worktree creation */ }
+
+  // Ensure .gitignore excludes sensitive files
+  try {
+    ensureSensitiveGitignore(worktreePath);
+  } catch { /* non-fatal: gitignore enforcement is defense-in-depth */ }
 
   return worktreePath;
 }
@@ -132,6 +160,63 @@ export function listWorktrees(repoPath: string): WorktreeInfo[] {
   }
 
   return result;
+}
+
+/**
+ * Resolves the parent repository path from a git worktree directory.
+ * Worktrees have a `.git` file (not directory) containing:
+ *   gitdir: /path/to/parent/.git/worktrees/<name>
+ * Returns the parent repo root, or null if the path is not a worktree.
+ */
+export function resolveParentRepo(worktreePath: string): string | null {
+  try {
+    const dotGit = join(worktreePath, ".git");
+    const stat = statSync(dotGit);
+    if (stat.isDirectory()) return null;
+
+    const content = readFileSync(dotGit, "utf-8").trim();
+    const match = content.match(/^gitdir:\s*(.+)$/);
+    if (!match) return null;
+
+    const gitdir = match[1].trim();
+    const worktreesDir = dirname(gitdir);         // .git/worktrees or bare/worktrees
+    const gitStoreDir = dirname(worktreesDir);    // .git or bare-repo-root
+    // For regular repos, gitStoreDir is the .git dir; for bare repos, it IS the repo root
+    const parentPath = gitStoreDir.endsWith(".git") || gitStoreDir.endsWith(sep + ".git")
+      ? dirname(gitStoreDir)
+      : gitStoreDir;
+    // Resolve to canonical long path (handles Windows 8.3 short names stored by git)
+    try {
+      return realpathSync(parentPath);
+    } catch {
+      return parentPath;
+    }
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Ensures that the worktree's .gitignore includes all sensitive-file patterns.
+ * Appends missing patterns without duplicating existing ones.
+ */
+function ensureSensitiveGitignore(worktreePath: string): void {
+  const gitignorePath = join(worktreePath, ".gitignore");
+  let existing = "";
+  try {
+    existing = readFileSync(gitignorePath, "utf-8");
+  } catch {
+    // No .gitignore yet
+  }
+
+  const existingLines = new Set(existing.split(/\r?\n/).map(l => l.trim()));
+  const missing = SENSITIVE_GITIGNORE_PATTERNS.filter(p => !existingLines.has(p));
+
+  if (missing.length === 0) return;
+
+  const prefix = existing.length === 0 ? "" : existing.endsWith("\n") ? "\n" : "\n\n";
+  const block = `${prefix}# ShaktimaanAI: sensitive file exclusions\n${missing.join("\n")}\n`;
+  writeFileSync(gitignorePath, existing + block, "utf-8");
 }
 
 // ─── Manifest helpers ──────────────────────────────────────────────────────
