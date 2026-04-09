@@ -282,18 +282,16 @@ Identify the earliest pipeline stage affected by the issue. Be conservative — 
 
 ## Output Format
 
-Output ONLY valid JSON. No markdown, no explanation, no code fences.
+Output ONLY valid JSON. No markdown, no explanation, no code fences. The response must be a raw JSON object matching this schema (shown here for documentation only — do NOT wrap output in fences):
 
-```json
-{
-  "classification": "fixable" | "terminal",
-  "diagnosis": "Detailed explanation of the root cause",
-  "affectedFiles": ["src/config/defaults.ts", ...],
-  "suggestedFix": "Description of what needs to change",
-  "reEntryStage": "stage-name (only for fixable)",
-  "confidence": 0.0-1.0
-}
-```
+    {
+      "classification": "fixable" | "terminal",
+      "diagnosis": "Detailed explanation of the root cause",
+      "affectedFiles": ["src/config/defaults.ts", ...],
+      "suggestedFix": "Description of what needs to change",
+      "reEntryStage": "stage-name (only for fixable)",
+      "confidence": 0.0-1.0
+    }
 
 ## Privacy Rules
 

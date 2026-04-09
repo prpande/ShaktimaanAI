@@ -477,11 +477,11 @@ Marked `@deprecated` but not removed. No tracking issue or target version.
 **File:** `src/core/pipeline.ts`  
 `processStage` (~300 lines) should be extracted to a separate `stage-runner.ts` module.
 
-### 10.2 No linter or formatter configured
+### 10.2 ESLint is configured, but formatter/CI enforcement is missing
 
-No ESLint, Prettier, or equivalent. Style is enforced only by convention. The inconsistent `node:` import prefixes (§10.3) would be caught automatically.
+ESLint is already configured for the repo (`eslint.config.js`) and `package.json` includes `eslint`, `@typescript-eslint/eslint-plugin`, `@typescript-eslint/parser`, and a `"lint"` script. However, there is no formatter (e.g. Prettier) and no CI enforcement to prevent style drift. The inconsistent `node:` import prefixes (§10.3) would be caught automatically if linting was run in CI.
 
-**Fix:** Add `eslint` with `@typescript-eslint/eslint-plugin`. Add to `package.json` scripts.
+**Fix:** Add a formatter such as Prettier if desired, and enforce linting (and formatting, if added) in CI and contributor workflows.
 
 ### 10.3 Inconsistent `node:` import prefix in 3 files
 
@@ -517,12 +517,10 @@ Version is hardcoded `0.1.0` and can drift from `package.json`.
 
 **Fix:** Import version from `package.json` or read it dynamically.
 
-### 10.8 Build script is an opaque inline one-liner
+### 10.8 Build script note is outdated
 
 **File:** `package.json`  
-The copy-agents step uses a long inline `node -e "..."` one-liner with CommonJS `require` in an ESM package.
-
-**Note:** A `scripts/copy-agents.js` file exists but is not referenced by the build script in `package.json`.
+The build script already invokes `node scripts/copy-agents.js` after `tsup` (`"build": "tsup && node scripts/copy-agents.js"`), so the previous note about an inline `node -e "..."` one-liner is outdated. `scripts/copy-agents.js` is correctly referenced by the build script.
 
 ### 10.9 `djb2` hash has non-trivial collision risk
 
@@ -628,11 +626,11 @@ jobs:
 | **File locking** | `core/pipeline.ts` | `EBUSY`/`EPERM` retries with spin-wait are Windows-specific workarounds |
 | **Path separators** | Various | Most paths use `path.join` (correct), but string interpolation in some shell commands assumes `/` |
 
-### 12.2 Node.js version requirements
+### 12.2 Node.js version is declared but not enforced in CI
 
-`package.json` specifies `node >= 20` but doesn't use `engines` field to enforce it. Users on Node 18 will get confusing errors from ESM features.
+`package.json` already specifies `"engines": { "node": ">=20" }`, so the version requirement is declared. However, there is no CI pipeline to enforce it and users who ignore the `engines` field warning when installing could still run on older Node versions and encounter confusing errors.
 
-**Fix:** Add `"engines": { "node": ">=20.0.0" }` to `package.json`.
+**Fix:** Add a CI step (e.g. GitHub Actions `node-version: '20'`) and document the minimum version requirement in `README.md`.
 
 ---
 
@@ -725,21 +723,22 @@ The Zod schema in `schema.ts` is the only documentation for configuration option
 
 ### 15.1 Direct dependencies
 
+Source of truth for exact declared versions is `package.json` (with resolved installs in `package-lock.json`). The table below is reconciled to that metadata.
+
 | Package | Version | Purpose | Health |
 |---------|---------|---------|--------|
-| `@anthropic-ai/claude-agent-sdk` | `^0.2.91` | Agent execution | ⚠️ Transitive CVE (§6.4) |
-| `@clack/prompts` | `^0.10.1` | Interactive CLI prompts | ✅ |
-| `chokidar` | `^4.0.3` | File watching | ✅ |
-| `commander` | `^13.1.0` | CLI framework | ✅ |
-| `dotenv` | `^16.4.7` | `.env` loading | ✅ |
+| `@anthropic-ai/claude-agent-sdk` | `^0.2.92` | Agent execution | ⚠️ Transitive CVE (§6.4) |
+| `@clack/prompts` | `^1.2.0` | Interactive CLI prompts | ✅ |
+| `chokidar` | `^5.0.0` | File watching | ✅ |
+| `commander` | `^14.0.3` | CLI framework | ✅ |
 | `zod` | `^4.3.6` | Schema validation | ⚠️ v4 is newer — verify API compatibility |
 
 ### 15.2 Dev dependency concerns
 
 | Package | Issue |
 |---------|-------|
-| `vite` | Two High CVEs (§6.5) |
-| `@hono/node-server` | Moderate CVE (§6.5) |
+| `vite` *(transitive dev dependency)* | Two High CVEs (§6.5) |
+| `@hono/node-server` *(transitive dev dependency)* | Moderate CVE (§6.5) |
 
 ### 15.3 Missing recommended dependencies
 
