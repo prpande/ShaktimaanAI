@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach } from "vitest";
-import { mkdirSync, rmSync, writeFileSync, existsSync, readFileSync } from "node:fs";
+import { mkdirSync, rmSync, writeFileSync, existsSync, readFileSync, realpathSync } from "node:fs";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { randomUUID } from "node:crypto";
@@ -11,6 +11,7 @@ import {
   listWorktrees,
   cleanupExpired,
   recordWorktreeCompletion,
+  resolveParentRepo,
   type WorktreeInfo,
 } from "../../src/core/worktree.js";
 
@@ -207,5 +208,58 @@ describe("shell injection prevention", () => {
     expect(() =>
       createWorktree(REPO_DIR, "inject-test", worktreesDir, '$(echo pwned)'),
     ).toThrow(); // git will reject the invalid ref
+  }, TEST_TIMEOUT);
+});
+
+describe("resolveParentRepo", () => {
+  it("resolves the parent repo from a worktree .git file", () => {
+    const worktreesDir = join(TEST_DIR, "worktrees");
+    const worktreePath = createWorktree(REPO_DIR, "resolve-test", worktreesDir);
+
+    const resolved = resolveParentRepo(worktreePath);
+    expect(resolved).not.toBeNull();
+    // Normalize both sides: slashes, case, and Windows 8.3 short paths (tmpdir may return short form)
+    const normalize = (p: string) => realpathSync.native(p).replace(/\\/g, "/").toLowerCase();
+    expect(normalize(resolved!)).toBe(normalize(REPO_DIR));
+  }, TEST_TIMEOUT);
+
+  it("returns null for a regular git repo (not a worktree)", () => {
+    const resolved = resolveParentRepo(REPO_DIR);
+    expect(resolved).toBeNull();
+  }, TEST_TIMEOUT);
+
+  it("returns null for a non-git directory", () => {
+    const plainDir = join(TEST_DIR, "plain");
+    mkdirSync(plainDir, { recursive: true });
+    const resolved = resolveParentRepo(plainDir);
+    expect(resolved).toBeNull();
+  }, TEST_TIMEOUT);
+
+  it("resolves the parent repo from a worktree of a bare repo", () => {
+    const bareDir = join(TEST_DIR, "bare-repo");
+    mkdirSync(bareDir, { recursive: true });
+    execSync("git init --bare", { cwd: bareDir, stdio: "pipe" });
+
+    // Bare repos need at least one ref to create a worktree from
+    // Create a temporary regular repo, push to bare, then create worktree from bare
+    const tempRepo = join(TEST_DIR, "temp-repo");
+    mkdirSync(tempRepo, { recursive: true });
+    execSync("git init", { cwd: tempRepo, stdio: "pipe" });
+    execSync('git config user.email "test@test.com"', { cwd: tempRepo, stdio: "pipe" });
+    execSync('git config user.name "Test"', { cwd: tempRepo, stdio: "pipe" });
+    writeFileSync(join(tempRepo, "README.md"), "# Test");
+    execSync("git add .", { cwd: tempRepo, stdio: "pipe" });
+    execSync('git commit -m "initial"', { cwd: tempRepo, stdio: "pipe" });
+    execSync(`git push "${bareDir}" HEAD:main`, { cwd: tempRepo, stdio: "pipe" });
+
+    // Now create worktree from the bare repo
+    const worktreePath = join(TEST_DIR, "bare-wt");
+    execSync(`git worktree add "${worktreePath}" -b shkmn/bare-test main`, { cwd: bareDir, stdio: "pipe" });
+
+    const resolved = resolveParentRepo(worktreePath);
+    expect(resolved).not.toBeNull();
+
+    const normalize = (p: string) => realpathSync.native(p).replace(/\\/g, "/").toLowerCase();
+    expect(normalize(resolved!)).toBe(normalize(bareDir));
   }, TEST_TIMEOUT);
 });

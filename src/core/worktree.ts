@@ -1,6 +1,6 @@
 import { execFileSync } from "node:child_process";
-import { mkdirSync, existsSync, readFileSync, writeFileSync } from "node:fs";
-import { join, dirname } from "node:path";
+import { mkdirSync, existsSync, readFileSync, writeFileSync, statSync, realpathSync } from "node:fs";
+import { join, dirname, sep } from "node:path";
 
 export interface WorktreeInfo {
   path: string;
@@ -132,6 +132,40 @@ export function listWorktrees(repoPath: string): WorktreeInfo[] {
   }
 
   return result;
+}
+
+/**
+ * Resolves the parent repository path from a git worktree directory.
+ * Worktrees have a `.git` file (not directory) containing:
+ *   gitdir: /path/to/parent/.git/worktrees/<name>
+ * Returns the parent repo root, or null if the path is not a worktree.
+ */
+export function resolveParentRepo(worktreePath: string): string | null {
+  try {
+    const dotGit = join(worktreePath, ".git");
+    const stat = statSync(dotGit);
+    if (stat.isDirectory()) return null;
+
+    const content = readFileSync(dotGit, "utf-8").trim();
+    const match = content.match(/^gitdir:\s*(.+)$/);
+    if (!match) return null;
+
+    const gitdir = match[1].trim();
+    const worktreesDir = dirname(gitdir);         // .git/worktrees or bare/worktrees
+    const gitStoreDir = dirname(worktreesDir);    // .git or bare-repo-root
+    // For regular repos, gitStoreDir is the .git dir; for bare repos, it IS the repo root
+    const parentPath = gitStoreDir.endsWith(".git") || gitStoreDir.endsWith(sep + ".git")
+      ? dirname(gitStoreDir)
+      : gitStoreDir;
+    // Resolve to canonical long path (handles Windows 8.3 short names stored by git)
+    try {
+      return realpathSync(parentPath);
+    } catch {
+      return parentPath;
+    }
+  } catch {
+    return null;
+  }
 }
 
 // ─── Manifest helpers ──────────────────────────────────────────────────────
