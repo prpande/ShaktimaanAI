@@ -266,14 +266,15 @@ Keep the pipeline alive and up-to-date. A pure shell script (no Node.js, no pipe
 ### Watchdog Logic
 
 ```
-1. Read PID from ~/.shkmn/shkmn.pid
+1. Read PID from `${runtimeDir}/shkmn.pid`
 2. Check if PID is a running process
 3. If running → exit
 4. If not running:
-   a. Source mode:  git pull origin master && npm run build
-      Package mode: npm update -g shaktimaanai
-   b. shkmn run  (writes PID file on startup)
-   c. Log restart event to ~/.shkmn/watchdog.log with timestamp
+   a. Source mode:  resolve the checkout's configured/current branch, then run
+      `git pull origin <branch> && npm run build`
+      Package mode: `npm update -g shaktimaanai`
+   b. `shkmn start`  (writes PID file on startup)
+   c. Log restart event to `~/.shkmn/watchdog.log` with timestamp
 ```
 
 ### Crash Loop Protection
@@ -285,8 +286,8 @@ Track consecutive failed starts (pipeline exits within 60 seconds of starting):
 
 ### PID File Contract
 
-- `shkmn run` writes PID to `~/.shkmn/shkmn.pid` on startup
-- `shkmn run` deletes PID file on graceful shutdown (SIGINT, SIGTERM)
+- `shkmn start` writes PID to `${runtimeDir}/shkmn.pid` on startup (where `runtimeDir` is configured in `shkmn.config.json`, defaulting to `~/.shkmn/runtime`)
+- `shkmn start` deletes PID file on graceful shutdown (SIGINT, SIGTERM)
 - Watchdog validates PID is alive (handles stale PID from crash — process no longer exists)
 
 ### Commands
