@@ -13,7 +13,7 @@ import { appendDailyLogEntry } from "./interactions.js";
 import { resolveModelForStage, checkBudget, type BudgetCheckContext } from "./budget.js";
 import type { BudgetConfig } from "../config/budget-schema.js";
 import type { SessionTokenTracker } from "./budget.js";
-import { readRunState, writeRunState, moveTaskDir, collectArtifacts, getNextStage, isReviewGate } from "./pipeline.js";
+import { readRunState, writeRunState, moveTaskDir, collectArtifacts, getNextStage, isReviewGate } from "./pipeline-utils.js";
 
 // ─── StageContext ─────────────────────────────────────────────────────────────
 

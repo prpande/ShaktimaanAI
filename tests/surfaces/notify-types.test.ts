@@ -165,6 +165,15 @@ describe("shouldNotify", () => {
     expect(shouldNotify("bookends", event)).toBe(false);
   });
 
+  it("stages level returns false for unknown future event type", () => {
+    const event = {
+      type: "some_future_event" as any,
+      slug: "test",
+      timestamp: "2026-01-01T00:00:00Z",
+    };
+    expect(shouldNotify("stages", event)).toBe(false);
+  });
+
   it("minimal level returns true for task_failed", () => {
     const event: NotifyEvent = {
       type: "task_failed",
