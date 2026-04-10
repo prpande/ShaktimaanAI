@@ -148,9 +148,9 @@ export function buildPaths(runtimeDir: string): RuntimePaths {
     configFile:        join(runtimeDir, "shkmn.config.json"),
 
     // Slack files
-    slackOutbox:   join(runtimeDir, "slack-outbox.json"),
-    slackInbox:    join(runtimeDir, "slack-inbox.json"),
-    slackSent:     join(runtimeDir, "slack-sent.json"),
+    slackOutbox:   join(runtimeDir, "slack-outbox.jsonl"),
+    slackInbox:    join(runtimeDir, "slack-inbox.jsonl"),
+    slackSent:     join(runtimeDir, "slack-sent.jsonl"),
     slackThreads:  join(runtimeDir, "slack-threads.json"),
     slackCursor:   join(runtimeDir, "slack-cursor.json"),
     slackProcessed: join(runtimeDir, "slack-processed.json"),

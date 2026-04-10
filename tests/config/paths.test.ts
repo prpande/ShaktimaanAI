@@ -34,9 +34,9 @@ describe("buildPaths — system paths resolve from runtimeDir", () => {
   it("envFile", () => expect(p.envFile).toBe(join(RUNTIME, ".env")));
   it("configFile", () => expect(p.configFile).toBe(join(RUNTIME, "shkmn.config.json")));
 
-  it("slackOutbox", () => expect(p.slackOutbox).toBe(join(RUNTIME, "slack-outbox.json")));
-  it("slackInbox", () => expect(p.slackInbox).toBe(join(RUNTIME, "slack-inbox.json")));
-  it("slackSent", () => expect(p.slackSent).toBe(join(RUNTIME, "slack-sent.json")));
+  it("slackOutbox", () => expect(p.slackOutbox).toBe(join(RUNTIME, "slack-outbox.jsonl")));
+  it("slackInbox", () => expect(p.slackInbox).toBe(join(RUNTIME, "slack-inbox.jsonl")));
+  it("slackSent", () => expect(p.slackSent).toBe(join(RUNTIME, "slack-sent.jsonl")));
   it("slackThreads", () => expect(p.slackThreads).toBe(join(RUNTIME, "slack-threads.json")));
   it("slackCursor", () => expect(p.slackCursor).toBe(join(RUNTIME, "slack-cursor.json")));
   it("slackProcessed", () => expect(p.slackProcessed).toBe(join(RUNTIME, "slack-processed.json")));

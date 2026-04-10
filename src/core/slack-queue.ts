@@ -94,6 +94,19 @@ export function saveThreadMap(runtimeDir: string, map: Record<string, string>): 
 
 // ─── Payload builder ────────────────────────────────────────────────────────
 
+export interface NaradaPayloadPaths {
+  outbox: string;
+  inbox: string;
+  sent: string;
+  threads: string;
+  cursor: string;
+}
+
+/**
+ * Builds a Narada payload. Accepts either:
+ *   - (runtimeDir, opts)            — legacy: derives file paths from runtimeDir
+ *   - (runtimeDir, opts, filePaths) — explicit: uses provided file paths (from config.paths)
+ */
 export function buildNaradaPayload(
   runtimeDir: string,
   opts: {
@@ -103,15 +116,25 @@ export function buildNaradaPayload(
     heldSlugs: string[];
     outboundPrefix?: string;
   },
+  filePaths?: NaradaPayloadPaths,
 ): NaradaPayload {
   const outbox = readOutbox(runtimeDir);
   const threadMap = loadThreadMap(runtimeDir);
+
+  // Resolve file paths: use provided paths if given, otherwise build from runtimeDir
+  const resolvedPaths: NaradaPayloadPaths = filePaths ?? {
+    outbox:  join(runtimeDir, "slack-outbox.jsonl"),
+    inbox:   join(runtimeDir, "slack-inbox.jsonl"),
+    sent:    join(runtimeDir, "slack-sent.jsonl"),
+    threads: join(runtimeDir, "slack-threads.json"),
+    cursor:  join(runtimeDir, "slack-cursor.json"),
+  };
 
   const nowTs = String(Date.now() / 1000);
   let channelTs = nowTs;
   let dmTs = nowTs;
   try {
-    const cursor = JSON.parse(readFileSync(join(runtimeDir, "slack-cursor.json"), "utf-8"));
+    const cursor = JSON.parse(readFileSync(resolvedPaths.cursor, "utf-8"));
     channelTs = cursor.channelTs === "now" ? nowTs : (cursor.channelTs ?? nowTs);
     dmTs = cursor.dmTs === "now" ? nowTs : (cursor.dmTs ?? nowTs);
   } catch { /* use defaults */ }
@@ -142,12 +165,6 @@ export function buildNaradaPayload(
     approvalChecks,
     conversationChecks,
     outboundPrefix: opts.outboundPrefix ?? "🤖 [ShaktimaanAI]",
-    files: {
-      outbox: join(runtimeDir, "slack-outbox.jsonl"),
-      inbox: join(runtimeDir, "slack-inbox.jsonl"),
-      sent: join(runtimeDir, "slack-sent.jsonl"),
-      threads: join(runtimeDir, "slack-threads.json"),
-      cursor: join(runtimeDir, "slack-cursor.json"),
-    },
+    files: resolvedPaths,
   };
 }

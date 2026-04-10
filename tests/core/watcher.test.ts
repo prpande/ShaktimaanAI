@@ -22,10 +22,13 @@ const mockLogger: TaskLogger = {
   error() {},
 };
 
-const mockConfig = {
-  ...DEFAULT_CONFIG,
-  slack: { ...DEFAULT_CONFIG.slack, enabled: false },
-};
+function makeMockConfig(testDir: string) {
+  return {
+    ...DEFAULT_CONFIG,
+    paths: buildPaths(testDir),
+    slack: { ...DEFAULT_CONFIG.slack, enabled: false },
+  };
+}
 
 function makeMockPipeline(): Pipeline {
   return {
@@ -64,7 +67,7 @@ afterEach(() => {
 describe("createWatcher", () => {
   it("starts and stops without error", async () => {
     const pipeline = makeMockPipeline();
-    const watcher = createWatcher({ runtimeDir: TEST_DIR, pipeline, logger: mockLogger, config: mockConfig });
+    const watcher = createWatcher({ runtimeDir: TEST_DIR, pipeline, logger: mockLogger, config: makeMockConfig(TEST_DIR) });
 
     expect(watcher.isRunning()).toBe(false);
     watcher.start();
@@ -76,7 +79,7 @@ describe("createWatcher", () => {
 
   it("does not start twice (second start is no-op)", async () => {
     const pipeline = makeMockPipeline();
-    const watcher = createWatcher({ runtimeDir: TEST_DIR, pipeline, logger: mockLogger, config: mockConfig });
+    const watcher = createWatcher({ runtimeDir: TEST_DIR, pipeline, logger: mockLogger, config: makeMockConfig(TEST_DIR) });
 
     watcher.start();
     expect(watcher.isRunning()).toBe(true);
@@ -90,7 +93,7 @@ describe("createWatcher", () => {
 
   it("calls pipeline.startRun when a .task file appears in inbox", async () => {
     const pipeline = makeMockPipeline();
-    const watcher = createWatcher({ runtimeDir: TEST_DIR, pipeline, logger: mockLogger, config: mockConfig });
+    const watcher = createWatcher({ runtimeDir: TEST_DIR, pipeline, logger: mockLogger, config: makeMockConfig(TEST_DIR) });
 
     watcher.start();
 
@@ -112,7 +115,7 @@ describe("createWatcher", () => {
 
   it("ignores non-.task files in inbox", async () => {
     const pipeline = makeMockPipeline();
-    const watcher = createWatcher({ runtimeDir: TEST_DIR, pipeline, logger: mockLogger, config: mockConfig });
+    const watcher = createWatcher({ runtimeDir: TEST_DIR, pipeline, logger: mockLogger, config: makeMockConfig(TEST_DIR) });
 
     watcher.start();
 
@@ -158,6 +161,7 @@ describe("createWatcher", () => {
 
     const slackEnabledConfig = {
       ...DEFAULT_CONFIG,
+      paths: buildPaths(TEST_DIR),
       slack: {
         ...DEFAULT_CONFIG.slack,
         enabled: true,

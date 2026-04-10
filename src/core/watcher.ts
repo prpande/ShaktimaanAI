@@ -85,7 +85,7 @@ export function createWatcher(options: WatcherOptions): Watcher {
   let slackInterval: ReturnType<typeof setTimeout> | null = null;
 
   // Deduplication: track processed Slack message timestamps
-  const processedTsPath = join(runtimeDir, "slack-processed.json");
+  const processedTsPath = config.paths.slackProcessed;
   let processedTs: Set<string>;
   try {
     const raw = readFileSync(processedTsPath, "utf-8");
@@ -105,22 +105,20 @@ export function createWatcher(options: WatcherOptions): Watcher {
   }
 
   function ensureSlackFiles(): void {
-    const files = [
-      { name: "slack-outbox.jsonl", content: "" },
-      { name: "slack-inbox.jsonl", content: "" },
-      { name: "slack-sent.jsonl", content: "" },
-      { name: "slack-threads.json", content: "{}" },
-      { name: "slack-cursor.json", content: JSON.stringify({ channelTs: String(Date.now() / 1000), dmTs: String(Date.now() / 1000) }) },
+    const files: Array<{ path: string; content: string }> = [
+      { path: config.paths.slackOutbox,  content: "" },
+      { path: config.paths.slackInbox,   content: "" },
+      { path: config.paths.slackSent,    content: "" },
+      { path: config.paths.slackThreads, content: "{}" },
+      { path: config.paths.slackCursor,  content: JSON.stringify({ channelTs: String(Date.now() / 1000), dmTs: String(Date.now() / 1000) }) },
     ];
     for (const f of files) {
-      const p = join(runtimeDir, f.name);
-      if (!existsSync(p)) {
-        writeFileSync(p, f.content, "utf-8");
+      if (!existsSync(f.path)) {
+        writeFileSync(f.path, f.content, "utf-8");
       }
     }
-    const responsesDir = join(runtimeDir, "astra-responses");
-    if (!existsSync(responsesDir)) {
-      mkdirSync(responsesDir, { recursive: true });
+    if (!existsSync(config.paths.astraResponsesDir)) {
+      mkdirSync(config.paths.astraResponsesDir, { recursive: true });
     }
   }
 
@@ -134,8 +132,7 @@ export function createWatcher(options: WatcherOptions): Watcher {
       thread_ts: threadTs,
       addedAt: new Date().toISOString(),
     };
-    const outboxPath = join(runtimeDir, "slack-outbox.jsonl");
-    appendFileSync(outboxPath, JSON.stringify(entry) + "\n", "utf-8");
+    appendFileSync(config.paths.slackOutbox, JSON.stringify(entry) + "\n", "utf-8");
   }
 
   function notifySlackError(channel: string, threadTs: string | null, message: string): void {
@@ -169,10 +166,9 @@ export function createWatcher(options: WatcherOptions): Watcher {
       ensureSlackFiles();
 
       // Find held task slugs for approval checking
-      const holdDir = join(runtimeDir, "12-hold");
       let heldSlugs: string[] = [];
       try {
-        heldSlugs = readdirSync(holdDir).filter((f) => !f.startsWith("."));
+        heldSlugs = readdirSync(config.paths.terminals.hold).filter((f) => !f.startsWith("."));
       } catch { /* no hold dir */ }
 
       // Build Narada payload
@@ -182,6 +178,12 @@ export function createWatcher(options: WatcherOptions): Watcher {
         dmUserIds: config.slack.dmUserIds,
         heldSlugs,
         outboundPrefix: config.slack.outboundPrefix,
+      }, {
+        outbox:  config.paths.slackOutbox,
+        inbox:   config.paths.slackInbox,
+        sent:    config.paths.slackSent,
+        threads: config.paths.slackThreads,
+        cursor:  config.paths.slackCursor,
       });
 
       // Warn if DMs enabled but no user IDs
@@ -211,7 +213,7 @@ export function createWatcher(options: WatcherOptions): Watcher {
       // Log Narada completion for budget tracking
       try {
         const { appendDailyLogEntry } = await import("./interactions.js");
-        appendDailyLogEntry(join(runtimeDir, "interactions"), {
+        appendDailyLogEntry(config.paths.interactionsDir, {
           timestamp: new Date().toISOString(),
           type: "agent_completed",
           slug: "slack-io-poll",
@@ -243,8 +245,8 @@ export function createWatcher(options: WatcherOptions): Watcher {
 
         // Handle Slack approvals (unchanged)
         if (entry.isApproval && entry.slug) {
-          if (existsSync(join(runtimeDir, "12-hold", entry.slug))) {
-            const controlPath = join(runtimeDir, "00-inbox", `slack-approve-${entry.ts.replace(".", "-")}.control`);
+          if (existsSync(config.paths.resolveTask(entry.slug, "hold").taskDir)) {
+            const controlPath = join(config.paths.terminals.inbox, `slack-approve-${entry.ts.replace(".", "-")}.control`);
             writeFileSync(controlPath, JSON.stringify({
               operation: "approve",
               slug: entry.slug,
@@ -282,7 +284,7 @@ export function createWatcher(options: WatcherOptions): Watcher {
 
         // Persist triage result for audit trail
         try {
-          const triageFile = join(runtimeDir, "astra-responses", `triage-${entry.ts.replace(".", "-")}.json`);
+          const triageFile = join(config.paths.astraResponsesDir, `triage-${entry.ts.replace(".", "-")}.json`);
           writeFileSync(triageFile, JSON.stringify(triageResult, null, 2), "utf-8");
         } catch { /* swallow */ }
 
@@ -293,7 +295,7 @@ export function createWatcher(options: WatcherOptions): Watcher {
                 operation: triageResult.controlOp,
                 slug: triageResult.extractedSlug,
               };
-              const controlPath = join(runtimeDir, "00-inbox", `slack-${entry.ts.replace(".", "-")}.control`);
+              const controlPath = join(config.paths.terminals.inbox, `slack-${entry.ts.replace(".", "-")}.control`);
               writeFileSync(controlPath, JSON.stringify(controlPayload), "utf-8");
               logger.info(`[watcher] Astra: control command ${triageResult.controlOp} for ${triageResult.extractedSlug}`);
             } else if (triageResult.controlOp && !triageResult.extractedSlug) {
@@ -322,14 +324,13 @@ export function createWatcher(options: WatcherOptions): Watcher {
             }
 
             try {
-              const outputDir = join(runtimeDir, "astra-responses");
-              mkdirSync(outputDir, { recursive: true });
+              mkdirSync(config.paths.astraResponsesDir, { recursive: true });
               const executeResult = await runner({
                 stage: "quick-execute",
                 slug: `astra-exec-${entry.ts.replace(".", "-")}`,
                 taskContent: astraInput.message,
                 previousOutput: triageResult.enrichedContext ?? "",
-                outputPath: join(outputDir, `${entry.ts.replace(".", "-")}.md`),
+                outputPath: join(config.paths.astraResponsesDir, `${entry.ts.replace(".", "-")}.md`),
                 cwd: resolveSlackRepoCwd(undefined, config),
                 config,
                 logger: { info() {}, warn() {}, error() {} },
@@ -464,7 +465,7 @@ export function createWatcher(options: WatcherOptions): Watcher {
         return; // no-op if already running
       }
 
-      const inboxDir = join(runtimeDir, "00-inbox");
+      const inboxDir = config.paths.terminals.inbox;
 
       fsWatcher = chokidar.watch(inboxDir, {
         ignored: (path: string, stats?: { isFile(): boolean }) =>

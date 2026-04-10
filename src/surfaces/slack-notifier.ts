@@ -12,6 +12,8 @@ export interface SlackNotifierOptions {
   notifyLevel: NotifyLevel;
   runtimeDir: string;
   timezone?: string;
+  /** Explicit path to slack-outbox.jsonl — overrides join(runtimeDir, "slack-outbox.jsonl"). */
+  outboxPath?: string;
   /** Called after writing to outbox — wire to triggerNaradaSend for immediate delivery. */
   onOutboxWrite?: () => void;
 }
@@ -207,7 +209,7 @@ export function formatEvent(event: NotifyEvent, timezone: string = "UTC"): strin
 
 export function createSlackNotifier(options: SlackNotifierOptions): Notifier {
   const { channelId, notifyLevel, runtimeDir, onOutboxWrite } = options;
-  const outboxPath = join(runtimeDir, "slack-outbox.jsonl");
+  const outboxPath = options.outboxPath ?? join(runtimeDir, "slack-outbox.jsonl");
 
   return {
     async notify(event: NotifyEvent): Promise<void> {
