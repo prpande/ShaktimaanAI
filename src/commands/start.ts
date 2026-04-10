@@ -10,6 +10,7 @@ import { createPipeline } from "../core/pipeline.js";
 import { runAgent } from "../core/agent-runner.js";
 import { createWatcher, type Watcher } from "../core/watcher.js";
 import { createConsoleNotifier } from "../surfaces/console-notifier.js";
+import { showBanner } from "../ui/banner.js";
 import { runRecovery, runRecoveryStartupScan } from "../core/recovery.js";
 import { cleanupExpired } from "../core/worktree.js";
 
@@ -23,7 +24,7 @@ export function registerStartCommand(program: Command): void {
   program
     .command("start")
     .description("Start the ShaktimaanAI pipeline watcher")
-    .action(async () => {
+    .action(async (_opts: unknown, cmd: Command) => {
       // 1. Resolve config and load env
       const configPath = resolveConfigPath();
       const config = loadConfig(configPath);
@@ -40,7 +41,11 @@ export function registerStartCommand(program: Command): void {
         process.exit(1);
       }
 
-      // 3. Create system logger and agent registry
+      // 3. Show banner (after validation so errors aren't hidden behind animation)
+      const noBanner = cmd.optsWithGlobals().banner === false;
+      await showBanner({ noBanner, version: program.version() ?? "" });
+
+      // 4. Create system logger and agent registry
       const logDir = join(config.pipeline.runtimeDir, "logs");
       const logger = createSystemLogger(logDir);
       const registry = createAgentRegistry(config.agents.maxConcurrentTotal);
