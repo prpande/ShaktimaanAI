@@ -4,6 +4,7 @@ import { intro, text, confirm, select, outro, isCancel, log } from "@clack/promp
 import { DEFAULT_CONFIG, DEFAULT_AGENT_NAMES } from "../config/defaults.js";
 import { createRuntimeDirs } from "../runtime/dirs.js";
 import { checkAllTools } from "./auth.js";
+import { showBanner } from "../ui/banner.js";
 
 export interface InitAnswers {
   runtimeDir: string;
@@ -105,7 +106,8 @@ export function writeInitEnv(dir: string): void {
  * Prompts the user for all required config values, creates runtime dirs,
  * writes config and .env files.
  */
-export async function runInitWizard(): Promise<void> {
+export async function runInitWizard(options?: { noBanner?: boolean }): Promise<void> {
+  await showBanner({ noBanner: options?.noBanner });
   intro("ShaktimaanAI Setup");
 
   // Check required tools

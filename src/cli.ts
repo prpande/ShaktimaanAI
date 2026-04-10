@@ -29,13 +29,15 @@ const program = new Command();
 program
   .name("shkmn")
   .description("ShaktimaanAI — Agentic development pipeline")
-  .version(__VERSION__);
+  .version(__VERSION__)
+  .option("--no-banner", "Skip the animated banner");
 
 program
   .command("init")
   .description("Interactive setup wizard — creates config, runtime dirs, dashboard repo")
   .action(async () => {
-    await runInitWizard();
+    const noBanner = program.opts().banner === false;
+    await runInitWizard({ noBanner });
   });
 
 const configCmd = program

@@ -10,6 +10,7 @@ import { createPipeline } from "../core/pipeline.js";
 import { runAgent } from "../core/agent-runner.js";
 import { createWatcher, type Watcher } from "../core/watcher.js";
 import { createConsoleNotifier } from "../surfaces/console-notifier.js";
+import { showBanner } from "../ui/banner.js";
 import { runRecovery, runRecoveryStartupScan } from "../core/recovery.js";
 import { cleanupExpired } from "../core/worktree.js";
 
@@ -30,7 +31,11 @@ export function registerStartCommand(program: Command): void {
       const envPath = join(dirname(configPath), ".env");
       loadEnvFile(envPath);
 
-      // 2. Verify runtime dirs
+      // 2. Show banner
+      const noBanner = program.opts?.()?.banner === false;
+      await showBanner({ noBanner });
+
+      // 3. Verify runtime dirs
       const { valid, missing } = verifyRuntimeDirs(config.pipeline.runtimeDir);
       if (!valid) {
         console.error(
