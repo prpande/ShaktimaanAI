@@ -1,7 +1,7 @@
 import { readFileSync, existsSync } from "node:fs";
 import { join, isAbsolute } from "node:path";
 import { configSchema, type ConfigParsed } from "./schema.js";
-import { DEFAULT_CONFIG, DEFAULT_AGENT_NAMES, DEFAULT_BUDGET_CONFIG, type ShkmnConfig } from "./defaults.js";
+import { DEFAULT_CONFIG, DEFAULT_AGENT_NAMES, DEFAULT_BUDGET_CONFIG, DEFAULT_ADVISER_STAGES, type ShkmnConfig } from "./defaults.js";
 import { budgetConfigSchema, type BudgetConfig } from "./budget-schema.js";
 
 /**
@@ -102,6 +102,11 @@ export function resolveConfig(parsed: ConfigParsed): ResolvedConfig {
       maxReviewRetries: parsed.agents?.maxReviewRetries ?? da.maxReviewRetries,
       tools: { ...da.tools, ...parsed.agents?.tools },
       models: { ...da.models, ...parsed.agents?.models },
+      adviser: {
+        enabled: parsed.agents?.adviser?.enabled ?? da.adviser.enabled,
+        model: parsed.agents?.adviser?.model ?? da.adviser.model,
+        stages: parsed.agents?.adviser?.stages ?? [...DEFAULT_ADVISER_STAGES],
+      },
     },
     schedule: {
       rollupTime: parsed.schedule?.rollupTime ?? d.schedule.rollupTime,

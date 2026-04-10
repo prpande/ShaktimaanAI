@@ -98,6 +98,18 @@ export const MCP_TOOL_PREFIXES: Record<string, string> = {
   figma:  "mcp__plugin_figma_figma__",
 };
 
+// ─── Adviser defaults ───────────────────────────────────────────────────────
+
+/**
+ * Pipeline stages that get the adviser tool by default (non-opus stages).
+ * Opus stages (design, plan, impl, recovery) are excluded — advising Opus
+ * with Opus adds cost with minimal benefit.
+ */
+export const DEFAULT_ADVISER_STAGES: string[] = [
+  "questions", "research", "structure", "review", "pr",
+  "validate", "quick-triage", "quick", "quick-execute", "slack-io",
+];
+
 // ─── Config types ───────────────────────────────────────────────────────────
 
 export interface ShkmnConfig {
@@ -146,6 +158,14 @@ export interface ShkmnConfig {
     maxReviewRetries: number;
     tools: Record<string, { allowed?: string[]; disallowed?: string[] }>;
     models: Record<string, string>;
+    adviser: {
+      /** Whether the adviser tool is enabled globally. Default: false. */
+      enabled: boolean;
+      /** Model to use as the adviser. Must be a valid advisor model (e.g. claude-opus-4-6). */
+      model: string;
+      /** Stages that receive the adviser tool. Defaults to all non-opus stages. */
+      stages: string[];
+    };
   };
   schedule: {
     rollupTime: string;
@@ -251,6 +271,11 @@ export const DEFAULT_CONFIG: ShkmnConfig = {
     maxSuggestionRetriesPerCycle: 1,
     maxReviewRetries: 5,
     tools: {},
+    adviser: {
+      enabled: false,
+      model: "claude-opus-4-6",
+      stages: [...DEFAULT_ADVISER_STAGES],
+    },
     models: {
       questions: "sonnet",
       research: "sonnet",
