@@ -3,6 +3,7 @@ import { join, isAbsolute } from "node:path";
 import { configSchema, type ConfigParsed } from "./schema.js";
 import { DEFAULT_CONFIG, DEFAULT_AGENT_NAMES, DEFAULT_BUDGET_CONFIG, type ShkmnConfig } from "./defaults.js";
 import { budgetConfigSchema, type BudgetConfig } from "./budget-schema.js";
+import { buildPaths } from "./paths.js";
 
 /**
  * A fully resolved config with all fields present (no optionals).
@@ -59,7 +60,10 @@ export function resolveConfig(parsed: ConfigParsed): ResolvedConfig {
   const d = DEFAULT_CONFIG;
   const da = d.agents;
 
+  const runtimeDir = parsed.pipeline.runtimeDir;
+
   return {
+    paths: buildPaths(runtimeDir),
     pipeline: {
       runtimeDir: parsed.pipeline.runtimeDir,
       agentsDir: parsed.pipeline.agentsDir ?? d.pipeline.agentsDir,

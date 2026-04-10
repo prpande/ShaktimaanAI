@@ -1,5 +1,8 @@
+import { join } from "node:path";
+import { homedir } from "node:os";
 import type { BudgetConfig } from "./budget-schema.js";
 import type { PipelineStage } from "../core/types.js";
+import { buildPaths, type RuntimePaths } from "./paths.js";
 
 export const DEFAULT_AGENT_NAMES = {
   questions: "Gargi",
@@ -101,6 +104,7 @@ export const MCP_TOOL_PREFIXES: Record<string, string> = {
 // ─── Config types ───────────────────────────────────────────────────────────
 
 export interface ShkmnConfig {
+  paths: RuntimePaths;
   pipeline: {
     runtimeDir: string;
     agentsDir: string;
@@ -174,6 +178,7 @@ export interface ShkmnConfig {
 }
 
 export const DEFAULT_CONFIG: ShkmnConfig = {
+  paths: buildPaths(join(homedir(), ".shkmn", "runtime")),
   pipeline: {
     runtimeDir: "",
     agentsDir: "",
