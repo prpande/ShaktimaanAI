@@ -2,7 +2,7 @@ import { describe, it, expect, beforeEach, afterEach } from "vitest";
 import { writeFileSync, mkdirSync, rmSync } from "node:fs";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
-import { loadConfig, resolveConfig } from "../../src/config/loader.js";
+import { loadConfig, resolveConfig, findConfigPath } from "../../src/config/loader.js";
 import { DEFAULT_AGENT_NAMES } from "../../src/config/defaults.js";
 
 const TEST_DIR = join(tmpdir(), "shkmn-test-config-" + Date.now());
@@ -13,6 +13,7 @@ beforeEach(() => {
 
 afterEach(() => {
   rmSync(TEST_DIR, { recursive: true, force: true });
+  delete process.env.SHKMN_CONFIG;
 });
 
 describe("loadConfig", () => {
@@ -88,5 +89,14 @@ describe("resolveConfig", () => {
       "impl", "review", "validate", "pr",
     ]);
     expect(resolved.agents.defaultReviewAfter).toBe("design");
+  });
+});
+
+describe("findConfigPath", () => {
+  it("returns SHKMN_CONFIG env path when file exists", () => {
+    const configFile = join(TEST_DIR, "custom.config.json");
+    writeFileSync(configFile, "{}");
+    process.env.SHKMN_CONFIG = configFile;
+    expect(findConfigPath()).toBe(configFile);
   });
 });

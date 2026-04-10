@@ -1,8 +1,7 @@
 import { readdirSync, readFileSync, existsSync } from "node:fs";
 import { join } from "node:path";
 import type { Command } from "commander";
-import { resolveConfigPath } from "../config/resolve-path.js";
-import { loadConfig } from "../config/loader.js";
+import { findConfigPath, loadConfig } from "../config/loader.js";
 
 export interface HistoryEntry {
   slug: string;
@@ -13,11 +12,17 @@ export interface HistoryEntry {
   error?: string;
 }
 
-export function listCompletedTasks(runtimeDir: string, count?: number): HistoryEntry[] {
+export function listCompletedTasks(
+  completeDirPath: string,
+  failedDirPath: string,
+  count?: number,
+): HistoryEntry[] {
   const entries: HistoryEntry[] = [];
 
-  for (const dir of ["10-complete", "11-failed"]) {
-    const dirPath = join(runtimeDir, dir);
+  for (const [dirPath, defaultStatus] of [
+    [completeDirPath, "complete"],
+    [failedDirPath, "failed"],
+  ] as const) {
     if (!existsSync(dirPath)) continue;
 
     for (const slug of readdirSync(dirPath)) {
@@ -28,7 +33,7 @@ export function listCompletedTasks(runtimeDir: string, count?: number): HistoryE
         const raw = JSON.parse(readFileSync(statePath, "utf8"));
         entries.push({
           slug: raw.slug ?? slug,
-          status: raw.status ?? (dir === "10-complete" ? "complete" : "failed"),
+          status: raw.status ?? defaultStatus,
           startedAt: raw.startedAt ?? "",
           updatedAt: raw.updatedAt ?? "",
           finalStage: raw.currentStage ?? "",
@@ -68,9 +73,9 @@ export function registerHistoryCommand(program: Command): void {
         process.exit(1);
       }
 
-      const configPath = resolveConfigPath();
+      const configPath = findConfigPath();
       const config = loadConfig(configPath);
-      const entries = listCompletedTasks(config.pipeline.runtimeDir, count);
+      const entries = listCompletedTasks(config.paths.terminals.complete, config.paths.terminals.failed, count);
 
       if (entries.length === 0) {
         console.log("No completed tasks found.");

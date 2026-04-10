@@ -1,8 +1,7 @@
 import type { Command } from "commander";
 import { readFileSync, existsSync } from "node:fs";
 import { join } from "node:path";
-import { resolveConfigPath } from "../config/resolve-path.js";
-import { loadConfig } from "../config/loader.js";
+import { findConfigPath, loadConfig } from "../config/loader.js";
 import { listActiveSlugs } from "../core/slug-resolver.js";
 
 export function formatElapsed(startedAt: string): string {
@@ -32,10 +31,10 @@ export function registerStatusCommand(program: Command): void {
     .command("status")
     .description("Show active pipeline runs and their current stages")
     .action(() => {
-      const configPath = resolveConfigPath();
+      const configPath = findConfigPath();
       const config = loadConfig(configPath);
 
-      const tasks = listActiveSlugs(config.pipeline.runtimeDir);
+      const tasks = listActiveSlugs(config.paths.runtimeDir);
 
       if (tasks.length === 0) {
         console.log("No active tasks.");
@@ -48,7 +47,7 @@ export function registerStatusCommand(program: Command): void {
       if (active.length > 0) {
         console.log("Active:");
         for (const task of active) {
-          const runStatePath = join(config.pipeline.runtimeDir, task.dir, task.slug, "run-state.json");
+          const runStatePath = join(config.paths.runtimeDir, task.dir, task.slug, "run-state.json");
           const startedAt = readTimestamp(runStatePath, "startedAt");
           const duration = startedAt ? ` (${formatElapsed(startedAt)})` : "";
           console.log(`  ${task.slug.padEnd(40)}  → ${task.stage.padEnd(12)}${duration}`);
@@ -59,7 +58,7 @@ export function registerStatusCommand(program: Command): void {
         if (active.length > 0) console.log("");
         console.log("Held (awaiting approval):");
         for (const task of held) {
-          const runStatePath = join(config.pipeline.runtimeDir, "12-hold", task.slug, "run-state.json");
+          const runStatePath = config.paths.resolveTask(task.slug, "hold").runStateFile;
           // Use updatedAt for held tasks — it reflects when the task entered hold
           const heldSince = readTimestamp(runStatePath, "updatedAt");
           const duration = heldSince ? ` (held ${formatElapsed(heldSince)})` : "";

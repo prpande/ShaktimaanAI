@@ -1,5 +1,4 @@
 import * as fs from "node:fs";
-import * as path from "node:path";
 import { z } from "zod";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -55,7 +54,6 @@ export function stripPrefix(text: string, prefix: string): string {
 
 // ─── Cursor persistence ───────────────────────────────────────────────────────
 
-const CURSOR_FILENAME = "slack-cursor.json";
 const DEFAULT_CURSOR: SlackCursor = { channelTs: "now", dmTs: "now" };
 
 const slackCursorSchema = z.object({
@@ -63,10 +61,13 @@ const slackCursorSchema = z.object({
   dmTs: z.string(),
 });
 
-export function loadCursor(runtimeDir: string): SlackCursor {
-  const filePath = path.join(runtimeDir, CURSOR_FILENAME);
+/**
+ * Loads the Slack cursor from disk.
+ * Accepts the explicit cursor file path (from config.paths.slackCursor).
+ */
+export function loadCursor(cursorPath: string): SlackCursor {
   try {
-    const raw = fs.readFileSync(filePath, "utf8");
+    const raw = fs.readFileSync(cursorPath, "utf8");
     const parsed = slackCursorSchema.safeParse(JSON.parse(raw));
     return parsed.success ? parsed.data : { ...DEFAULT_CURSOR };
   } catch {
@@ -74,7 +75,10 @@ export function loadCursor(runtimeDir: string): SlackCursor {
   }
 }
 
-export function saveCursor(runtimeDir: string, cursor: SlackCursor): void {
-  const filePath = path.join(runtimeDir, CURSOR_FILENAME);
-  fs.writeFileSync(filePath, JSON.stringify(cursor, null, 2), "utf8");
+/**
+ * Saves the Slack cursor to disk.
+ * Accepts the explicit cursor file path (from config.paths.slackCursor).
+ */
+export function saveCursor(cursorPath: string, cursor: SlackCursor): void {
+  fs.writeFileSync(cursorPath, JSON.stringify(cursor, null, 2), "utf8");
 }

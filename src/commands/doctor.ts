@@ -5,6 +5,7 @@ import { join, dirname } from "node:path";
 import { homedir } from "node:os";
 import { loadConfig } from "../config/loader.js";
 import { verifyRuntimeDirs, createRuntimeDirs } from "../runtime/dirs.js";
+import { buildPaths } from "../config/paths.js";
 import { DEFAULT_CONFIG } from "../config/defaults.js";
 
 // ── Types ──────────────────────────────────────────────────────────────
@@ -170,7 +171,7 @@ export function checkRuntimeDirs(runtimeDir: string | null): CheckResult {
     return { name, passed: false, message: "Cannot check — no config loaded", fixable: true };
   }
 
-  const { valid, missing } = verifyRuntimeDirs(runtimeDir);
+  const { valid, missing } = verifyRuntimeDirs(buildPaths(runtimeDir));
   if (valid) {
     return { name, passed: true, message: "All directories present", fixable: false };
   }
@@ -210,7 +211,7 @@ export function checkAgentPrompts(agentsDir: string): CheckResult {
 
 export function fixMissingDirs(runtimeDir: string): FixResult {
   try {
-    createRuntimeDirs(runtimeDir);
+    createRuntimeDirs(buildPaths(runtimeDir));
     return { success: true, message: "Created missing runtime directories" };
   } catch (err) {
     return { success: false, message: `Fix failed: ${(err as Error).message}` };
@@ -274,7 +275,7 @@ function deepMergeDefaults(
 // ── Config Resolution (non-exiting) ───────────────────────────────────
 
 /**
- * Same logic as resolveConfigPath() in src/config/resolve-path.ts
+ * Same logic as findConfigPath() in src/config/loader.ts
  * but returns null instead of calling process.exit(1).
  */
 export function tryResolveConfigPath(): string | null {

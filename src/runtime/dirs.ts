@@ -1,42 +1,53 @@
 import { mkdirSync, existsSync } from "node:fs";
 import { join } from "node:path";
+import type { RuntimePaths } from "../config/paths.js";
 
-import { ALL_STAGE_DIRS, STAGES_WITH_PENDING_DONE } from "../core/stage-map.js";
-
-function getAllDirPaths(runtimeDir: string): string[] {
+/**
+ * Collects all directories that should exist under the runtime root.
+ * Derives base paths from the RuntimePaths object. Only "pending" and "done"
+ * subdirectory names are hardcoded here as they are structural conventions of
+ * the pipeline stage directories, not configurable names.
+ */
+function getAllDirPaths(paths: RuntimePaths): string[] {
   const dirs: string[] = [];
 
-  for (const stage of ALL_STAGE_DIRS) {
-    dirs.push(join(runtimeDir, stage));
-
-    if (STAGES_WITH_PENDING_DONE.includes(stage)) {
-      dirs.push(join(runtimeDir, stage, "pending"));
-      dirs.push(join(runtimeDir, stage, "done"));
-    }
+  // Stage directories with pending/done subdirs
+  for (const stageDir of Object.values(paths.stages)) {
+    dirs.push(stageDir);
+    dirs.push(join(stageDir, "pending"));
+    dirs.push(join(stageDir, "done"));
   }
 
-  dirs.push(join(runtimeDir, "logs"));
-  dirs.push(join(runtimeDir, "history"));
-  dirs.push(join(runtimeDir, "history", "daily-log"));
-  dirs.push(join(runtimeDir, "history", "monthly-reports"));
-  dirs.push(join(runtimeDir, "interactions"));
-  dirs.push(join(runtimeDir, "diagnostics"));
+  // Terminal directories (no pending/done)
+  for (const termDir of Object.values(paths.terminals)) {
+    dirs.push(termDir);
+  }
+
+  // Non-stage directories
+  dirs.push(paths.logsDir);
+  dirs.push(paths.historyDir);
+  dirs.push(paths.dailyLogDir);
+  dirs.push(paths.monthlyReportsDir);
+  dirs.push(paths.interactionsDir);
+  dirs.push(paths.diagnosticsDir);
+  dirs.push(paths.astraResponsesDir);
+  dirs.push(paths.worktreesDir);
 
   return dirs;
 }
 
-export function createRuntimeDirs(runtimeDir: string): void {
-  for (const dir of getAllDirPaths(runtimeDir)) {
+export function createRuntimeDirs(paths: RuntimePaths): void {
+  for (const dir of getAllDirPaths(paths)) {
     mkdirSync(dir, { recursive: true });
   }
 }
 
-export function verifyRuntimeDirs(runtimeDir: string): {
+export function verifyRuntimeDirs(paths: RuntimePaths): {
   valid: boolean;
   missing: string[];
 } {
   const missing: string[] = [];
-  for (const dir of getAllDirPaths(runtimeDir)) {
+  for (const dir of getAllDirPaths(paths)) {
     if (!existsSync(dir)) {
       missing.push(dir);
     }

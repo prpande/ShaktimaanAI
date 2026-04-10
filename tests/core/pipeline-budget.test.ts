@@ -7,6 +7,7 @@ import { randomUUID } from "node:crypto";
 import { configSchema } from "../../src/config/schema.js";
 import { resolveConfig } from "../../src/config/loader.js";
 import { createRuntimeDirs } from "../../src/runtime/dirs.js";
+import { buildPaths } from "../../src/config/paths.js";
 import { createAgentRegistry } from "../../src/core/registry.js";
 import type { AgentRunOptions, AgentRunResult, RunState } from "../../src/core/types.js";
 import {
@@ -147,7 +148,7 @@ function writeHugeUsageForToday(model: string, tokens: number) {
 beforeEach(() => {
   TEST_DIR = join(tmpdir(), `shkmn-budget-test-${randomUUID()}`);
   mkdirSync(TEST_DIR, { recursive: true });
-  createRuntimeDirs(TEST_DIR);
+  createRuntimeDirs(buildPaths(TEST_DIR));
 });
 
 afterEach(() => {

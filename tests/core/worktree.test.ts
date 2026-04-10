@@ -293,8 +293,9 @@ describe("shell injection prevention", () => {
     // A baseBranch containing shell metacharacters should fail as an
     // invalid git ref, NOT execute the injected command.
     // With execFileSync, the string is passed as a literal argument to git.
+    const manifestPath = join(TEST_DIR, "worktree-manifest.json");
     expect(() =>
-      createWorktree(REPO_DIR, "inject-test", worktreesDir, '$(echo pwned)'),
+      createWorktree(REPO_DIR, "inject-test", worktreesDir, manifestPath, '$(echo pwned)'),
     ).toThrow(); // git will reject the invalid ref
   }, TEST_TIMEOUT);
 });

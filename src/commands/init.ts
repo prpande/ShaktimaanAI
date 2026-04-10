@@ -3,6 +3,7 @@ import { join } from "node:path";
 import { intro, text, confirm, select, outro, isCancel, log } from "@clack/prompts";
 import { DEFAULT_CONFIG, DEFAULT_AGENT_NAMES } from "../config/defaults.js";
 import { createRuntimeDirs } from "../runtime/dirs.js";
+import { buildPaths } from "../config/paths.js";
 import { checkAllTools } from "./auth.js";
 import { showBanner } from "../ui/banner.js";
 
@@ -21,10 +22,10 @@ export interface InitAnswers {
 }
 
 /**
- * Writes a shkmn.config.json file to `dir` with the provided answers merged
+ * Writes a shkmn.config.json file to `configFilePath` with the provided answers merged
  * into the DEFAULT_CONFIG structure.
  */
-export function writeInitConfig(dir: string, answers: InitAnswers): void {
+export function writeInitConfig(configFilePath: string, answers: InitAnswers): void {
   const d = DEFAULT_CONFIG;
 
   const config = {
@@ -72,16 +73,15 @@ export function writeInitConfig(dir: string, answers: InitAnswers): void {
     },
   };
 
-  const configPath = join(dir, "shkmn.config.json");
-  writeFileSync(configPath, JSON.stringify(config, null, 2) + "\n", "utf-8");
+  writeFileSync(configFilePath, JSON.stringify(config, null, 2) + "\n", "utf-8");
 }
 
 /**
- * Writes a .env template with empty placeholder keys to `dir`.
- * Skips writing if a .env file already exists.
+ * Writes a .env template with empty placeholder keys to `envFilePath`.
+ * Skips writing if the file already exists.
  */
-export function writeInitEnv(dir: string): void {
-  const envPath = join(dir, ".env");
+export function writeInitEnv(envFilePath: string): void {
+  const envPath = envFilePath;
   if (existsSync(envPath)) {
     return;
   }
@@ -122,8 +122,8 @@ export async function runInitWizard(options?: { noBanner?: boolean; version?: st
 
   // Prompt for runtime directory
   const runtimeDir = await text({
-    message: "Runtime directory (where task files and logs are stored)",
-    placeholder: "~/.shkmn/runtime",
+    message: "Base directory (task files and logs will be stored in a runtime/ subdirectory)",
+    placeholder: "~/.shkmn",
     validate: (val) => (val.trim() ? undefined : "Runtime directory is required"),
   });
   if (isCancel(runtimeDir)) {
@@ -260,16 +260,20 @@ export async function runInitWizard(options?: { noBanner?: boolean; version?: st
     slackNotifyLevel,
   };
 
+  // Build paths under the runtime subdirectory
+  const fullRuntimeDir = join(answers.runtimeDir, "runtime");
+  const paths = buildPaths(fullRuntimeDir);
+
   // Create runtime directories
-  createRuntimeDirs(answers.runtimeDir);
-  log.success(`Created runtime directories at: ${answers.runtimeDir}`);
+  createRuntimeDirs(paths);
+  log.success(`Created runtime directories at: ${fullRuntimeDir}`);
 
   // Write config and .env
-  writeInitConfig(answers.runtimeDir, answers);
-  log.success(`Written shkmn.config.json to: ${answers.runtimeDir}`);
+  writeInitConfig(paths.configFile, { ...answers, runtimeDir: fullRuntimeDir });
+  log.success(`Written shkmn.config.json to: ${paths.configFile}`);
 
-  writeInitEnv(answers.runtimeDir);
-  log.success(`Written .env template to: ${answers.runtimeDir}`);
+  writeInitEnv(paths.envFile);
+  log.success(`Written .env template to: ${paths.envFile}`);
 
   outro("Setup complete! Run 'shkmn start' to begin.");
 }

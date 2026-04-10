@@ -3,6 +3,7 @@ import { mkdirSync, rmSync, existsSync } from "node:fs";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { createRuntimeDirs, verifyRuntimeDirs } from "../../src/runtime/dirs.js";
+import { buildPaths } from "../../src/config/paths.js";
 import { ALL_STAGE_DIRS } from "../../src/core/stage-map.js";
 
 const TEST_DIR = join(tmpdir(), "shkmn-test-dirs-" + Date.now());
@@ -28,7 +29,8 @@ describe("ALL_STAGE_DIRS", () => {
 
 describe("createRuntimeDirs", () => {
   it("creates all stage directories with pending/done subdirs", () => {
-    createRuntimeDirs(TEST_DIR);
+    const paths = buildPaths(TEST_DIR);
+    createRuntimeDirs(paths);
 
     expect(existsSync(join(TEST_DIR, "00-inbox"))).toBe(true);
     expect(existsSync(join(TEST_DIR, "01-questions", "pending"))).toBe(true);
@@ -45,22 +47,25 @@ describe("createRuntimeDirs", () => {
   });
 
   it("is idempotent — safe to run multiple times", () => {
-    createRuntimeDirs(TEST_DIR);
-    createRuntimeDirs(TEST_DIR);
+    const paths = buildPaths(TEST_DIR);
+    createRuntimeDirs(paths);
+    createRuntimeDirs(paths);
     expect(existsSync(join(TEST_DIR, "00-inbox"))).toBe(true);
   });
 });
 
 describe("verifyRuntimeDirs", () => {
   it("returns missing dirs when runtime is not initialized", () => {
-    const result = verifyRuntimeDirs(TEST_DIR);
+    const paths = buildPaths(TEST_DIR);
+    const result = verifyRuntimeDirs(paths);
     expect(result.valid).toBe(false);
     expect(result.missing.length).toBeGreaterThan(0);
   });
 
   it("returns valid when all dirs exist", () => {
-    createRuntimeDirs(TEST_DIR);
-    const result = verifyRuntimeDirs(TEST_DIR);
+    const paths = buildPaths(TEST_DIR);
+    createRuntimeDirs(paths);
+    const result = verifyRuntimeDirs(paths);
     expect(result.valid).toBe(true);
     expect(result.missing).toHaveLength(0);
   });

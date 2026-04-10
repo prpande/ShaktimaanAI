@@ -9,7 +9,7 @@ import { registerStatusCommand } from "./commands/status.js";
 import { registerLogsCommand } from "./commands/logs.js";
 import { registerHistoryCommand } from "./commands/history.js";
 import { getConfigValue, setConfigValue } from "./commands/config.js";
-import { resolveConfigPath } from "./config/resolve-path.js";
+import { findConfigPath } from "./config/loader.js";
 import { registerCancelCommand } from "./commands/cancel.js";
 import { registerSkipCommand } from "./commands/skip.js";
 import { registerPauseCommand } from "./commands/pause.js";
@@ -51,7 +51,7 @@ configCmd
   .description("Get a config value by dot-path")
   .argument("<path>", "Dot-separated config path (e.g. agents.names.questions)")
   .action((path: string) => {
-    const configPath = resolveConfigPath();
+    const configPath = findConfigPath();
     const value = getConfigValue(configPath, path);
     if (value === undefined) {
       console.error(`Key not found: ${path}`);
@@ -66,7 +66,7 @@ configCmd
   .argument("<path>", "Dot-separated config path")
   .argument("<value>", "New value (strings, numbers, booleans)")
   .action((path: string, value: string) => {
-    const configPath = resolveConfigPath();
+    const configPath = findConfigPath();
     let parsed: unknown = value;
     if (value === "true") parsed = true;
     else if (value === "false") parsed = false;

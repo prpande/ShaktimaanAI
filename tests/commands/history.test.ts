@@ -20,7 +20,7 @@ function writeRunState(dir: string, slug: string, state: Record<string, unknown>
 
 describe("listCompletedTasks", () => {
   it("returns empty array when no tasks exist", () => {
-    const result = listCompletedTasks(TEST_DIR);
+    const result = listCompletedTasks(join(TEST_DIR, "10-complete"), join(TEST_DIR, "11-failed"));
     expect(result).toEqual([]);
   });
 
@@ -36,7 +36,7 @@ describe("listCompletedTasks", () => {
         { stage: "pr", completedAt: "2026-04-01T12:05:00Z" },
       ],
     });
-    const result = listCompletedTasks(TEST_DIR);
+    const result = listCompletedTasks(join(TEST_DIR, "10-complete"), join(TEST_DIR, "11-failed"));
     expect(result).toHaveLength(1);
     expect(result[0].slug).toBe("my-task-20260401120000");
     expect(result[0].status).toBe("complete");
@@ -54,7 +54,7 @@ describe("listCompletedTasks", () => {
       error: "Agent timed out",
       completedStages: [],
     });
-    const result = listCompletedTasks(TEST_DIR);
+    const result = listCompletedTasks(join(TEST_DIR, "10-complete"), join(TEST_DIR, "11-failed"));
     expect(result).toHaveLength(1);
     expect(result[0].status).toBe("failed");
     expect(result[0].error).toBe("Agent timed out");
@@ -77,7 +77,7 @@ describe("listCompletedTasks", () => {
       currentStage: "pr",
       completedStages: [],
     });
-    const result = listCompletedTasks(TEST_DIR);
+    const result = listCompletedTasks(join(TEST_DIR, "10-complete"), join(TEST_DIR, "11-failed"));
     expect(result[0].slug).toBe("new-task-20260401120000");
     expect(result[1].slug).toBe("old-task-20260401100000");
   });
@@ -94,13 +94,13 @@ describe("listCompletedTasks", () => {
         completedStages: [],
       });
     }
-    const result = listCompletedTasks(TEST_DIR, 3);
+    const result = listCompletedTasks(join(TEST_DIR, "10-complete"), join(TEST_DIR, "11-failed"), 3);
     expect(result).toHaveLength(3);
   });
 
   it("skips directories without run-state.json", () => {
     mkdirSync(join(TEST_DIR, "10-complete", "orphan-dir"), { recursive: true });
-    const result = listCompletedTasks(TEST_DIR);
+    const result = listCompletedTasks(join(TEST_DIR, "10-complete"), join(TEST_DIR, "11-failed"));
     expect(result).toEqual([]);
   });
 });

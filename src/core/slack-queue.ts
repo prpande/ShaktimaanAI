@@ -1,5 +1,4 @@
 import { readFileSync, writeFileSync } from "node:fs";
-import { join } from "node:path";
 
 // ─── Types ──────────────────────────────────────────────────────────────────
 
@@ -64,38 +63,49 @@ function readJsonl<T>(filePath: string): T[] {
 
 // ─── Queue operations ───────────────────────────────────────────────────────
 
-export function readOutbox(runtimeDir: string): OutboxEntry[] {
-  return readJsonl<OutboxEntry>(join(runtimeDir, "slack-outbox.jsonl"));
+export function readOutbox(outboxPath: string): OutboxEntry[] {
+  return readJsonl<OutboxEntry>(outboxPath);
 }
 
-export function readInbox(runtimeDir: string): InboxEntry[] {
-  return readJsonl<InboxEntry>(join(runtimeDir, "slack-inbox.jsonl"));
+export function readInbox(inboxPath: string): InboxEntry[] {
+  return readJsonl<InboxEntry>(inboxPath);
 }
 
-export function clearInbox(runtimeDir: string): void {
-  writeFileSync(join(runtimeDir, "slack-inbox.jsonl"), "", "utf-8");
+export function clearInbox(inboxPath: string): void {
+  writeFileSync(inboxPath, "", "utf-8");
 }
 
-export function readSentLog(runtimeDir: string): SentEntry[] {
-  return readJsonl<SentEntry>(join(runtimeDir, "slack-sent.jsonl"));
+export function readSentLog(sentPath: string): SentEntry[] {
+  return readJsonl<SentEntry>(sentPath);
 }
 
-export function loadThreadMap(runtimeDir: string): Record<string, string> {
+export function loadThreadMap(threadsPath: string): Record<string, string> {
   try {
-    return JSON.parse(readFileSync(join(runtimeDir, "slack-threads.json"), "utf-8"));
+    return JSON.parse(readFileSync(threadsPath, "utf-8"));
   } catch {
     return {};
   }
 }
 
-export function saveThreadMap(runtimeDir: string, map: Record<string, string>): void {
-  writeFileSync(join(runtimeDir, "slack-threads.json"), JSON.stringify(map, null, 2), "utf-8");
+export function saveThreadMap(threadsPath: string, map: Record<string, string>): void {
+  writeFileSync(threadsPath, JSON.stringify(map, null, 2), "utf-8");
 }
 
 // ─── Payload builder ────────────────────────────────────────────────────────
 
+export interface NaradaPayloadPaths {
+  outbox: string;
+  inbox: string;
+  sent: string;
+  threads: string;
+  cursor: string;
+}
+
+/**
+ * Builds a Narada payload from explicit file paths (from config.paths).
+ */
 export function buildNaradaPayload(
-  runtimeDir: string,
+  filePaths: NaradaPayloadPaths,
   opts: {
     channelId: string;
     allowDMs: boolean;
@@ -104,14 +114,14 @@ export function buildNaradaPayload(
     outboundPrefix?: string;
   },
 ): NaradaPayload {
-  const outbox = readOutbox(runtimeDir);
-  const threadMap = loadThreadMap(runtimeDir);
+  const outbox = readOutbox(filePaths.outbox);
+  const threadMap = loadThreadMap(filePaths.threads);
 
   const nowTs = String(Date.now() / 1000);
   let channelTs = nowTs;
   let dmTs = nowTs;
   try {
-    const cursor = JSON.parse(readFileSync(join(runtimeDir, "slack-cursor.json"), "utf-8"));
+    const cursor = JSON.parse(readFileSync(filePaths.cursor, "utf-8"));
     channelTs = cursor.channelTs === "now" ? nowTs : (cursor.channelTs ?? nowTs);
     dmTs = cursor.dmTs === "now" ? nowTs : (cursor.dmTs ?? nowTs);
   } catch { /* use defaults */ }
@@ -142,12 +152,6 @@ export function buildNaradaPayload(
     approvalChecks,
     conversationChecks,
     outboundPrefix: opts.outboundPrefix ?? "🤖 [ShaktimaanAI]",
-    files: {
-      outbox: join(runtimeDir, "slack-outbox.jsonl"),
-      inbox: join(runtimeDir, "slack-inbox.jsonl"),
-      sent: join(runtimeDir, "slack-sent.jsonl"),
-      threads: join(runtimeDir, "slack-threads.json"),
-      cursor: join(runtimeDir, "slack-cursor.json"),
-    },
+    files: filePaths,
   };
 }

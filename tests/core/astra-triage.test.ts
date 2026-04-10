@@ -1,5 +1,6 @@
 import { describe, it, expect, expectTypeOf } from "vitest";
 import { tmpdir } from "node:os";
+import { join } from "node:path";
 import type { AstraTriageResult } from "../../src/core/types.js";
 import { parseTriageResult, runAstraTriage, type AstraInput } from "../../src/core/astra-triage.js";
 import type { AgentRunOptions, AgentRunResult } from "../../src/core/types.js";
@@ -134,7 +135,11 @@ describe("parseTriageResult", () => {
 
 describe("runAstraTriage", () => {
   const noopLogger = { info() {}, warn() {}, error() {} };
-  const mockConfig = { pipeline: { runtimeDir: tmpdir() } } as any;
+  const runtimeDir = tmpdir();
+  const mockConfig = {
+    pipeline: { runtimeDir },
+    paths: { astraResponsesDir: join(runtimeDir, "astra-responses") },
+  } as any;
   const mockInput: AstraInput = {
     message: "what stages are running?",
     channelId: "C12345",

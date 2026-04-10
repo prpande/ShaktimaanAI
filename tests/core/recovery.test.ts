@@ -5,6 +5,7 @@ import { tmpdir } from "node:os";
 import { randomUUID } from "node:crypto";
 
 import { createRuntimeDirs } from "../../src/runtime/dirs.js";
+import { buildPaths } from "../../src/config/paths.js";
 import { STAGE_DIR_MAP } from "../../src/core/pipeline.js";
 import { scanForRecovery, runRecovery, type RecoveryItem, type RecoveryResult } from "../../src/core/recovery.js";
 import { type Pipeline } from "../../src/core/pipeline.js";
@@ -23,7 +24,7 @@ const mockLogger: TaskLogger = {
 beforeEach(() => {
   TEST_DIR = join(tmpdir(), `shkmn-recovery-test-${randomUUID()}`);
   mkdirSync(TEST_DIR, { recursive: true });
-  createRuntimeDirs(TEST_DIR);
+  createRuntimeDirs(buildPaths(TEST_DIR));
 });
 
 afterEach(() => {
@@ -38,7 +39,7 @@ describe("scanForRecovery", () => {
     const pendingDir = join(TEST_DIR, STAGE_DIR_MAP["questions"], "pending");
     mkdirSync(join(pendingDir, "my-task"), { recursive: true });
 
-    const items = scanForRecovery(TEST_DIR);
+    const items = scanForRecovery(buildPaths(TEST_DIR));
     expect(items).toHaveLength(1);
     expect(items[0].slug).toBe("my-task");
     expect(items[0].stage).toBe("questions");
@@ -52,7 +53,7 @@ describe("scanForRecovery", () => {
       mkdirSync(join(pendingDir, `task-${stage}`), { recursive: true });
     }
 
-    const items = scanForRecovery(TEST_DIR);
+    const items = scanForRecovery(buildPaths(TEST_DIR));
     expect(items).toHaveLength(3);
 
     const slugs = items.map((i) => i.slug).sort();
@@ -63,14 +64,14 @@ describe("scanForRecovery", () => {
     const doneDir = join(TEST_DIR, STAGE_DIR_MAP["design"], "done");
     mkdirSync(join(doneDir, "done-task"), { recursive: true });
 
-    const items = scanForRecovery(TEST_DIR);
+    const items = scanForRecovery(buildPaths(TEST_DIR));
     expect(items).toHaveLength(1);
     expect(items[0].slug).toBe("done-task");
     expect(items[0].location).toBe("done");
   });
 
   it("returns empty array when nothing is pending", () => {
-    const items = scanForRecovery(TEST_DIR);
+    const items = scanForRecovery(buildPaths(TEST_DIR));
     expect(items).toHaveLength(0);
   });
 
@@ -81,7 +82,7 @@ describe("scanForRecovery", () => {
     // Create a real task dir too
     mkdirSync(join(pendingDir, "real-task"), { recursive: true });
 
-    const items = scanForRecovery(TEST_DIR);
+    const items = scanForRecovery(buildPaths(TEST_DIR));
     expect(items).toHaveLength(1);
     expect(items[0].slug).toBe("real-task");
   });

@@ -1,8 +1,7 @@
 import { Command } from "commander";
 import { readFileSync, writeFileSync, existsSync, unlinkSync, mkdirSync } from "node:fs";
 import { join } from "node:path";
-import { resolveConfigPath } from "../config/resolve-path.js";
-import { loadConfig } from "../config/loader.js";
+import { findConfigPath, loadConfig } from "../config/loader.js";
 
 // ─── registerStopCommand ─────────────────────────────────────────────────────
 
@@ -12,11 +11,10 @@ export function registerStopCommand(program: Command): void {
     .description("Stop the ShaktimaanAI pipeline watcher")
     .action(async () => {
       // 1. Resolve config
-      const configPath = resolveConfigPath();
+      const configPath = findConfigPath();
       const config = loadConfig(configPath);
 
-      const runtimeDir = config.pipeline.runtimeDir;
-      const pidFile = join(runtimeDir, "shkmn.pid");
+      const pidFile = config.paths.pidFile;
 
       // 2. Check for PID file
       if (!existsSync(pidFile)) {
@@ -50,9 +48,8 @@ export function registerStopCommand(program: Command): void {
       }
 
       // 4. Write shutdown.control file to trigger graceful drain
-      const inboxDir = join(runtimeDir, "00-inbox");
-      mkdirSync(inboxDir, { recursive: true });
-      const controlPath = join(inboxDir, "shutdown.control");
+      mkdirSync(config.paths.terminals.inbox, { recursive: true });
+      const controlPath = join(config.paths.terminals.inbox, "shutdown.control");
       writeFileSync(
         controlPath,
         JSON.stringify({ operation: "shutdown", slug: "system" }),

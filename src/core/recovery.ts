@@ -10,6 +10,7 @@ import { reenterTask } from "./recovery-reentry.js";
 import type { AgentRunnerFn } from "./types.js";
 import type { ResolvedConfig } from "../config/loader.js";
 import { moveTaskDir } from "./pipeline.js";
+import { TERMINAL_DIR_MAP, buildPaths, type RuntimePaths } from "../config/paths.js";
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -72,12 +73,12 @@ function listFiles(dir: string, extension: string): string[] {
  * - 12-hold/: held tasks that need re-registration
  * - 00-inbox/: unprocessed .task files that arrived before/during crash
  */
-export function scanForRecovery(runtimeDir: string): RecoveryItem[] {
+export function scanForRecovery(paths: RuntimePaths): RecoveryItem[] {
   const items: RecoveryItem[] = [];
 
   // 1. Scan each stage's pending/ and done/ directories
-  for (const [stage, stageDir] of Object.entries(STAGE_DIR_MAP)) {
-    const pendingDir = join(runtimeDir, stageDir, "pending");
+  for (const [stage, stageDir] of Object.entries(paths.stages)) {
+    const pendingDir = join(stageDir, "pending");
     for (const slug of listDirectories(pendingDir)) {
       items.push({
         slug,
@@ -87,7 +88,7 @@ export function scanForRecovery(runtimeDir: string): RecoveryItem[] {
       });
     }
 
-    const doneDir = join(runtimeDir, stageDir, "done");
+    const doneDir = join(stageDir, "done");
     for (const slug of listDirectories(doneDir)) {
       items.push({
         slug,
@@ -99,7 +100,7 @@ export function scanForRecovery(runtimeDir: string): RecoveryItem[] {
   }
 
   // 2. Scan 12-hold/ for held tasks
-  const holdDir = join(runtimeDir, "12-hold");
+  const holdDir = paths.terminals.hold;
   for (const slug of listDirectories(holdDir)) {
     items.push({
       slug,
@@ -110,7 +111,7 @@ export function scanForRecovery(runtimeDir: string): RecoveryItem[] {
   }
 
   // 3. Scan 00-inbox/ for unprocessed .task files
-  const inboxDir = join(runtimeDir, "00-inbox");
+  const inboxDir = paths.terminals.inbox;
   for (const file of listFiles(inboxDir, ".task")) {
     const slug = file.replace(/\.task$/, "");
     items.push({
@@ -149,7 +150,7 @@ export interface HeldTaskWithIssue {
  * hasn't analyzed them yet.
  */
 export function scanUnanalyzedFailures(runtimeDir: string): UnanalyzedFailure[] {
-  const failedDir = join(runtimeDir, "11-failed");
+  const failedDir = join(runtimeDir, TERMINAL_DIR_MAP.failed);
   const results: UnanalyzedFailure[] = [];
 
   for (const slug of listDirectories(failedDir)) {
@@ -183,7 +184,7 @@ export function scanUnanalyzedFailures(runtimeDir: string): UnanalyzedFailure[] 
  * recoveryIssueNumber exists — these are tasks waiting for a fix to be merged.
  */
 export function scanHeldTasksWithIssues(runtimeDir: string): HeldTaskWithIssue[] {
-  const holdDir = join(runtimeDir, "12-hold");
+  const holdDir = join(runtimeDir, TERMINAL_DIR_MAP.hold);
   const results: HeldTaskWithIssue[] = [];
 
   for (const slug of listDirectories(holdDir)) {
@@ -231,7 +232,7 @@ export async function runRecovery(
     errors: [],
   };
 
-  const items = scanForRecovery(runtimeDir);
+  const items = scanForRecovery(buildPaths(runtimeDir));
 
   // Recovery timeout must be long enough for the agent to complete the current
   // stage. Each stage has its own timeout (default 30-90 min in config), so
@@ -351,7 +352,7 @@ export async function runRecoveryStartupScan(
       const updatedState = readRunState(
         existsSync(taskDir)
           ? taskDir
-          : join(runtimeDir, "12-hold", failure.slug),
+          : config.paths.resolveTask(failure.slug, "hold").taskDir,
       );
       if (updatedState.terminalFailure) {
         terminal.push(failure.slug);
@@ -403,7 +404,7 @@ export async function runRecoveryStartupScan(
             state.holdDetail = undefined;
             const { writeRunState: writeState } = await import("./pipeline.js");
             writeState(taskDir, state);
-            moveTaskDir(runtimeDir, held.slug, "12-hold", "11-failed");
+            moveTaskDir(runtimeDir, held.slug, TERMINAL_DIR_MAP.hold, TERMINAL_DIR_MAP.failed);
             terminal.push(held.slug);
             logger.info(`[startup-scan] Moved "${held.slug}" to failed — issue #${held.issueNumber} closed as NOT_PLANNED`);
           } catch (err) {
@@ -427,7 +428,7 @@ export async function runRecoveryStartupScan(
   }
 
   // ── Phase 3: Log remaining held tasks without issues ───────────────────
-  const holdDir = join(runtimeDir, "12-hold");
+  const holdDir = config.paths.terminals.hold;
   const processedSlugs = new Set([...recovered, ...terminal, ...pending]);
 
   for (const slug of listDirectories(holdDir)) {

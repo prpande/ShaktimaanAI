@@ -18,6 +18,7 @@ import {
   EXPECTED_AGENT_FILES,
 } from "../../src/commands/doctor.js";
 import { createRuntimeDirs, verifyRuntimeDirs } from "../../src/runtime/dirs.js";
+import { buildPaths } from "../../src/config/paths.js";
 
 vi.mock("node:child_process", () => ({
   execSync: vi.fn(),
@@ -275,7 +276,7 @@ describe("checkRuntimeDirs", () => {
   it("returns passed: true when all dirs exist", () => {
     const runtimeDir = join(TEST_DIR, "runtime");
     mkdirSync(runtimeDir, { recursive: true });
-    createRuntimeDirs(runtimeDir);
+    createRuntimeDirs(buildPaths(runtimeDir));
     const result = checkRuntimeDirs(runtimeDir);
     expect(result.passed).toBe(true);
     expect(result.fixable).toBe(false);
@@ -362,7 +363,7 @@ describe("runDoctor", () => {
     );
 
     // Create runtime dirs
-    createRuntimeDirs(runtimeDir);
+    createRuntimeDirs(buildPaths(runtimeDir));
 
     // Create agent files
     mkdirSync(agentsDir, { recursive: true });
@@ -455,7 +456,7 @@ describe("runDoctor", () => {
     expect(output).toMatch(/fix/i);
 
     // Verify dirs actually got created
-    const { valid } = verifyRuntimeDirs(runtimeDir);
+    const { valid } = verifyRuntimeDirs(buildPaths(runtimeDir));
     expect(valid).toBe(true);
   });
 
@@ -495,26 +496,26 @@ describe("fixMissingDirs", () => {
     mkdirSync(runtimeDir, { recursive: true });
 
     // Verify dirs are missing initially
-    const before = verifyRuntimeDirs(runtimeDir);
+    const before = verifyRuntimeDirs(buildPaths(runtimeDir));
     expect(before.valid).toBe(false);
 
     const result = fixMissingDirs(runtimeDir);
     expect(result.success).toBe(true);
 
     // Verify dirs now exist
-    const after = verifyRuntimeDirs(runtimeDir);
+    const after = verifyRuntimeDirs(buildPaths(runtimeDir));
     expect(after.valid).toBe(true);
   });
 
   it("does not error when directories already exist", () => {
     const runtimeDir = join(TEST_DIR, "fix-existing");
     mkdirSync(runtimeDir, { recursive: true });
-    createRuntimeDirs(runtimeDir);
+    createRuntimeDirs(buildPaths(runtimeDir));
 
     const result = fixMissingDirs(runtimeDir);
     expect(result.success).toBe(true);
 
-    const after = verifyRuntimeDirs(runtimeDir);
+    const after = verifyRuntimeDirs(buildPaths(runtimeDir));
     expect(after.valid).toBe(true);
   });
 });

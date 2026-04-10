@@ -1,6 +1,5 @@
 import type { Command } from "commander";
-import { resolveConfigPath } from "../config/resolve-path.js";
-import { loadConfig } from "../config/loader.js";
+import { findConfigPath, loadConfig } from "../config/loader.js";
 import { createTask } from "../core/task-creator.js";
 
 export function registerTaskCommand(program: Command): void {
@@ -20,7 +19,7 @@ export function registerTaskCommand(program: Command): void {
       hints?: string[];
       quick?: boolean;
     }) => {
-      const configPath = resolveConfigPath();
+      const configPath = findConfigPath();
       const config = loadConfig(configPath);
 
       // Parse stages
@@ -54,7 +53,7 @@ export function registerTaskCommand(program: Command): void {
           stages,
           stageHints: Object.keys(stageHints).length > 0 ? stageHints : undefined,
         },
-        config.pipeline.runtimeDir,
+        config.paths.terminals.inbox,
         config,
       );
 

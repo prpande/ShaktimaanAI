@@ -1,8 +1,7 @@
 import type { Command } from "commander";
 import { readFileSync, watchFile, unwatchFile, existsSync, statSync, openSync, readSync, closeSync } from "node:fs";
 import { join } from "node:path";
-import { resolveConfigPath } from "../config/resolve-path.js";
-import { loadConfig } from "../config/loader.js";
+import { findConfigPath, loadConfig } from "../config/loader.js";
 import { resolveSlugOrExit } from "./resolve-slug-or-exit.js";
 
 /**
@@ -35,12 +34,12 @@ export function registerLogsCommand(program: Command): void {
     .option("-f, --follow", "Follow log output (watch for new content)")
     .option("--lines <n>", "Number of lines to show", "50")
     .action((slug: string, opts: { follow?: boolean; lines: string }) => {
-      const configPath = resolveConfigPath();
+      const configPath = findConfigPath();
       const config = loadConfig(configPath);
-      const resolved = resolveSlugOrExit(slug, config.pipeline.runtimeDir);
+      const resolved = resolveSlugOrExit(slug, config.paths.runtimeDir);
 
       const lineCount = parseLineCount(opts.lines);
-      const logFile = join(config.pipeline.runtimeDir, "logs", `${resolved}.log`);
+      const logFile = join(config.paths.logsDir, `${resolved}.log`);
 
       if (!existsSync(logFile)) {
         console.error(`Log file not found: ${logFile}`);

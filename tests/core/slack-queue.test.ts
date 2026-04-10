@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach } from "vitest";
-import { mkdirSync, rmSync, writeFileSync, readFileSync, existsSync } from "node:fs";
+import { mkdirSync, rmSync, writeFileSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { randomUUID } from "node:crypto";
@@ -15,9 +15,21 @@ import {
 
 let TEST_DIR: string;
 
+// Convenience helpers — full file paths
+let outboxPath: string;
+let inboxPath: string;
+let sentPath: string;
+let threadsPath: string;
+let cursorPath: string;
+
 beforeEach(() => {
   TEST_DIR = join(tmpdir(), `shkmn-slack-queue-${randomUUID()}`);
   mkdirSync(TEST_DIR, { recursive: true });
+  outboxPath  = join(TEST_DIR, "slack-outbox.jsonl");
+  inboxPath   = join(TEST_DIR, "slack-inbox.jsonl");
+  sentPath    = join(TEST_DIR, "slack-sent.jsonl");
+  threadsPath = join(TEST_DIR, "slack-threads.json");
+  cursorPath  = join(TEST_DIR, "slack-cursor.json");
 });
 
 afterEach(() => {
@@ -26,76 +38,79 @@ afterEach(() => {
 
 describe("readOutbox", () => {
   it("returns empty array when file does not exist", () => {
-    expect(readOutbox(TEST_DIR)).toEqual([]);
+    expect(readOutbox(outboxPath)).toEqual([]);
   });
 
   it("parses JSONL lines into array", () => {
-    writeFileSync(join(TEST_DIR, "slack-outbox.jsonl"), '{"id":"a","text":"hello"}\n{"id":"b","text":"world"}\n');
-    const entries = readOutbox(TEST_DIR);
+    writeFileSync(outboxPath, '{"id":"a","text":"hello"}\n{"id":"b","text":"world"}\n');
+    const entries = readOutbox(outboxPath);
     expect(entries).toHaveLength(2);
     expect(entries[0].id).toBe("a");
     expect(entries[1].id).toBe("b");
   });
 
   it("skips blank lines", () => {
-    writeFileSync(join(TEST_DIR, "slack-outbox.jsonl"), '{"id":"a"}\n\n{"id":"b"}\n');
-    expect(readOutbox(TEST_DIR)).toHaveLength(2);
+    writeFileSync(outboxPath, '{"id":"a"}\n\n{"id":"b"}\n');
+    expect(readOutbox(outboxPath)).toHaveLength(2);
   });
 });
 
 describe("readInbox", () => {
   it("returns empty array when file does not exist", () => {
-    expect(readInbox(TEST_DIR)).toEqual([]);
+    expect(readInbox(inboxPath)).toEqual([]);
   });
 
   it("parses JSONL lines", () => {
-    writeFileSync(join(TEST_DIR, "slack-inbox.jsonl"), '{"ts":"1","text":"hi"}\n');
-    expect(readInbox(TEST_DIR)).toHaveLength(1);
+    writeFileSync(inboxPath, '{"ts":"1","text":"hi"}\n');
+    expect(readInbox(inboxPath)).toHaveLength(1);
   });
 });
 
 describe("clearInbox", () => {
   it("writes empty file", () => {
-    writeFileSync(join(TEST_DIR, "slack-inbox.jsonl"), '{"ts":"1"}\n');
-    clearInbox(TEST_DIR);
-    expect(readFileSync(join(TEST_DIR, "slack-inbox.jsonl"), "utf-8")).toBe("");
+    writeFileSync(inboxPath, '{"ts":"1"}\n');
+    clearInbox(inboxPath);
+    expect(readFileSync(inboxPath, "utf-8")).toBe("");
   });
 });
 
 describe("readSentLog", () => {
   it("returns empty array when file does not exist", () => {
-    expect(readSentLog(TEST_DIR)).toEqual([]);
+    expect(readSentLog(sentPath)).toEqual([]);
   });
 
   it("parses JSONL lines", () => {
-    writeFileSync(join(TEST_DIR, "slack-sent.jsonl"), '{"id":"evt-1","ts":"1.1"}\n');
-    expect(readSentLog(TEST_DIR)).toHaveLength(1);
+    writeFileSync(sentPath, '{"id":"evt-1","ts":"1.1"}\n');
+    expect(readSentLog(sentPath)).toHaveLength(1);
   });
 });
 
 describe("loadThreadMap / saveThreadMap", () => {
   it("returns empty object when file does not exist", () => {
-    expect(loadThreadMap(TEST_DIR)).toEqual({});
+    expect(loadThreadMap(threadsPath)).toEqual({});
   });
 
   it("round-trips thread map", () => {
-    saveThreadMap(TEST_DIR, { "slug-a": "1.1", "slug-b": "2.2" });
-    expect(loadThreadMap(TEST_DIR)).toEqual({ "slug-a": "1.1", "slug-b": "2.2" });
+    saveThreadMap(threadsPath, { "slug-a": "1.1", "slug-b": "2.2" });
+    expect(loadThreadMap(threadsPath)).toEqual({ "slug-a": "1.1", "slug-b": "2.2" });
   });
 });
 
 describe("buildNaradaPayload", () => {
   it("builds correct payload from queue state", () => {
-    writeFileSync(join(TEST_DIR, "slack-outbox.jsonl"), '{"id":"evt-1","slug":"s1","text":"hi","channel":"C1","thread_ts":null}\n');
-    writeFileSync(join(TEST_DIR, "slack-cursor.json"), '{"channelTs":"100.0","dmTs":"100.0"}');
-    saveThreadMap(TEST_DIR, { "held-task": "200.0" });
+    writeFileSync(outboxPath, '{"id":"evt-1","slug":"s1","text":"hi","channel":"C1","thread_ts":null}\n');
+    writeFileSync(cursorPath, '{"channelTs":"100.0","dmTs":"100.0"}');
+    saveThreadMap(threadsPath, { "held-task": "200.0" });
 
-    const payload = buildNaradaPayload(TEST_DIR, {
-      channelId: "C1",
-      allowDMs: false,
-      dmUserIds: [],
-      heldSlugs: ["held-task"],
-    });
+    const payload = buildNaradaPayload(
+      { outbox: outboxPath, inbox: inboxPath, sent: sentPath, threads: threadsPath, cursor: cursorPath },
+      {
+        channelId: "C1",
+        allowDMs: false,
+        dmUserIds: [],
+        heldSlugs: ["held-task"],
+      },
+    );
 
     expect(payload.outbox).toHaveLength(1);
     expect(payload.inbound.channelId).toBe("C1");
@@ -106,73 +121,88 @@ describe("buildNaradaPayload", () => {
   });
 
   it("skips approval checks for held tasks without threads", () => {
-    writeFileSync(join(TEST_DIR, "slack-cursor.json"), '{"channelTs":"100.0","dmTs":"100.0"}');
+    writeFileSync(cursorPath, '{"channelTs":"100.0","dmTs":"100.0"}');
 
-    const payload = buildNaradaPayload(TEST_DIR, {
-      channelId: "C1",
-      allowDMs: false,
-      dmUserIds: [],
-      heldSlugs: ["no-thread-task"],
-    });
+    const payload = buildNaradaPayload(
+      { outbox: outboxPath, inbox: inboxPath, sent: sentPath, threads: threadsPath, cursor: cursorPath },
+      {
+        channelId: "C1",
+        allowDMs: false,
+        dmUserIds: [],
+        heldSlugs: ["no-thread-task"],
+      },
+    );
 
     expect(payload.approvalChecks).toHaveLength(0);
   });
 
   it("includes DM user IDs when allowDMs is true", () => {
-    writeFileSync(join(TEST_DIR, "slack-cursor.json"), '{"channelTs":"100.0","dmTs":"50.0"}');
+    writeFileSync(cursorPath, '{"channelTs":"100.0","dmTs":"50.0"}');
 
-    const payload = buildNaradaPayload(TEST_DIR, {
-      channelId: "C1",
-      allowDMs: true,
-      dmUserIds: ["U111", "U222"],
-      heldSlugs: [],
-    });
+    const payload = buildNaradaPayload(
+      { outbox: outboxPath, inbox: inboxPath, sent: sentPath, threads: threadsPath, cursor: cursorPath },
+      {
+        channelId: "C1",
+        allowDMs: true,
+        dmUserIds: ["U111", "U222"],
+        heldSlugs: [],
+      },
+    );
 
     expect(payload.inbound.dmUserIds).toEqual(["U111", "U222"]);
     expect(payload.inbound.dmOldest).toBe("50.0");
   });
 
   it("includes outboundPrefix in payload when provided", () => {
-    writeFileSync(join(TEST_DIR, "slack-cursor.json"), '{"channelTs":"1.0","dmTs":"1.0"}');
+    writeFileSync(cursorPath, '{"channelTs":"1.0","dmTs":"1.0"}');
 
-    const payload = buildNaradaPayload(TEST_DIR, {
-      channelId: "C1",
-      allowDMs: false,
-      dmUserIds: [],
-      heldSlugs: [],
-      outboundPrefix: "🤖 [TestBot]",
-    });
+    const payload = buildNaradaPayload(
+      { outbox: outboxPath, inbox: inboxPath, sent: sentPath, threads: threadsPath, cursor: cursorPath },
+      {
+        channelId: "C1",
+        allowDMs: false,
+        dmUserIds: [],
+        heldSlugs: [],
+        outboundPrefix: "🤖 [TestBot]",
+      },
+    );
 
     expect(payload.outboundPrefix).toBe("🤖 [TestBot]");
   });
 
   it("uses default outboundPrefix when not provided", () => {
-    writeFileSync(join(TEST_DIR, "slack-cursor.json"), '{"channelTs":"1.0","dmTs":"1.0"}');
+    writeFileSync(cursorPath, '{"channelTs":"1.0","dmTs":"1.0"}');
 
-    const payload = buildNaradaPayload(TEST_DIR, {
-      channelId: "C1",
-      allowDMs: false,
-      dmUserIds: [],
-      heldSlugs: [],
-    });
+    const payload = buildNaradaPayload(
+      { outbox: outboxPath, inbox: inboxPath, sent: sentPath, threads: threadsPath, cursor: cursorPath },
+      {
+        channelId: "C1",
+        allowDMs: false,
+        dmUserIds: [],
+        heldSlugs: [],
+      },
+    );
 
     expect(payload.outboundPrefix).toBe("🤖 [ShaktimaanAI]");
   });
 
   it("includes astra-* threads in conversationChecks", () => {
-    writeFileSync(join(TEST_DIR, "slack-cursor.json"), '{"channelTs":"100.0","dmTs":"100.0"}');
-    saveThreadMap(TEST_DIR, {
+    writeFileSync(cursorPath, '{"channelTs":"100.0","dmTs":"100.0"}');
+    saveThreadMap(threadsPath, {
       "held-task": "200.0",
       "astra-1775638845-450169": "300.0",
       "astra-1775639000-123456": "400.0",
     });
 
-    const payload = buildNaradaPayload(TEST_DIR, {
-      channelId: "C1",
-      allowDMs: false,
-      dmUserIds: [],
-      heldSlugs: ["held-task"],
-    });
+    const payload = buildNaradaPayload(
+      { outbox: outboxPath, inbox: inboxPath, sent: sentPath, threads: threadsPath, cursor: cursorPath },
+      {
+        channelId: "C1",
+        allowDMs: false,
+        dmUserIds: [],
+        heldSlugs: ["held-task"],
+      },
+    );
 
     expect(payload.approvalChecks).toHaveLength(1);
     expect(payload.conversationChecks).toHaveLength(2);
@@ -183,28 +213,34 @@ describe("buildNaradaPayload", () => {
   });
 
   it("returns empty conversationChecks when no astra threads exist", () => {
-    writeFileSync(join(TEST_DIR, "slack-cursor.json"), '{"channelTs":"1.0","dmTs":"1.0"}');
-    saveThreadMap(TEST_DIR, { "task-slug": "200.0" });
+    writeFileSync(cursorPath, '{"channelTs":"1.0","dmTs":"1.0"}');
+    saveThreadMap(threadsPath, { "task-slug": "200.0" });
 
-    const payload = buildNaradaPayload(TEST_DIR, {
-      channelId: "C1",
-      allowDMs: false,
-      dmUserIds: [],
-      heldSlugs: [],
-    });
+    const payload = buildNaradaPayload(
+      { outbox: outboxPath, inbox: inboxPath, sent: sentPath, threads: threadsPath, cursor: cursorPath },
+      {
+        channelId: "C1",
+        allowDMs: false,
+        dmUserIds: [],
+        heldSlugs: [],
+      },
+    );
 
     expect(payload.conversationChecks).toHaveLength(0);
   });
 
   it("includes file paths in payload", () => {
-    writeFileSync(join(TEST_DIR, "slack-cursor.json"), '{"channelTs":"1.0","dmTs":"1.0"}');
+    writeFileSync(cursorPath, '{"channelTs":"1.0","dmTs":"1.0"}');
 
-    const payload = buildNaradaPayload(TEST_DIR, {
-      channelId: "C1",
-      allowDMs: false,
-      dmUserIds: [],
-      heldSlugs: [],
-    });
+    const payload = buildNaradaPayload(
+      { outbox: outboxPath, inbox: inboxPath, sent: sentPath, threads: threadsPath, cursor: cursorPath },
+      {
+        channelId: "C1",
+        allowDMs: false,
+        dmUserIds: [],
+        heldSlugs: [],
+      },
+    );
 
     expect(payload.files.outbox).toContain("slack-outbox.jsonl");
     expect(payload.files.inbox).toContain("slack-inbox.jsonl");
