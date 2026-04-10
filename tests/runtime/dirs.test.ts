@@ -42,8 +42,8 @@ describe("createRuntimeDirs", () => {
     expect(existsSync(join(TEST_DIR, "12-hold"))).toBe(true);
     expect(existsSync(join(TEST_DIR, "logs"))).toBe(true);
     expect(existsSync(join(TEST_DIR, "history"))).toBe(true);
-    expect(existsSync(join(TEST_DIR, "logs", "daily"))).toBe(true);
-    expect(existsSync(join(TEST_DIR, "logs", "monthly"))).toBe(true);
+    expect(existsSync(join(TEST_DIR, "history", "daily-log"))).toBe(true);
+    expect(existsSync(join(TEST_DIR, "history", "monthly-reports"))).toBe(true);
   });
 
   it("is idempotent — safe to run multiple times", () => {

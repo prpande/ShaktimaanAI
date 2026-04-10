@@ -21,8 +21,8 @@ describe("buildPaths — system paths resolve from runtimeDir", () => {
 
   it("logsDir", () => expect(p.logsDir).toBe(join(RUNTIME, "logs")));
   it("historyDir", () => expect(p.historyDir).toBe(join(RUNTIME, "history")));
-  it("dailyLogDir", () => expect(p.dailyLogDir).toBe(join(RUNTIME, "logs", "daily")));
-  it("monthlyReportsDir", () => expect(p.monthlyReportsDir).toBe(join(RUNTIME, "logs", "monthly")));
+  it("dailyLogDir", () => expect(p.dailyLogDir).toBe(join(RUNTIME, "history", "daily-log")));
+  it("monthlyReportsDir", () => expect(p.monthlyReportsDir).toBe(join(RUNTIME, "history", "monthly-reports")));
   it("interactionsDir", () => expect(p.interactionsDir).toBe(join(RUNTIME, "interactions")));
   it("diagnosticsDir", () => expect(p.diagnosticsDir).toBe(join(RUNTIME, "diagnostics")));
   it("astraResponsesDir", () => expect(p.astraResponsesDir).toBe(join(RUNTIME, "astra-responses")));

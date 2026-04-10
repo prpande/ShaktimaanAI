@@ -133,8 +133,8 @@ export function buildPaths(runtimeDir: string): RuntimePaths {
     // Non-stage directories
     logsDir:           join(runtimeDir, "logs"),
     historyDir:        join(runtimeDir, "history"),
-    dailyLogDir:       join(runtimeDir, "logs", "daily"),
-    monthlyReportsDir: join(runtimeDir, "logs", "monthly"),
+    dailyLogDir:       join(runtimeDir, "history", "daily-log"),
+    monthlyReportsDir: join(runtimeDir, "history", "monthly-reports"),
     interactionsDir:   join(runtimeDir, "interactions"),
     diagnosticsDir:    join(runtimeDir, "diagnostics"),
     astraResponsesDir: join(runtimeDir, "astra-responses"),
