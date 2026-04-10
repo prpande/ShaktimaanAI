@@ -4,13 +4,13 @@ import { homedir } from "node:os";
 import { configSchema, type ConfigParsed } from "./schema.js";
 import { DEFAULT_CONFIG, DEFAULT_AGENT_NAMES, DEFAULT_BUDGET_CONFIG, type ShkmnConfig } from "./defaults.js";
 import { budgetConfigSchema, type BudgetConfig } from "./budget-schema.js";
-import { buildPaths } from "./paths.js";
+import { buildPaths, type RuntimePaths } from "./paths.js";
 
 /**
  * A fully resolved config with all fields present (no optionals).
- * Alias for ShkmnConfig — single source of truth lives in defaults.ts.
+ * Extends ShkmnConfig with computed `paths` (not in DEFAULT_CONFIG to keep it JSON-serializable).
  */
-export type ResolvedConfig = ShkmnConfig;
+export type ResolvedConfig = ShkmnConfig & { paths: RuntimePaths };
 
 /**
  * Resolves the config file path by checking (in order):
