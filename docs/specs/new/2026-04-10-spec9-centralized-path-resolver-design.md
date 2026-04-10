@@ -2,13 +2,13 @@
 
 **Status:** New
 **Date:** 2026-04-10
-**Scope:** Refactor — no new features, no behavior changes
+**Scope:** Refactor + bugfix — centralizes path construction (no new features) and corrects the `init` config write location (behavior fix for a broken flow)
 
 ## Problem
 
 Directory paths are constructed ad-hoc across 26+ files using hardcoded string literals and `join()` calls. There is no single source of truth for where things live on disk. Two partial centralizations exist (`runtime/dirs.ts` for directory creation, `core/stage-map.ts` for stage mappings), but neither is used by consumers for path resolution.
 
-This caused a concrete bug: `init` writes config to `~/.shkmn/shkmn.config.json` while `start` searches for it at `~/.shkmn/runtime/shkmn.config.json` — two modules, two conventions, no shared constant.
+This caused a concrete bug: `shkmn init` writes `shkmn.config.json` into the user-provided `runtimeDir`, but `resolveConfigPath()` has a home-directory fallback that expects `~/.shkmn/runtime/shkmn.config.json`. When a user initializes with `runtimeDir = ~/.shkmn`, `init` writes `~/.shkmn/shkmn.config.json` while later resolution via the home fallback looks under `~/.shkmn/runtime/shkmn.config.json` — two code paths, two conventions, no shared constant.
 
 If any directory were renamed today, 4–15 scattered files would need manual updates.
 
@@ -40,7 +40,7 @@ interface RuntimePaths {
 
   // Stage directories — keyed by stage name, values are absolute paths
   // e.g. stages.impl → "~/.shkmn/runtime/06-impl"
-  readonly stages: Readonly<Record<StageName, string>>;
+  readonly stages: Readonly<Record<PipelineStageName, string>>;
 
   // Terminal directories — not pipeline stages, different semantics
   readonly terminals: Readonly<{
@@ -75,8 +75,8 @@ interface RuntimePaths {
   readonly slackCursor:    string;
   readonly slackProcessed: string;
 
-  // Task path factory
-  resolveTask(slug: string, stage: StageName, location: "pending" | "done"): TaskPaths;
+  // Task path factory (retryNumber defaults to 0 — first attempt has no suffix)
+  resolveTask(slug: string, stage: PipelineStageName, location: "pending" | "done", retryNumber?: number): TaskPaths;
   resolveTask(slug: string, terminal: "hold" | "complete" | "failed" | "inbox"): TaskPaths;
 }
 ```
@@ -87,13 +87,13 @@ interface RuntimePaths {
 interface TaskPaths {
   readonly taskDir:      string;            // Full path to task root
   readonly artifactsDir: string;            // taskDir/artifacts
-  readonly outputFile:   string | undefined; // taskDir/artifacts/{stage}-output.md (undefined for terminal locations)
+  readonly outputFile:   string | undefined; // taskDir/artifacts/{stage}-output.md or {stage}-output-r{N}.md for retries (undefined for terminal locations)
   readonly runStateFile: string;            // taskDir/run-state.json
   readonly taskFile:     string;            // taskDir/task.task
 }
 ```
 
-- `outputFile` stage name is derived from the stage argument passed to `resolveTask()`
+- `outputFile` is derived from the stage argument and optional retry number: `{stage}-output.md` for the first attempt (retryNumber 0 or omitted), `{stage}-output-r{N}.md` for retries (retryNumber >= 1)
 - For terminal locations (hold/complete/failed/inbox), `outputFile` is omitted (undefined) since no stage is running. Callers that need a specific artifact path in a terminal directory construct it from `artifactsDir` and the known stage name
 - The object is disposable: after `moveTaskDir()`, the pipeline calls `resolveTask()` again for the new location
 
@@ -127,16 +127,17 @@ return { ...resolved, paths };
 
 ### Init command (`src/commands/init.ts`)
 
-`init` creates the config, so it can't use `loadConfig()`. Instead:
+`init` creates the config, so it can't use `loadConfig()`. The init wizard continues to prompt for a base directory (e.g. `~/.shkmn`) — this UX does not change. What changes is that `init` now explicitly appends `runtime/` before writing, matching what `resolveConfigPath()` already expects:
 ```
-runtimeDir = join(userInput, "runtime")  // e.g. join("~/.shkmn", "runtime")
+baseDir = userInput                      // e.g. "~/.shkmn" (unchanged prompt)
+runtimeDir = join(baseDir, "runtime")    // "~/.shkmn/runtime"
 paths = buildPaths(runtimeDir)
 createRuntimeDirs(paths)
-writeConfig(paths.configFile, answers)   // fixes the bug
-writeEnv(paths.envFile)
+writeConfig(paths.configFile, answers)   // writes to ~/.shkmn/runtime/shkmn.config.json — fixes the bug
+writeEnv(paths.envFile)                  // writes to ~/.shkmn/runtime/.env
 ```
 
-The `pipeline.runtimeDir` value written inside the config JSON is the full `runtimeDir` path (e.g. `~/.shkmn/runtime`).
+The `pipeline.runtimeDir` value written inside the config JSON is the full `runtimeDir` path (e.g. `~/.shkmn/runtime`). This ensures `loadConfig()` and `init` agree on the canonical location.
 
 ### Pipeline (`src/core/pipeline.ts`)
 
