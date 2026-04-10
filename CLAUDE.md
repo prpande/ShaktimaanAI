@@ -69,6 +69,28 @@ Also in `defaults.ts` (`STAGE_CONTEXT_RULES`): controls what context each stage 
 - **Windows EBUSY handling**: retry logic with exponential backoff exists for file operations
 - **Agent prompts**: `agents/*.md` — each file is a self-contained prompt template loaded at runtime
 
+## Document Lifecycle Directories
+
+Specs, plans, and validation docs follow a lifecycle convention:
+
+```
+docs/
+├── specs/          ← Design specifications
+│   ├── new/        ← Newly written, not yet implemented
+│   ├── pending/    ← Implementation in progress
+│   └── done/       ← Implemented and validated
+├── plans/          ← Implementation plans
+│   ├── new/        ← Newly written, not yet started
+│   └── done/       ← Executed and complete
+└── validation/     ← Validation reports
+    └── done/       ← Completed validation reports
+```
+
+- **Specs** go in `docs/specs/new/` when first written. Move to `pending/` when implementation begins, and `done/` when complete.
+- **Plans** go in `docs/plans/new/` when created. Move to `done/` after execution.
+- Naming convention: specs generally use `YYYY-MM-DD-<topic>-design.md` (e.g., `2026-04-07-slack-outbound-prefix-design.md`), and plans use `YYYY-MM-DD-<topic>.md`. If you are adding to an explicitly numbered "Spec" series, use `YYYY-MM-DD-spec<N>-<topic>-design.md` (e.g., `2026-04-10-spec7-askuser-design.md`) with a project-wide sequential `<N>`; sub-specs in that series may use letter suffixes such as `spec5a` and `spec5b`.
+- Do not add new specs or plans under `docs/superpowers/specs/` or `docs/superpowers/plans/` — those are legacy paths. Existing legacy docs there may still need to be referenced when they are explicitly linked or remain authoritative.
+
 ## Pipeline Diagnostics
 
 Run `/pipeline-diagnostics` to audit the pipeline runtime directory. The skill:
