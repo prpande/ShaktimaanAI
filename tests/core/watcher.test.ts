@@ -5,6 +5,7 @@ import { tmpdir } from "node:os";
 import { randomUUID } from "node:crypto";
 
 import { createRuntimeDirs } from "../../src/runtime/dirs.js";
+import { buildPaths } from "../../src/config/paths.js";
 import { createWatcher, resolveSlackRepoCwd, type Watcher, type WatcherOptions } from "../../src/core/watcher.js";
 import { type Pipeline } from "../../src/core/pipeline.js";
 import { type TaskLogger } from "../../src/core/logger.js";
@@ -50,7 +51,7 @@ function delay(ms: number): Promise<void> {
 beforeEach(() => {
   TEST_DIR = join(tmpdir(), `shkmn-watcher-test-${randomUUID()}`);
   mkdirSync(TEST_DIR, { recursive: true });
-  createRuntimeDirs(TEST_DIR);
+  createRuntimeDirs(buildPaths(TEST_DIR));
   startedFiles = [];
 });
 

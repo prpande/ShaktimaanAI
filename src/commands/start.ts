@@ -32,7 +32,7 @@ export function registerStartCommand(program: Command): void {
       loadEnvFile(envPath);
 
       // 2. Verify runtime dirs
-      const { valid, missing } = verifyRuntimeDirs(config.pipeline.runtimeDir);
+      const { valid, missing } = verifyRuntimeDirs(config.paths);
       if (!valid) {
         console.error(
           "Runtime directories are missing. Run 'shkmn init' first.\nMissing:\n" +

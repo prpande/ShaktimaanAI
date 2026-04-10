@@ -5,6 +5,7 @@ import { tmpdir } from "node:os";
 import { randomUUID } from "node:crypto";
 
 import { createRuntimeDirs } from "../../src/runtime/dirs.js";
+import { buildPaths } from "../../src/config/paths.js";
 import { STAGE_DIR_MAP } from "../../src/core/pipeline.js";
 import { scanForRecovery, runRecovery, type RecoveryItem, type RecoveryResult } from "../../src/core/recovery.js";
 import { type Pipeline } from "../../src/core/pipeline.js";
@@ -23,7 +24,7 @@ const mockLogger: TaskLogger = {
 beforeEach(() => {
   TEST_DIR = join(tmpdir(), `shkmn-recovery-test-${randomUUID()}`);
   mkdirSync(TEST_DIR, { recursive: true });
-  createRuntimeDirs(TEST_DIR);
+  createRuntimeDirs(buildPaths(TEST_DIR));
 });
 
 afterEach(() => {
