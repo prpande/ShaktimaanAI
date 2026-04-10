@@ -212,17 +212,21 @@ export async function runInitWizard(): Promise<void> {
       log.warn("Setup cancelled.");
       return;
     }
-    slackChannel = String(channelVal) || "#agent-pipeline";
+    slackChannel = String(channelVal).trim() || "#agent-pipeline";
 
     const channelIdVal = await text({
       message: "Slack channel ID (from channel details in Slack)",
       placeholder: "C0123456789",
+      validate: (val) =>
+        String(val).trim()
+          ? undefined
+          : "Slack channel ID is required when Slack is enabled",
     });
     if (isCancel(channelIdVal)) {
       log.warn("Setup cancelled.");
       return;
     }
-    slackChannelId = String(channelIdVal);
+    slackChannelId = String(channelIdVal).trim();
 
     const notifyLevelVal = await select({
       message: "Slack notification level",
