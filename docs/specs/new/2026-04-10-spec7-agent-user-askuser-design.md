@@ -107,12 +107,12 @@ interface StageCheckpoint {
 Stored alongside stage artifacts:
 
 ```
-{taskDir}/{stage}/pending/artifacts/{stage}-checkpoint.json
+artifacts/{stage}-checkpoint.json
 ```
 
 ### Resume Flow
 
-1. Watcher detects user reply, writes `.control` file: `{ action: "resume_stage", slug, stage, answer: "user's reply text" }`
+1. Watcher detects user reply, writes `.control` file: `{ operation: "resume_stage", slug, stage, answer: "user's reply text" }`
 2. Stage runner loads checkpoint from disk
 3. Calls `query({ options: { resume: checkpoint.sdkSessionId } })` with the user's answer injected as the tool result:
    ```typescript
@@ -178,11 +178,11 @@ The `SlackNotifier` emits a `task_held` event with `holdReason: "awaiting_user_r
 
 ## 6. Watcher Reply Routing via Astra
 
-All inbound messages continue to flow through Astra for triage. Astra gains awareness of pending agent questions to correctly route replies.
+AskUser does not add a new watcher-side pre-triage path for agent-question replies. Existing watcher special-cases that already run before Astra (for example, approval handling) remain unchanged. For inbound messages that are not consumed by those existing pre-Astra paths, the normal flow through Astra continues, and Astra gains awareness of pending agent questions so it can correctly route user answers.
 
 ### Astra Context Enrichment
 
-When there are tasks on hold with pending questions, the watcher builds a summary and appends it to Astra's triage input:
+When there are tasks on hold with pending questions, the watcher builds a summary for Astra and appends it to the normal triage input:
 
 ```
 ## Pending Agent Questions
@@ -411,7 +411,7 @@ shkmn status --questions
 shkmn answer task-api-refactor "Use REST for v1, add GraphQL later"
 ```
 
-`shkmn answer` writes the same `.control` file as the watcher: `{ action: "resume_stage", slug, stage, answer }`.
+`shkmn answer` writes the same `.control` file as the watcher: `{ operation: "resume_stage", slug, stage, answer }`.
 
 ### Race Condition: Slack + CLI Answer
 
@@ -497,7 +497,7 @@ Complete lifecycle of an agent asking a question:
    └─ Calls AskUser({ question: "REST or GraphQL?", context: "...", options: [...] })
 
 2. Agent runner intercepts the AskUser tool call
-   ├─ Saves StageCheckpoint to artifacts/design-checkpoint.json
+   ├─ Saves StageCheckpoint to artifacts/{stage}-checkpoint.json
    │   (sdkSessionId, pendingToolCall with tool_use_id, costSoFar, turns)
    └─ Throws AskUserInterrupt — stage runner catches it
 
@@ -520,7 +520,7 @@ Complete lifecycle of an agent asking a question:
    └─ Astra returns: question_reply (slug: task-api-refactor)
 
 7. Watcher writes .control file
-   { action: "resume_stage", slug: "task-api-refactor", stage: "design",
+   { operation: "resume_stage", slug: "task-api-refactor", stage: "design",
      answer: "Use REST for v1, we'll add GraphQL later" }
 
 8. Pipeline processes .control file → resumeStage()
