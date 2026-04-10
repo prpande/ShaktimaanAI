@@ -18,7 +18,8 @@ describe("loadBudgetConfig", () => {
   });
 
   it("returns DEFAULT_BUDGET_CONFIG when usage-budget.json does not exist", () => {
-    const result = loadBudgetConfig(tempDir);
+    const budgetFile = join(tempDir, "usage-budget.json");
+    const result = loadBudgetConfig(budgetFile);
     expect(result).toEqual(DEFAULT_BUDGET_CONFIG);
   });
 
@@ -35,8 +36,9 @@ describe("loadBudgetConfig", () => {
       peak_hours: { start_utc: "14:00", end_utc: "20:00", multiplier: 0.3 },
       safety_margin: 0.1,
     };
-    writeFileSync(join(tempDir, "usage-budget.json"), JSON.stringify(customConfig));
-    const result = loadBudgetConfig(tempDir);
+    const budgetFile = join(tempDir, "usage-budget.json");
+    writeFileSync(budgetFile, JSON.stringify(customConfig));
+    const result = loadBudgetConfig(budgetFile);
     expect(result.model_budgets.sonnet.weekly_token_limit).toBe(10_000_000);
     expect(result.peak_hours.multiplier).toBe(0.3);
     expect(result.safety_margin).toBe(0.1);
@@ -44,12 +46,14 @@ describe("loadBudgetConfig", () => {
 
   it("throws when usage-budget.json contains invalid config", () => {
     const invalidConfig = { model_budgets: "not-an-object" };
-    writeFileSync(join(tempDir, "usage-budget.json"), JSON.stringify(invalidConfig));
-    expect(() => loadBudgetConfig(tempDir)).toThrow(tempDir);
+    const budgetFile = join(tempDir, "usage-budget.json");
+    writeFileSync(budgetFile, JSON.stringify(invalidConfig));
+    expect(() => loadBudgetConfig(budgetFile)).toThrow(tempDir);
   });
 
   it("throws when usage-budget.json is not valid JSON", () => {
-    writeFileSync(join(tempDir, "usage-budget.json"), "not json {{{");
-    expect(() => loadBudgetConfig(tempDir)).toThrow("Failed to parse");
+    const budgetFile = join(tempDir, "usage-budget.json");
+    writeFileSync(budgetFile, "not json {{{");
+    expect(() => loadBudgetConfig(budgetFile)).toThrow("Failed to parse");
   });
 });

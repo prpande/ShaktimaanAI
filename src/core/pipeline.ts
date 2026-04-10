@@ -6,7 +6,8 @@ import { type ResolvedConfig } from "../config/loader.js";
 import { type AgentRunnerFn, type RunState } from "./types.js";
 import { type AgentRegistry } from "./registry.js";
 import { type TaskLogger } from "./logger.js";
-import { STAGE_DIR_MAP, STAGES_WITH_PENDING_DONE } from "./stage-map.js";
+import { STAGE_DIR_MAP, STAGES_WITH_PENDING_DONE, type PipelineStageName } from "./stage-map.js";
+import { TERMINAL_DIR_MAP, type TaskPaths } from "../config/paths.js";
 import { type Notifier, type NotifyEvent } from "../surfaces/types.js";
 import { createWorktree, recordWorktreeCompletion, resolveParentRepo } from "./worktree.js";
 import { appendDailyLogEntry, appendInteraction } from "./interactions.js";
@@ -65,16 +66,10 @@ export function createRunState(
 
 // ─── Directory Helpers ──────────────────────────────────────────────────────
 
-export function initTaskDir(
-  runtimeDir: string,
-  slug: string,
-  stageDir: string,
-  taskFilePath: string,
-): string {
-  const taskDir = join(runtimeDir, stageDir, "pending", slug);
-  mkdirSync(join(taskDir, "artifacts"), { recursive: true });
-  copyFileSync(taskFilePath, join(taskDir, "task.task"));
-  return taskDir;
+export function initTaskDir(tp: TaskPaths, taskFilePath: string): string {
+  mkdirSync(tp.artifactsDir, { recursive: true });
+  copyFileSync(taskFilePath, tp.taskFile);
+  return tp.taskDir;
 }
 
 // ─── Pipeline Interfaces (type-only exports) ────────────────────────────────
@@ -111,13 +106,13 @@ export interface Pipeline {
 export function createPipeline(options: PipelineOptions): Pipeline {
   const { config, registry, runner, logger } = options;
   const runtimeDir = config.pipeline.runtimeDir;
-  const interactionsDir = join(runtimeDir, "interactions");
+  const interactionsDir = config.paths.interactionsDir;
   const activeRuns = new Map<string, RunState>();
   const deferredTasks: { slug: string; taskDir: string }[] = [];
   const sessionTracker = createSessionTracker();
   const budgetConfig: BudgetConfig = (() => {
     try {
-      return loadBudgetConfig(runtimeDir);
+      return loadBudgetConfig(config.paths.usageBudget);
     } catch (err) {
       logger.error(`[pipeline] Failed to load budget config: ${err instanceof Error ? err.message : String(err)}`);
       return DEFAULT_BUDGET_CONFIG;
@@ -155,10 +150,10 @@ export function createPipeline(options: PipelineOptions): Pipeline {
     delete state.pausedAtStage;
     writeRunState(taskDir, state);
     try {
-      moveTaskDir(runtimeDir, slug, fromSubdir, "11-failed");
+      moveTaskDir(runtimeDir, slug, fromSubdir, TERMINAL_DIR_MAP.failed);
     } catch (moveErr) {
       logger.error(
-        `[pipeline] Failed to move task "${slug}" to 11-failed: ` +
+        `[pipeline] Failed to move task "${slug}" to ${TERMINAL_DIR_MAP.failed}: ` +
         `${moveErr instanceof Error ? moveErr.message : String(moveErr)}. ` +
         `Original error: ${state.error}`,
       );
@@ -188,7 +183,7 @@ export function createPipeline(options: PipelineOptions): Pipeline {
     activeRuns.delete(slug);
 
     // Fire recovery agent asynchronously — does not block the pipeline
-    const failedTaskDir = join(runtimeDir, "11-failed", slug);
+    const failedTaskDir = config.paths.resolveTask(slug, "failed").taskDir;
     if (existsSync(failedTaskDir)) {
       runRecoveryAgent(failedTaskDir, { ...state }, runner, config, logger, (event) => {
         for (const n of notifiers) {
@@ -232,8 +227,8 @@ export function createPipeline(options: PipelineOptions): Pipeline {
   // ─── findTaskDir: search 12-hold first, then all stage dirs (pending+done) ─
   function findTaskDir(slug: string): { dir: string; subdir: string } | null {
     // Check 12-hold first
-    const holdPath = join(runtimeDir, "12-hold", slug);
-    if (existsSync(holdPath)) return { dir: holdPath, subdir: "12-hold" };
+    const holdPath = config.paths.resolveTask(slug, "hold").taskDir;
+    if (existsSync(holdPath)) return { dir: holdPath, subdir: TERMINAL_DIR_MAP.hold };
 
     // Check all stage dirs (pending and done)
     for (const stageDir of STAGES_WITH_PENDING_DONE) {
@@ -248,7 +243,7 @@ export function createPipeline(options: PipelineOptions): Pipeline {
 
   function recordCompletionIfWorktree(state: RunState): void {
     if (!state.worktreePath) return;
-    const manifestPath = join(runtimeDir, "worktree-manifest.json");
+    const manifestPath = config.paths.worktreeManifest;
 
     // Resolution chain for repoPath:
     // 1. state.repoRoot (set when task had explicit repo)
@@ -308,7 +303,7 @@ export function createPipeline(options: PipelineOptions): Pipeline {
       const repoPath = alias ? alias.path : taskMeta.repo;
 
       try {
-        const worktreesDir = join(runtimeDir, "worktrees");
+        const worktreesDir = config.paths.worktreesDir;
         const worktreePath = createWorktree(repoPath, state.slug, worktreesDir);
         state.repoRoot = repoPath;
         state.worktreePath = worktreePath;
@@ -335,7 +330,7 @@ export function createPipeline(options: PipelineOptions): Pipeline {
 
   function recordCompletionIfWorktree(state: RunState): void {
     if (!state.worktreePath) return;
-    const manifestPath = join(runtimeDir, "worktree-manifest.json");
+    const manifestPath = config.paths.worktreeManifest;
     try {
       recordWorktreeCompletion(manifestPath, {
         slug: state.slug,
@@ -386,8 +381,8 @@ export function createPipeline(options: PipelineOptions): Pipeline {
         state.invocationCwd = invocationCwd;
       }
 
-      const stageDir = STAGE_DIR_MAP[firstStage];
-      const taskDir = initTaskDir(runtimeDir, slug, stageDir, taskFilePath);
+      const tp = config.paths.resolveTask(slug, firstStage as PipelineStageName, "pending");
+      const taskDir = initTaskDir(tp, taskFilePath);
       writeRunState(taskDir, state);
 
       // Log task creation interaction
@@ -425,7 +420,7 @@ export function createPipeline(options: PipelineOptions): Pipeline {
     },
 
     async approveAndResume(slug: string, feedback?: string): Promise<void> {
-      const holdDir = join(runtimeDir, "12-hold", slug);
+      const holdDir = config.paths.resolveTask(slug, "hold").taskDir;
       if (!existsSync(holdDir)) {
         throw new Error(`Task "${slug}" not found in hold`);
       }
@@ -444,7 +439,7 @@ export function createPipeline(options: PipelineOptions): Pipeline {
         writeRunState(holdDir, state);
 
         const stageDir = STAGE_DIR_MAP[state.currentStage];
-        const nextDir = moveTaskDir(runtimeDir, slug, "12-hold", join(stageDir, "pending"));
+        const nextDir = moveTaskDir(runtimeDir, slug, TERMINAL_DIR_MAP.hold, join(stageDir, "pending"));
         activeRuns.set(slug, state);
         await processStage(slug, nextDir);
         return;
@@ -457,8 +452,8 @@ export function createPipeline(options: PipelineOptions): Pipeline {
         state.status = "complete";
         writeRunState(holdDir, state);
         recordCompletionIfWorktree(state);
-        moveTaskDir(runtimeDir, slug, "12-hold", "10-complete");
-        activeRuns.set(slug, readRunState(join(runtimeDir, "10-complete", slug)));
+        moveTaskDir(runtimeDir, slug, TERMINAL_DIR_MAP.hold, TERMINAL_DIR_MAP.complete);
+        activeRuns.set(slug, readRunState(config.paths.resolveTask(slug, "complete").taskDir));
         emitNotify({
           type: "task_completed", slug,
           completedStages: state.completedStages,
@@ -490,7 +485,7 @@ export function createPipeline(options: PipelineOptions): Pipeline {
       });
       const nextTaskDir = moveTaskDir(
         runtimeDir, slug,
-        "12-hold",
+        TERMINAL_DIR_MAP.hold,
         join(STAGE_DIR_MAP[nextStage], "pending"),
       );
       activeRuns.set(slug, state);
@@ -512,7 +507,7 @@ export function createPipeline(options: PipelineOptions): Pipeline {
       state.status = "failed";
       state.error = "Cancelled by user";
       writeRunState(found.dir, state);
-      moveTaskDir(runtimeDir, slug, found.subdir, "11-failed");
+      moveTaskDir(runtimeDir, slug, found.subdir, TERMINAL_DIR_MAP.failed);
       activeRuns.delete(slug);
       emitNotify({ type: "task_cancelled", slug, cancelledBy: "user", timestamp: new Date().toISOString() });
       try {
@@ -564,8 +559,8 @@ export function createPipeline(options: PipelineOptions): Pipeline {
       state.pausedAtStage = state.currentStage;
       state.holdReason = "user_paused";
       writeRunState(found.dir, state);
-      moveTaskDir(runtimeDir, slug, found.subdir, "12-hold");
-      activeRuns.set(slug, readRunState(join(runtimeDir, "12-hold", slug)));
+      moveTaskDir(runtimeDir, slug, found.subdir, TERMINAL_DIR_MAP.hold);
+      activeRuns.set(slug, readRunState(config.paths.resolveTask(slug, "hold").taskDir));
       emitNotify({ type: "task_paused", slug, pausedBy: "user", timestamp: new Date().toISOString() });
       try {
         appendDailyLogEntry(interactionsDir, {
@@ -579,7 +574,7 @@ export function createPipeline(options: PipelineOptions): Pipeline {
     },
 
     async resume(slug: string): Promise<void> {
-      const holdDir = join(runtimeDir, "12-hold", slug);
+      const holdDir = config.paths.resolveTask(slug, "hold").taskDir;
       if (!existsSync(holdDir)) throw new Error(`Task "${slug}" not found in hold`);
       const state = readRunState(holdDir);
       if (!state.pausedAtStage) throw new Error(`Task "${slug}" was not paused — use approve instead`);
@@ -610,7 +605,7 @@ export function createPipeline(options: PipelineOptions): Pipeline {
       delete state.holdReason;
       delete state.pausedAtStage;
       writeRunState(holdDir, state);
-      const nextDir = moveTaskDir(runtimeDir, slug, "12-hold", join(STAGE_DIR_MAP[resumeStage], "pending"));
+      const nextDir = moveTaskDir(runtimeDir, slug, TERMINAL_DIR_MAP.hold, join(STAGE_DIR_MAP[resumeStage], "pending"));
       activeRuns.set(slug, state);
       emitNotify({ type: "task_resumed", slug, resumedBy: "user", timestamp: new Date().toISOString() });
       try {
@@ -684,7 +679,7 @@ export function createPipeline(options: PipelineOptions): Pipeline {
     },
 
     async retry(slug: string, feedback: string): Promise<void> {
-      const holdDir = join(runtimeDir, "12-hold", slug);
+      const holdDir = config.paths.resolveTask(slug, "hold").taskDir;
       if (!existsSync(holdDir)) throw new Error(`Task "${slug}" not found in hold`);
       const state = readRunState(holdDir);
       if (state.pausedAtStage) throw new Error(`Task "${slug}" was paused — use resume instead`);
@@ -702,7 +697,7 @@ export function createPipeline(options: PipelineOptions): Pipeline {
       writeFileSync(join(holdDir, "artifacts", feedbackFile), feedback, "utf-8");
 
       writeRunState(holdDir, state);
-      const nextDir = moveTaskDir(runtimeDir, slug, "12-hold", join(stageDir, "pending"));
+      const nextDir = moveTaskDir(runtimeDir, slug, TERMINAL_DIR_MAP.hold, join(stageDir, "pending"));
       activeRuns.set(slug, state);
       emitNotify({ type: "stage_retried", slug, stage: retryStage, attempt: state.retryAttempts[retryStage], feedback, timestamp: new Date().toISOString() });
       try {

@@ -234,7 +234,8 @@ describe("initTaskDir", () => {
     const taskFilePath = join(TEST_DIR, "my-task.task");
     writeFileSync(taskFilePath, SAMPLE_TASK, "utf-8");
 
-    const taskDir = initTaskDir(TEST_DIR, "add-logging", "01-questions", taskFilePath);
+    const tp = buildPaths(TEST_DIR).resolveTask("add-logging", "questions", "pending");
+    const taskDir = initTaskDir(tp, taskFilePath);
 
     expect(taskDir).toBe(join(TEST_DIR, "01-questions", "pending", "add-logging"));
     expect(existsSync(join(taskDir, "artifacts"))).toBe(true);

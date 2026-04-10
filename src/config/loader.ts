@@ -157,12 +157,14 @@ export function resolveConfig(parsed: ConfigParsed): ResolvedConfig {
 }
 
 /**
- * Loads and validates usage-budget.json from runtimeDir.
+ * Loads and validates a usage-budget.json file.
  * Returns DEFAULT_BUDGET_CONFIG if file is missing.
  * Throws if file exists but fails validation.
+ *
+ * @param budgetFilePath - Absolute path to the budget JSON file (e.g. config.paths.usageBudget)
  */
-export function loadBudgetConfig(runtimeDir: string): BudgetConfig {
-  const filePath = join(runtimeDir, "usage-budget.json");
+export function loadBudgetConfig(budgetFilePath: string): BudgetConfig {
+  const filePath = budgetFilePath;
 
   if (!existsSync(filePath)) {
     return DEFAULT_BUDGET_CONFIG;
