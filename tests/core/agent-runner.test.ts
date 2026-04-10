@@ -10,6 +10,7 @@ import {
   resolveToolPermissions,
   resolveMaxTurns,
   resolveTimeoutMinutes,
+  resolveAdviserModel,
 } from "../../src/core/agent-runner.js";
 import { configSchema } from "../../src/config/schema.js";
 import { resolveConfig } from "../../src/config/loader.js";
@@ -453,5 +454,80 @@ describe("filterMcpToolsByTaskNeeds", () => {
     const result = filterMcpToolsByTaskNeeds(tools, ["slack"]);
     expect(result).toEqual(["Read", "mcp__claude_ai_Slack__slack_read_channel"]);
     // Should NOT add mcp__claude_ai_Slack__* since a Slack tool is already present
+  });
+});
+
+// ─── resolveAdviserModel ─────────────────────────────────────────────────────
+
+describe("resolveAdviserModel", () => {
+  function makeAdviserConfig(overrides: {
+    enabled?: boolean;
+    model?: string;
+    stages?: string[];
+  } = {}) {
+    const parsed = configSchema.parse({
+      pipeline: { runtimeDir: "/tmp/rt" },
+      agents: {
+        adviser: {
+          enabled: overrides.enabled ?? false,
+          model: overrides.model,
+          stages: overrides.stages,
+        },
+      },
+    });
+    return resolveConfig(parsed);
+  }
+
+  it("returns undefined when adviser is disabled (default)", () => {
+    const config = makeAdviserConfig({ enabled: false });
+    expect(resolveAdviserModel("questions", config)).toBeUndefined();
+  });
+
+  it("returns undefined for a stage not in adviser.stages even when enabled", () => {
+    const config = makeAdviserConfig({ enabled: true, stages: ["impl"] });
+    expect(resolveAdviserModel("questions", config)).toBeUndefined();
+  });
+
+  it("returns the adviser model for a stage in adviser.stages when enabled", () => {
+    const config = makeAdviserConfig({ enabled: true, stages: ["questions"] });
+    expect(resolveAdviserModel("questions", config)).toBe("claude-opus-4-6");
+  });
+
+  it("returns a custom adviser model when configured", () => {
+    const config = makeAdviserConfig({
+      enabled: true,
+      model: "claude-opus-4-6",
+      stages: ["validate"],
+    });
+    expect(resolveAdviserModel("validate", config)).toBe("claude-opus-4-6");
+  });
+
+  it("defaults to DEFAULT_ADVISER_STAGES (non-opus stages) when stages not specified", () => {
+    const config = makeAdviserConfig({ enabled: true });
+    // Stages that should get adviser by default
+    expect(resolveAdviserModel("questions", config)).toBe("claude-opus-4-6");
+    expect(resolveAdviserModel("research", config)).toBe("claude-opus-4-6");
+    expect(resolveAdviserModel("validate", config)).toBe("claude-opus-4-6");
+    expect(resolveAdviserModel("review", config)).toBe("claude-opus-4-6");
+    expect(resolveAdviserModel("quick", config)).toBe("claude-opus-4-6");
+    // Opus stages should not get adviser by default
+    expect(resolveAdviserModel("impl", config)).toBeUndefined();
+    expect(resolveAdviserModel("design", config)).toBeUndefined();
+    expect(resolveAdviserModel("plan", config)).toBeUndefined();
+    expect(resolveAdviserModel("recovery", config)).toBeUndefined();
+  });
+
+  it("handles unknown stage gracefully (returns undefined)", () => {
+    const config = makeAdviserConfig({ enabled: true });
+    expect(resolveAdviserModel("unknown-stage", config)).toBeUndefined();
+  });
+
+  it("schema rejects an empty adviser model string at parse time", () => {
+    expect(() =>
+      configSchema.parse({
+        pipeline: { runtimeDir: "/tmp/rt" },
+        agents: { adviser: { enabled: true, model: "" } },
+      })
+    ).toThrow(/must not be empty/);
   });
 });

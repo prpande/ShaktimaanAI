@@ -54,6 +54,11 @@ export const configSchema = z.object({
       disallowed: z.array(z.string()).optional(),
     })).optional().default({}),
     models: z.record(z.string(), z.string()).optional().default({}),
+    adviser: z.object({
+      enabled: z.boolean().optional().default(false),
+      model: z.string().min(1, "agents.adviser.model must not be empty").optional().default("claude-opus-4-6"),
+      stages: z.array(z.string()).optional(),
+    }).optional().default({}),
   }).optional().default({}),
   schedule: z.object({
     rollupTime: z.string().optional(),

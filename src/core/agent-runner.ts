@@ -75,6 +75,26 @@ export function resolveTimeoutMinutes(stage: string, config: ResolvedConfig): nu
   return config.agents.timeoutsMinutes[stage] ?? 30;
 }
 
+// ─── Adviser model resolver ──────────────────────────────────────────────────
+
+/**
+ * Returns the adviser model string for a stage when the adviser tool is
+ * enabled and the stage is in the configured adviser stages list.
+ * Returns undefined when adviser should not be used for this stage.
+ *
+ * The returned value is passed to the SDK as `settings: { advisorModel }`,
+ * which activates the server-side adviser tool (advisor_20260301).
+ */
+export function resolveAdviserModel(
+  stage: string,
+  config: ResolvedConfig,
+): string | undefined {
+  const { adviser } = config.agents;
+  if (!adviser.enabled) return undefined;
+  if (!adviser.stages.includes(stage)) return undefined;
+  return adviser.model;
+}
+
 // ─── System prompt builder ───────────────────────────────────────────────────
 
 /**
@@ -372,6 +392,7 @@ export async function runAgent(options: AgentRunOptions): Promise<AgentRunResult
   const timeoutMinutes = resolveTimeoutMinutes(stage, config);
   const timeoutMs = timeoutMinutes * 60 * 1000;
   const model = options.model ?? config.agents.models?.[stage];
+  const adviserModel = resolveAdviserModel(stage, config);
 
   // Use provided abortController or create our own
   const abortController = externalAbort ?? new AbortController();
@@ -418,6 +439,11 @@ export async function runAgent(options: AgentRunOptions): Promise<AgentRunResult
         // interactive CLI use and cannot be used in a pipeline context.
         permissionMode: "bypassPermissions" as const,
         allowDangerouslySkipPermissions: true,
+        // Adviser tool: activates server-side advisor_20260301 when configured.
+        // The SDK passes advisorModel as a Settings field to the Claude process.
+        // Use !== undefined (not truthy) so an empty model is never silently swallowed
+        // — schema validation already rejects empty strings at config-parse time.
+        ...(adviserModel !== undefined ? { settings: { advisorModel: adviserModel } } : {}),
       },
     });
 
