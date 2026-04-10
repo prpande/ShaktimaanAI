@@ -56,7 +56,7 @@ export const configSchema = z.object({
     models: z.record(z.string(), z.string()).optional().default({}),
     adviser: z.object({
       enabled: z.boolean().optional().default(false),
-      model: z.string().optional().default("claude-opus-4-6"),
+      model: z.string().min(1, "agents.adviser.model must not be empty").optional().default("claude-opus-4-6"),
       stages: z.array(z.string()).optional(),
     }).optional().default({}),
   }).optional().default({}),

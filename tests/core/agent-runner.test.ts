@@ -521,4 +521,13 @@ describe("resolveAdviserModel", () => {
     const config = makeAdviserConfig({ enabled: true });
     expect(resolveAdviserModel("unknown-stage", config)).toBeUndefined();
   });
+
+  it("schema rejects an empty adviser model string at parse time", () => {
+    expect(() =>
+      configSchema.parse({
+        pipeline: { runtimeDir: "/tmp/rt" },
+        agents: { adviser: { enabled: true, model: "" } },
+      })
+    ).toThrow(/must not be empty/);
+  });
 });

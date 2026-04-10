@@ -441,7 +441,9 @@ export async function runAgent(options: AgentRunOptions): Promise<AgentRunResult
         allowDangerouslySkipPermissions: true,
         // Adviser tool: activates server-side advisor_20260301 when configured.
         // The SDK passes advisorModel as a Settings field to the Claude process.
-        ...(adviserModel ? { settings: { advisorModel: adviserModel } } : {}),
+        // Use !== undefined (not truthy) so an empty model is never silently swallowed
+        // — schema validation already rejects empty strings at config-parse time.
+        ...(adviserModel !== undefined ? { settings: { advisorModel: adviserModel } } : {}),
       },
     });
 
