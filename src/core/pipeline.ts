@@ -329,20 +329,6 @@ export function createPipeline(options: PipelineOptions): Pipeline {
     return state.invocationCwd ?? runtimeDir;
   }
 
-  function recordCompletionIfWorktree(state: RunState): void {
-    if (!state.worktreePath) return;
-    const manifestPath = config.paths.worktreeManifest;
-    try {
-      recordWorktreeCompletion(manifestPath, {
-        slug: state.slug,
-        repoPath: state.repoRoot ?? state.worktreePath,
-        worktreePath: state.worktreePath,
-        completedAt: new Date().toISOString(),
-      });
-    } catch {
-      // log but don't fail
-    }
-  }
 
   // ─── Stage Context (shared with stage-runner.ts) ───────────────────────────
   const stageCtx: StageContext = {
