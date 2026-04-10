@@ -3,6 +3,7 @@ import { join } from "node:path";
 
 import { type Pipeline } from "./pipeline.js";
 import { type TaskLogger } from "./logger.js";
+import { TERMINAL_DIR_MAP } from "../config/paths.js";
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -19,7 +20,7 @@ export interface ApproveInput {
  * Returns the full path if found, null otherwise.
  */
 export function findHeldTask(runtimeDir: string, slug: string): string | null {
-  const taskPath = join(runtimeDir, "12-hold", slug);
+  const taskPath = join(runtimeDir, TERMINAL_DIR_MAP.hold, slug);
   try {
     if (existsSync(taskPath) && statSync(taskPath).isDirectory()) {
       return taskPath;
@@ -38,7 +39,7 @@ export function findHeldTask(runtimeDir: string, slug: string): string | null {
  * Files are ignored — only directories are returned.
  */
 export function listHeldTasks(runtimeDir: string): string[] {
-  const holdDir = join(runtimeDir, "12-hold");
+  const holdDir = join(runtimeDir, TERMINAL_DIR_MAP.hold);
   if (!existsSync(holdDir)) {
     return [];
   }
