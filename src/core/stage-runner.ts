@@ -7,6 +7,7 @@ import { type AgentRunnerFn, type AgentRunOptions, type RunState, type ReviewIss
 import { type AgentRegistry } from "./registry.js";
 import { type TaskLogger, createTaskLogger } from "./logger.js";
 import { STAGE_DIR_MAP } from "./stage-map.js";
+import { TERMINAL_DIR_MAP } from "../config/paths.js";
 import { type NotifyEvent } from "../surfaces/types.js";
 import { parseAgentVerdict, parseReviewFindings, decideAfterValidate, decideAfterReview } from "./retry.js";
 import { appendDailyLogEntry } from "./interactions.js";
@@ -83,7 +84,7 @@ export async function runStage(ctx: StageContext, slug: string, initialTaskDir: 
   while (true) {
     const state = readRunState(currentTaskDir);
     const stage = state.currentStage;
-    const taskLogger = createTaskLogger(join(runtimeDir, "logs"), slug);
+    const taskLogger = createTaskLogger(config.paths.logsDir, slug);
 
     // Resolve workDir when entering impl for the first time
     if (stage === "impl" && !state.workDir) {
@@ -173,14 +174,14 @@ export async function runStage(ctx: StageContext, slug: string, initialTaskDir: 
       state.pausedAtStage = stage;
       writeRunState(currentTaskDir, state);
       try {
-        moveTaskDir(runtimeDir, slug, join(STAGE_DIR_MAP[stage], "pending"), "12-hold");
+        moveTaskDir(runtimeDir, slug, join(STAGE_DIR_MAP[stage], "pending"), TERMINAL_DIR_MAP.hold);
       } catch (moveErr) {
         logger.error(
-          `[pipeline] Failed to move budget-held task "${slug}" to 12-hold: ` +
+          `[pipeline] Failed to move budget-held task "${slug}" to ${TERMINAL_DIR_MAP.hold}: ` +
           `${moveErr instanceof Error ? moveErr.message : String(moveErr)}`,
         );
       }
-      activeRuns.set(slug, readRunState(join(runtimeDir, "12-hold", slug)));
+      activeRuns.set(slug, readRunState(config.paths.resolveTask(slug, "hold").taskDir));
       emitNotify({
         type: "task_held", slug, stage, artifactUrl: "",
         holdReason: "budget_exhausted",
@@ -319,7 +320,7 @@ export async function runStage(ctx: StageContext, slug: string, initialTaskDir: 
         moveTaskDir(
           runtimeDir, slug,
           join(STAGE_DIR_MAP[stage], "pending"),
-          "11-failed",
+          TERMINAL_DIR_MAP.failed,
         );
         activeRuns.delete(slug);
         return;
@@ -477,9 +478,9 @@ export async function runStage(ctx: StageContext, slug: string, initialTaskDir: 
       moveTaskDir(
         runtimeDir, slug,
         join(STAGE_DIR_MAP[stage], "done"),
-        "12-hold",
+        TERMINAL_DIR_MAP.hold,
       );
-      activeRuns.set(slug, readRunState(join(runtimeDir, "12-hold", slug)));
+      activeRuns.set(slug, readRunState(config.paths.resolveTask(slug, "hold").taskDir));
       emitNotify({
         type: "task_held", slug, stage, artifactUrl: "",
         holdReason: "approval_required",
@@ -498,9 +499,9 @@ export async function runStage(ctx: StageContext, slug: string, initialTaskDir: 
       moveTaskDir(
         runtimeDir, slug,
         join(STAGE_DIR_MAP[stage], "done"),
-        "10-complete",
+        TERMINAL_DIR_MAP.complete,
       );
-      activeRuns.set(slug, readRunState(join(runtimeDir, "10-complete", slug)));
+      activeRuns.set(slug, readRunState(config.paths.resolveTask(slug, "complete").taskDir));
       emitNotify({
         type: "task_completed", slug,
         completedStages: state.completedStages,
