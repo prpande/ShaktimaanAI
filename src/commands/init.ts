@@ -123,7 +123,7 @@ export async function runInitWizard(options?: { noBanner?: boolean; version?: st
   // Prompt for runtime directory
   const runtimeDir = await text({
     message: "Base directory (task files and logs will be stored in a runtime/ subdirectory)",
-    placeholder: "~/.shkmn/runtime",
+    placeholder: "~/.shkmn",
     validate: (val) => (val.trim() ? undefined : "Runtime directory is required"),
   });
   if (isCancel(runtimeDir)) {

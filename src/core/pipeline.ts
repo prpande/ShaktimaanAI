@@ -305,7 +305,7 @@ export function createPipeline(options: PipelineOptions): Pipeline {
 
       try {
         const worktreesDir = config.paths.worktreesDir;
-        const worktreePath = createWorktree(repoPath, state.slug, worktreesDir, undefined, config.paths.worktreeManifest);
+        const worktreePath = createWorktree(repoPath, state.slug, worktreesDir, config.paths.worktreeManifest);
         state.repoRoot = repoPath;
         state.worktreePath = worktreePath;
         return worktreePath;

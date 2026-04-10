@@ -10,7 +10,7 @@ import { reenterTask } from "./recovery-reentry.js";
 import type { AgentRunnerFn } from "./types.js";
 import type { ResolvedConfig } from "../config/loader.js";
 import { moveTaskDir } from "./pipeline.js";
-import { TERMINAL_DIR_MAP, buildPaths } from "../config/paths.js";
+import { TERMINAL_DIR_MAP, buildPaths, type RuntimePaths } from "../config/paths.js";
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -73,13 +73,11 @@ function listFiles(dir: string, extension: string): string[] {
  * - 12-hold/: held tasks that need re-registration
  * - 00-inbox/: unprocessed .task files that arrived before/during crash
  */
-export function scanForRecovery(runtimeDir: string): RecoveryItem[] {
+export function scanForRecovery(paths: RuntimePaths): RecoveryItem[] {
   const items: RecoveryItem[] = [];
-  const paths = buildPaths(runtimeDir);
 
   // 1. Scan each stage's pending/ and done/ directories
-  for (const [stage] of Object.entries(STAGE_DIR_MAP)) {
-    const stageDir = paths.stages[stage as keyof typeof STAGE_DIR_MAP];
+  for (const [stage, stageDir] of Object.entries(paths.stages)) {
     const pendingDir = join(stageDir, "pending");
     for (const slug of listDirectories(pendingDir)) {
       items.push({
@@ -234,7 +232,7 @@ export async function runRecovery(
     errors: [],
   };
 
-  const items = scanForRecovery(runtimeDir);
+  const items = scanForRecovery(buildPaths(runtimeDir));
 
   // Recovery timeout must be long enough for the agent to complete the current
   // stage. Each stage has its own timeout (default 30-90 min in config), so

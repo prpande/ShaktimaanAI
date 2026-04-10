@@ -164,18 +164,16 @@ export function resolveConfig(parsed: ConfigParsed): ResolvedConfig {
  * @param budgetFilePath - Absolute path to the budget JSON file (e.g. config.paths.usageBudget)
  */
 export function loadBudgetConfig(budgetFilePath: string): BudgetConfig {
-  const filePath = budgetFilePath;
-
-  if (!existsSync(filePath)) {
+  if (!existsSync(budgetFilePath)) {
     return DEFAULT_BUDGET_CONFIG;
   }
 
   let raw: string;
   try {
-    raw = readFileSync(filePath, "utf-8");
+    raw = readFileSync(budgetFilePath, "utf-8");
   } catch (err) {
     throw new Error(
-      `Failed to read budget config at "${filePath}": ${err instanceof Error ? err.message : String(err)}`,
+      `Failed to read budget config at "${budgetFilePath}": ${err instanceof Error ? err.message : String(err)}`,
     );
   }
 
@@ -184,7 +182,7 @@ export function loadBudgetConfig(budgetFilePath: string): BudgetConfig {
     parsed = JSON.parse(raw);
   } catch (err) {
     throw new Error(
-      `Failed to parse budget config as JSON at "${filePath}": ${(err as Error).message}`,
+      `Failed to parse budget config as JSON at "${budgetFilePath}": ${(err as Error).message}`,
     );
   }
 
@@ -196,7 +194,7 @@ export function loadBudgetConfig(budgetFilePath: string): BudgetConfig {
         return `${path}${i.message}`;
       })
       .join("; ");
-    throw new Error(`Invalid budget config at "${filePath}": ${messages}`);
+    throw new Error(`Invalid budget config at "${budgetFilePath}": ${messages}`);
   }
 
   return result.data;
