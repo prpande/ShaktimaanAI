@@ -26,6 +26,10 @@ describe("writeInitConfig", () => {
       adoOrg: "https://dev.azure.com/myorg",
       adoProject: "MyProject",
       adoArea: "MyArea",
+      slackEnabled: true,
+      slackChannel: "#my-channel",
+      slackChannelId: "C0123456789",
+      slackNotifyLevel: "stages",
     });
 
     const configPath = join(TEST_DIR, "shkmn.config.json");
@@ -36,6 +40,10 @@ describe("writeInitConfig", () => {
     expect(config.pipeline.dashboardRepoUrl).toBe("https://github.com/user/dash.git");
     expect(config.ado.org).toBe("https://dev.azure.com/myorg");
     expect(config.agents.names.questions).toBe("Gargi");
+    expect(config.slack.enabled).toBe(true);
+    expect(config.slack.channel).toBe("#my-channel");
+    expect(config.slack.channelId).toBe("C0123456789");
+    expect(config.slack.notifyLevel).toBe("stages");
   });
 
   it("writes valid JSON that passes config loader validation", () => {
@@ -47,6 +55,10 @@ describe("writeInitConfig", () => {
       adoOrg: "",
       adoProject: "",
       adoArea: "",
+      slackEnabled: false,
+      slackChannel: "#agent-pipeline",
+      slackChannelId: "",
+      slackNotifyLevel: "bookends",
     });
 
     const configPath = join(TEST_DIR, "shkmn.config.json");
