@@ -109,7 +109,7 @@ describe("createTask prefers taskTitle", () => {
       taskTitle: "spec4-dashboard-kanban-view",
     };
 
-    const slug = createTask(input, TEST_DIR, config);
+    const slug = createTask(input, join(TEST_DIR, "00-inbox"), config);
 
     // Slug should be based on taskTitle, not the long content
     expect(slug).toMatch(/^spec4-dashboard-kanban-view-\d{14}$/);
@@ -122,7 +122,7 @@ describe("createTask prefers taskTitle", () => {
       content: "Fix the login bug",
     };
 
-    const slug = createTask(input, TEST_DIR, config);
+    const slug = createTask(input, join(TEST_DIR, "00-inbox"), config);
 
     expect(slug).toMatch(/^fix-the-login-bug-\d{14}$/);
   });
@@ -135,7 +135,7 @@ describe("createTask prefers taskTitle", () => {
       taskTitle: "",
     };
 
-    const slug = createTask(input, TEST_DIR, config);
+    const slug = createTask(input, join(TEST_DIR, "00-inbox"), config);
 
     expect(slug).toMatch(/^fix-the-login-bug-\d{14}$/);
   });
@@ -148,7 +148,7 @@ describe("createTask prefers taskTitle", () => {
       taskTitle: "   ",
     };
 
-    const slug = createTask(input, TEST_DIR, config);
+    const slug = createTask(input, join(TEST_DIR, "00-inbox"), config);
 
     expect(slug).toMatch(/^fix-the-login-bug-\d{14}$/);
   });
@@ -161,7 +161,7 @@ describe("createTask prefers taskTitle", () => {
       taskTitle: "fix auth\ntoken refresh",
     };
 
-    const slug = createTask(input, TEST_DIR, config);
+    const slug = createTask(input, join(TEST_DIR, "00-inbox"), config);
 
     expect(slug).toMatch(/^fix-auth-token-refresh-\d{14}$/);
   });

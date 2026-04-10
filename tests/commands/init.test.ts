@@ -18,7 +18,8 @@ afterEach(() => {
 
 describe("writeInitConfig", () => {
   it("writes shkmn.config.json with provided values", () => {
-    writeInitConfig(TEST_DIR, {
+    const configPath = join(TEST_DIR, "shkmn.config.json");
+    writeInitConfig(configPath, {
       runtimeDir: "/home/user/.shkmn/runtime",
       dashboardRepoUrl: "https://github.com/user/dash.git",
       dashboardRepoLocal: "/home/user/dash",
@@ -32,7 +33,6 @@ describe("writeInitConfig", () => {
       slackNotifyLevel: "stages",
     });
 
-    const configPath = join(TEST_DIR, "shkmn.config.json");
     expect(existsSync(configPath)).toBe(true);
 
     const config = JSON.parse(readFileSync(configPath, "utf-8"));
@@ -47,7 +47,8 @@ describe("writeInitConfig", () => {
   });
 
   it("writes valid JSON that passes config loader validation", () => {
-    writeInitConfig(TEST_DIR, {
+    const configPath = join(TEST_DIR, "shkmn.config.json");
+    writeInitConfig(configPath, {
       runtimeDir: "/tmp/rt",
       dashboardRepoUrl: "",
       dashboardRepoLocal: "",
@@ -61,7 +62,6 @@ describe("writeInitConfig", () => {
       slackNotifyLevel: "bookends",
     });
 
-    const configPath = join(TEST_DIR, "shkmn.config.json");
     const config = loadConfig(configPath);
     expect(config.pipeline.runtimeDir).toBe("/tmp/rt");
   });
@@ -69,8 +69,8 @@ describe("writeInitConfig", () => {
 
 describe("writeInitEnv", () => {
   it("writes .env file with all required keys including SLACK_WEBHOOK_URL", () => {
-    writeInitEnv(TEST_DIR);
     const envPath = join(TEST_DIR, ".env");
+    writeInitEnv(envPath);
     const content = readFileSync(envPath, "utf-8");
     expect(content).toContain("ADO_PAT=");
     expect(content).toContain("ANTHROPIC_API_KEY=");
@@ -80,8 +80,8 @@ describe("writeInitEnv", () => {
   });
 
   it("contains all keys checked by doctor (REQUIRED_ENV_KEYS)", () => {
-    writeInitEnv(TEST_DIR);
     const envPath = join(TEST_DIR, ".env");
+    writeInitEnv(envPath);
     const content = readFileSync(envPath, "utf-8");
     for (const key of REQUIRED_ENV_KEYS) {
       expect(content, `Template should include ${key}`).toContain(key);
@@ -92,7 +92,7 @@ describe("writeInitEnv", () => {
     const envPath = join(TEST_DIR, ".env");
     writeFileSync(envPath, "EXISTING=value\n");
 
-    writeInitEnv(TEST_DIR);
+    writeInitEnv(envPath);
 
     const content = readFileSync(envPath, "utf-8");
     expect(content).toBe("EXISTING=value\n");

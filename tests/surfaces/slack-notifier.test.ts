@@ -45,25 +45,25 @@ afterEach(() => {
 describe("SlackNotifier (file-based outbox)", () => {
   describe("notify level filtering", () => {
     it("appends task_failed to outbox at minimal level", async () => {
-      const notifier = createSlackNotifier({ channelId: "C123", notifyLevel: "minimal", runtimeDir: TEST_DIR });
+      const notifier = createSlackNotifier({ channelId: "C123", notifyLevel: "minimal", outboxPath: join(TEST_DIR, "slack-outbox.jsonl"), threadsPath: join(TEST_DIR, "slack-threads.json") });
       await notifier.notify(makeEvent("task_failed", "my-task", { stage: "impl", error: "tests failed" }));
       expect(readOutbox()).toHaveLength(1);
     });
 
     it("skips task_created at minimal level", async () => {
-      const notifier = createSlackNotifier({ channelId: "C123", notifyLevel: "minimal", runtimeDir: TEST_DIR });
+      const notifier = createSlackNotifier({ channelId: "C123", notifyLevel: "minimal", outboxPath: join(TEST_DIR, "slack-outbox.jsonl"), threadsPath: join(TEST_DIR, "slack-threads.json") });
       await notifier.notify(makeEvent("task_created", "my-task", { title: "T", source: "cli", stages: ["impl"] }));
       expect(readOutbox()).toHaveLength(0);
     });
 
     it("appends task_created at bookends level", async () => {
-      const notifier = createSlackNotifier({ channelId: "C123", notifyLevel: "bookends", runtimeDir: TEST_DIR });
+      const notifier = createSlackNotifier({ channelId: "C123", notifyLevel: "bookends", outboxPath: join(TEST_DIR, "slack-outbox.jsonl"), threadsPath: join(TEST_DIR, "slack-threads.json") });
       await notifier.notify(makeEvent("task_created", "my-task", { title: "T", source: "cli", stages: ["impl"] }));
       expect(readOutbox()).toHaveLength(1);
     });
 
     it("appends all events at stages level", async () => {
-      const notifier = createSlackNotifier({ channelId: "C123", notifyLevel: "stages", runtimeDir: TEST_DIR });
+      const notifier = createSlackNotifier({ channelId: "C123", notifyLevel: "stages", outboxPath: join(TEST_DIR, "slack-outbox.jsonl"), threadsPath: join(TEST_DIR, "slack-threads.json") });
       await notifier.notify(makeEvent("stage_started", "my-task", { stage: "impl" }));
       await notifier.notify(makeEvent("stage_completed", "my-task", { stage: "impl", artifactPath: "/tmp/out.md" }));
       expect(readOutbox()).toHaveLength(2);
@@ -72,7 +72,7 @@ describe("SlackNotifier (file-based outbox)", () => {
 
   describe("outbox entry format", () => {
     it("writes correct fields to outbox JSONL", async () => {
-      const notifier = createSlackNotifier({ channelId: "C999", notifyLevel: "stages", runtimeDir: TEST_DIR });
+      const notifier = createSlackNotifier({ channelId: "C999", notifyLevel: "stages", outboxPath: join(TEST_DIR, "slack-outbox.jsonl"), threadsPath: join(TEST_DIR, "slack-threads.json") });
       await notifier.notify(makeEvent("task_created", "my-slug", { title: "Fix bug", source: "cli", stages: ["impl"] }));
       const entries = readOutbox();
       expect(entries).toHaveLength(1);
@@ -88,7 +88,7 @@ describe("SlackNotifier (file-based outbox)", () => {
 
   describe("threading via slack-threads.json", () => {
     it("sets thread_ts to null for task_created (root message)", async () => {
-      const notifier = createSlackNotifier({ channelId: "C123", notifyLevel: "stages", runtimeDir: TEST_DIR });
+      const notifier = createSlackNotifier({ channelId: "C123", notifyLevel: "stages", outboxPath: join(TEST_DIR, "slack-outbox.jsonl"), threadsPath: join(TEST_DIR, "slack-threads.json") });
       await notifier.notify(makeEvent("task_created", "my-task", { title: "T", source: "cli", stages: ["impl"] }));
       const entries = readOutbox();
       expect(entries[0].thread_ts).toBeNull();
@@ -96,21 +96,21 @@ describe("SlackNotifier (file-based outbox)", () => {
 
     it("reads thread_ts from slack-threads.json for non-created events", async () => {
       writeFileSync(join(TEST_DIR, "slack-threads.json"), JSON.stringify({ "my-task": "1234567890.000100" }));
-      const notifier = createSlackNotifier({ channelId: "C123", notifyLevel: "stages", runtimeDir: TEST_DIR });
+      const notifier = createSlackNotifier({ channelId: "C123", notifyLevel: "stages", outboxPath: join(TEST_DIR, "slack-outbox.jsonl"), threadsPath: join(TEST_DIR, "slack-threads.json") });
       await notifier.notify(makeEvent("stage_started", "my-task", { stage: "impl" }));
       const entries = readOutbox();
       expect(entries[0].thread_ts).toBe("1234567890.000100");
     });
 
     it("sets thread_ts to null when slug not in thread map", async () => {
-      const notifier = createSlackNotifier({ channelId: "C123", notifyLevel: "stages", runtimeDir: TEST_DIR });
+      const notifier = createSlackNotifier({ channelId: "C123", notifyLevel: "stages", outboxPath: join(TEST_DIR, "slack-outbox.jsonl"), threadsPath: join(TEST_DIR, "slack-threads.json") });
       await notifier.notify(makeEvent("stage_started", "unknown-slug", { stage: "impl" }));
       const entries = readOutbox();
       expect(entries[0].thread_ts).toBeNull();
     });
 
     it("uses slackThread from task_created event as thread_ts", async () => {
-      const notifier = createSlackNotifier({ channelId: "C123", notifyLevel: "stages", runtimeDir: TEST_DIR });
+      const notifier = createSlackNotifier({ channelId: "C123", notifyLevel: "stages", outboxPath: join(TEST_DIR, "slack-outbox.jsonl"), threadsPath: join(TEST_DIR, "slack-threads.json") });
       await notifier.notify(makeEvent("task_created", "slack-task", { title: "T", source: "slack", stages: ["impl"], slackThread: "9999999999.000001" }));
       const entries = readOutbox();
       expect(entries[0].thread_ts).toBe("9999999999.000001");
@@ -118,8 +118,13 @@ describe("SlackNotifier (file-based outbox)", () => {
   });
 
   describe("error handling", () => {
-    it("does not throw if runtimeDir is missing", async () => {
-      const notifier = createSlackNotifier({ channelId: "C123", notifyLevel: "stages", runtimeDir: "/nonexistent/path" });
+    it("does not throw if outbox dir is missing", async () => {
+      const notifier = createSlackNotifier({
+        channelId: "C123",
+        notifyLevel: "stages",
+        outboxPath: "/nonexistent/path/slack-outbox.jsonl",
+        threadsPath: "/nonexistent/path/slack-threads.json",
+      });
       await expect(
         notifier.notify(makeEvent("stage_started", "my-task", { stage: "impl" })),
       ).resolves.toBeUndefined();
@@ -127,7 +132,12 @@ describe("SlackNotifier (file-based outbox)", () => {
 
     it("logs a warning when outbox write fails", async () => {
       const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
-      const notifier = createSlackNotifier({ channelId: "C123", notifyLevel: "stages", runtimeDir: "/\0invalid" });
+      const notifier = createSlackNotifier({
+        channelId: "C123",
+        notifyLevel: "stages",
+        outboxPath: "/\0invalid/slack-outbox.jsonl",
+        threadsPath: "/nonexistent/slack-threads.json",
+      });
       await notifier.notify(makeEvent("task_failed", "test-task", { stage: "impl", error: "boom" }));
       expect(warnSpy).toHaveBeenCalledWith(
         expect.stringContaining("[slack-notifier] Failed to write outbox entry:"),

@@ -8,6 +8,7 @@ import { configSchema } from "../../src/config/schema.js";
 import { resolveConfig } from "../../src/config/loader.js";
 import { parseTaskFile } from "../../src/task/parser.js";
 import { createRuntimeDirs } from "../../src/runtime/dirs.js";
+import { buildPaths } from "../../src/config/paths.js";
 import { createAgentRegistry } from "../../src/core/registry.js";
 import { type AgentRunOptions, type AgentRunResult } from "../../src/core/types.js";
 import {
@@ -233,7 +234,8 @@ describe("initTaskDir", () => {
     const taskFilePath = join(TEST_DIR, "my-task.task");
     writeFileSync(taskFilePath, SAMPLE_TASK, "utf-8");
 
-    const taskDir = initTaskDir(TEST_DIR, "add-logging", "01-questions", taskFilePath);
+    const tp = buildPaths(TEST_DIR).resolveTask("add-logging", "questions", "pending");
+    const taskDir = initTaskDir(tp, taskFilePath);
 
     expect(taskDir).toBe(join(TEST_DIR, "01-questions", "pending", "add-logging"));
     expect(existsSync(join(taskDir, "artifacts"))).toBe(true);
@@ -303,7 +305,7 @@ stages: ${stages}
 
 describe("createPipeline", () => {
   it("runs two stages to completion", async () => {
-    createRuntimeDirs(TEST_DIR);
+    createRuntimeDirs(buildPaths(TEST_DIR));
     // Create stub templates
     const templatesDir = join(TEST_DIR, "templates");
     mkdirSync(templatesDir, { recursive: true });
@@ -341,7 +343,7 @@ describe("createPipeline", () => {
   });
 
   it("pauses at review gate", async () => {
-    createRuntimeDirs(TEST_DIR);
+    createRuntimeDirs(buildPaths(TEST_DIR));
     const templatesDir = join(TEST_DIR, "templates");
     mkdirSync(templatesDir, { recursive: true });
     writeFileSync(join(templatesDir, "prompt-questions.md"), "template", "utf-8");
@@ -373,7 +375,7 @@ describe("createPipeline", () => {
   });
 
   it("resumes from hold after approval", async () => {
-    createRuntimeDirs(TEST_DIR);
+    createRuntimeDirs(buildPaths(TEST_DIR));
     const templatesDir = join(TEST_DIR, "templates");
     mkdirSync(templatesDir, { recursive: true });
     writeFileSync(join(templatesDir, "prompt-questions.md"), "template", "utf-8");
@@ -415,7 +417,7 @@ describe("createPipeline", () => {
   });
 
   it("moves to failed on agent failure", async () => {
-    createRuntimeDirs(TEST_DIR);
+    createRuntimeDirs(buildPaths(TEST_DIR));
     const templatesDir = join(TEST_DIR, "templates");
     mkdirSync(templatesDir, { recursive: true });
     writeFileSync(join(templatesDir, "prompt-questions.md"), "template", "utf-8");
@@ -445,7 +447,7 @@ describe("createPipeline", () => {
   });
 
   it("throws on approve of non-existent task", async () => {
-    createRuntimeDirs(TEST_DIR);
+    createRuntimeDirs(buildPaths(TEST_DIR));
 
     const config = makeConfig();
     const registry = createAgentRegistry(3);
@@ -462,7 +464,7 @@ describe("createPipeline", () => {
   // ─── workDir resolution ──────────────────────────────────────────────────────
 
   it("uses invocationCwd when no repo and no repos.root configured", async () => {
-    createRuntimeDirs(TEST_DIR);
+    createRuntimeDirs(buildPaths(TEST_DIR));
     const templatesDir = join(TEST_DIR, "templates");
     mkdirSync(templatesDir, { recursive: true });
     writeFileSync(join(templatesDir, "prompt-impl.md"), "template", "utf-8");
@@ -513,7 +515,7 @@ describe("createPipeline", () => {
   it("uses repos.root/{slug} when repos.root is configured and no task repo", async () => {
     const reposRoot = join(TEST_DIR, "repos");
     mkdirSync(reposRoot, { recursive: true });
-    createRuntimeDirs(TEST_DIR);
+    createRuntimeDirs(buildPaths(TEST_DIR));
     const templatesDir = join(TEST_DIR, "templates");
     mkdirSync(templatesDir, { recursive: true });
     writeFileSync(join(templatesDir, "prompt-impl.md"), "template", "utf-8");
@@ -553,7 +555,7 @@ describe("createPipeline", () => {
   });
 
   it("stores workDir in run state after impl stage", async () => {
-    createRuntimeDirs(TEST_DIR);
+    createRuntimeDirs(buildPaths(TEST_DIR));
     const templatesDir = join(TEST_DIR, "templates");
     mkdirSync(templatesDir, { recursive: true });
     writeFileSync(join(templatesDir, "prompt-impl.md"), "template", "utf-8");
@@ -593,7 +595,7 @@ describe("createPipeline", () => {
   });
 
   it("reports active runs", async () => {
-    createRuntimeDirs(TEST_DIR);
+    createRuntimeDirs(buildPaths(TEST_DIR));
     const templatesDir = join(TEST_DIR, "templates");
     mkdirSync(templatesDir, { recursive: true });
     writeFileSync(join(templatesDir, "prompt-questions.md"), "template", "utf-8");
@@ -629,7 +631,7 @@ describe("pipeline retry integration", () => {
   }
 
   it("retries impl when validate returns NEEDS_FIXES (within maxRetries)", async () => {
-    createRuntimeDirs(TEST_DIR);
+    createRuntimeDirs(buildPaths(TEST_DIR));
     const templatesDir = join(TEST_DIR, "templates");
     mkdirSync(templatesDir, { recursive: true });
     for (const s of ["impl", "validate", "review", "pr"]) {
@@ -695,7 +697,7 @@ describe("pipeline retry integration", () => {
   });
 
   it("fails task when validate NEEDS_FIXES exceeds maxRetries", async () => {
-    createRuntimeDirs(TEST_DIR);
+    createRuntimeDirs(buildPaths(TEST_DIR));
     const templatesDir = join(TEST_DIR, "templates");
     mkdirSync(templatesDir, { recursive: true });
     for (const s of ["impl", "validate"]) {
@@ -738,7 +740,7 @@ describe("pipeline retry integration", () => {
   });
 
   it("writes retry-feedback artifact before sending task back to impl", async () => {
-    createRuntimeDirs(TEST_DIR);
+    createRuntimeDirs(buildPaths(TEST_DIR));
     const templatesDir = join(TEST_DIR, "templates");
     mkdirSync(templatesDir, { recursive: true });
     for (const s of ["impl", "validate"]) {
@@ -792,7 +794,7 @@ describe("pipeline retry integration", () => {
   });
 
   it("retries impl when review returns CHANGES_REQUIRED with new issues", async () => {
-    createRuntimeDirs(TEST_DIR);
+    createRuntimeDirs(buildPaths(TEST_DIR));
     const templatesDir = join(TEST_DIR, "templates");
     mkdirSync(templatesDir, { recursive: true });
     for (const s of ["impl", "validate", "review", "pr"]) {
@@ -861,7 +863,7 @@ describe("Spec 5a pipeline behavior", () => {
   }
 
   it("Test A: review retries once on HIGH_VALUE suggestion, then proceeds to validate → pr", async () => {
-    createRuntimeDirs(TEST_DIR);
+    createRuntimeDirs(buildPaths(TEST_DIR));
     const templatesDir = join(TEST_DIR, "templates");
     mkdirSync(templatesDir, { recursive: true });
     for (const s of ["impl", "review", "validate", "pr"]) {
@@ -933,7 +935,7 @@ describe("Spec 5a pipeline behavior", () => {
   });
 
   it("Test B: NITPICK-only suggestions do NOT trigger retry", async () => {
-    createRuntimeDirs(TEST_DIR);
+    createRuntimeDirs(buildPaths(TEST_DIR));
     const templatesDir = join(TEST_DIR, "templates");
     mkdirSync(templatesDir, { recursive: true });
     for (const s of ["impl", "review", "validate", "pr"]) {
@@ -992,7 +994,7 @@ describe("Spec 5a pipeline behavior", () => {
   });
 
   it("Test C: validate failure resets suggestion budget and loops back to impl", async () => {
-    createRuntimeDirs(TEST_DIR);
+    createRuntimeDirs(buildPaths(TEST_DIR));
     const templatesDir = join(TEST_DIR, "templates");
     mkdirSync(templatesDir, { recursive: true });
     for (const s of ["impl", "review", "validate", "pr"]) {
@@ -1154,7 +1156,7 @@ describe("collectArtifacts", () => {
 
 describe("F-1.1: manifest entry uses repoRoot for repoPath", () => {
   it("stores distinct repoPath and worktreePath in manifest when worktree is used", async () => {
-    createRuntimeDirs(TEST_DIR);
+    createRuntimeDirs(buildPaths(TEST_DIR));
     const templatesDir = join(TEST_DIR, "templates");
     mkdirSync(templatesDir, { recursive: true });
     writeFileSync(join(templatesDir, "prompt-questions.md"), "template", "utf-8");
@@ -1212,7 +1214,7 @@ describe("F-1.1: manifest entry uses repoRoot for repoPath", () => {
 
 describe("F-5.1: approveAndResume emits task_completed at last stage", () => {
   it("emits task_completed when approving a task at its last stage", async () => {
-    createRuntimeDirs(TEST_DIR);
+    createRuntimeDirs(buildPaths(TEST_DIR));
     const templatesDir = join(TEST_DIR, "templates");
     mkdirSync(templatesDir, { recursive: true });
     writeFileSync(join(templatesDir, "prompt-questions.md"), "template", "utf-8");
@@ -1265,7 +1267,7 @@ describe("F-5.1: approveAndResume emits task_completed at last stage", () => {
 
 describe("F-5.2: cancel records worktree completion", () => {
   it("creates manifest entry for worktree-backed tasks on cancel", async () => {
-    createRuntimeDirs(TEST_DIR);
+    createRuntimeDirs(buildPaths(TEST_DIR));
     const templatesDir = join(TEST_DIR, "templates");
     mkdirSync(templatesDir, { recursive: true });
     writeFileSync(join(templatesDir, "prompt-questions.md"), "template", "utf-8");
@@ -1319,7 +1321,7 @@ describe("F-5.2: cancel records worktree completion", () => {
 
 describe("F-5.6: modifyStages rejects removing currentStage", () => {
   it("throws when new stage list excludes the current stage", async () => {
-    createRuntimeDirs(TEST_DIR);
+    createRuntimeDirs(buildPaths(TEST_DIR));
     const templatesDir = join(TEST_DIR, "templates");
     mkdirSync(templatesDir, { recursive: true });
     writeFileSync(join(templatesDir, "prompt-questions.md"), "template", "utf-8");

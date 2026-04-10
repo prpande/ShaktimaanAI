@@ -5,6 +5,7 @@ import { type AgentRunnerFn, type RunState } from "./types.js";
 import { type ResolvedConfig } from "../config/loader.js";
 import { type TaskLogger } from "./logger.js";
 import { readRunState, writeRunState, moveTaskDir } from "./pipeline.js";
+import { TERMINAL_DIR_MAP } from "../config/paths.js";
 
 // ─── Types ──────────────────────────────────────────────────────────────────
 
@@ -414,7 +415,7 @@ export async function runRecoveryAgent(
 
     // Move from 11-failed to 12-hold
     const runtimeDir = join(taskDir, "..", "..");
-    moveTaskDir(runtimeDir, state.slug, "11-failed", "12-hold");
+    moveTaskDir(runtimeDir, state.slug, TERMINAL_DIR_MAP.failed, TERMINAL_DIR_MAP.hold);
 
     emitNotify({
       type: "recovery_diagnosed",

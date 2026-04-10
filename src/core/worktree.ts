@@ -40,11 +40,16 @@ export interface WorktreeManifestEntry {
  * Creates a git worktree for the given repo at {worktreesDir}/{slug}.
  * Creates branch shkmn/{slug} from HEAD (or baseBranch if provided).
  * If the worktree already exists (crash recovery), returns its path unchanged.
+ *
+ * @param manifestPath - Path to the worktree manifest JSON file (required).
+ *   The creation is recorded there. Callers should pass `config.paths.worktreeManifest`.
+ * @param baseBranch - Optional branch to create the worktree from. Defaults to HEAD.
  */
 export function createWorktree(
   repoPath: string,
   slug: string,
   worktreesDir: string,
+  manifestPath: string,
   baseBranch?: string,
 ): string {
   const worktreePath = join(worktreesDir, slug);
@@ -69,7 +74,6 @@ export function createWorktree(
   });
 
   // Record creation in manifest
-  const manifestPath = join(dirname(worktreesDir), "worktree-manifest.json");
   try {
     recordWorktreeCreation(manifestPath, {
       slug,

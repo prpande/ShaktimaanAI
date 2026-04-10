@@ -70,7 +70,7 @@ describe("Astra end-to-end flow", () => {
         stages: result!.recommendedStages,
         stageHints: result!.stageHints,
       },
-      TEST_DIR,
+      join(TEST_DIR, "00-inbox"),
       config,
       result!.enrichedContext,
       result!.repoSummary,
@@ -123,7 +123,7 @@ describe("Astra end-to-end flow", () => {
         content: "fix the null check in watcher.ts",
         stages: result!.recommendedStages,
       },
-      TEST_DIR,
+      join(TEST_DIR, "00-inbox"),
       config,
     );
 

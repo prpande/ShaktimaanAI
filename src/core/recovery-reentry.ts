@@ -4,6 +4,7 @@ import { join } from "node:path";
 import { PIPELINE_STAGES } from "./stage-map.js";
 import { STAGE_DIR_MAP } from "./stage-map.js";
 import { readRunState, writeRunState, moveTaskDir } from "./pipeline.js";
+import { TERMINAL_DIR_MAP } from "../config/paths.js";
 
 // ─── Types ──────────────────────────────────────────────────────────────────
 
@@ -81,7 +82,7 @@ export function reenterTask(
   runtimeDir: string,
   slug: string,
 ): ReentryResult {
-  const holdDir = join(runtimeDir, "12-hold", slug);
+  const holdDir = join(runtimeDir, TERMINAL_DIR_MAP.hold, slug);
 
   // 1. Verify task exists in 12-hold
   if (!existsSync(holdDir)) {
@@ -150,7 +151,7 @@ export function reenterTask(
   // 5. Move from 12-hold to {stage}/pending
   const targetSubdir = join(STAGE_DIR_MAP[reEntryStage], "pending");
   try {
-    moveTaskDir(runtimeDir, slug, "12-hold", targetSubdir);
+    moveTaskDir(runtimeDir, slug, TERMINAL_DIR_MAP.hold, targetSubdir);
   } catch (err) {
     return { success: false, error: `Failed to move task: ${err instanceof Error ? err.message : String(err)}` };
   }

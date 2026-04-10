@@ -40,13 +40,13 @@ describe("findHeldTask", () => {
     const slug = "my-feature-task";
     mkdirSync(join(TEST_DIR, "12-hold", slug), { recursive: true });
 
-    const result = findHeldTask(TEST_DIR, slug);
+    const result = findHeldTask(join(TEST_DIR, "12-hold"), slug);
 
     expect(result).toBe(join(TEST_DIR, "12-hold", slug));
   });
 
   it("returns null when the slug directory does not exist", () => {
-    const result = findHeldTask(TEST_DIR, "nonexistent-slug");
+    const result = findHeldTask(join(TEST_DIR, "12-hold"), "nonexistent-slug");
     expect(result).toBeNull();
   });
 
@@ -54,7 +54,7 @@ describe("findHeldTask", () => {
     const slug = "file-not-dir";
     writeFileSync(join(TEST_DIR, "12-hold", slug), "not a directory", "utf-8");
 
-    const result = findHeldTask(TEST_DIR, slug);
+    const result = findHeldTask(join(TEST_DIR, "12-hold"), slug);
     expect(result).toBeNull();
   });
 });
@@ -66,7 +66,7 @@ describe("listHeldTasks", () => {
     mkdirSync(join(TEST_DIR, "12-hold", "task-alpha"), { recursive: true });
     mkdirSync(join(TEST_DIR, "12-hold", "task-beta"), { recursive: true });
 
-    const result = listHeldTasks(TEST_DIR);
+    const result = listHeldTasks(join(TEST_DIR, "12-hold"));
 
     expect(result).toHaveLength(2);
     expect(result).toContain("task-alpha");
@@ -74,13 +74,13 @@ describe("listHeldTasks", () => {
   });
 
   it("returns empty array when 12-hold is empty", () => {
-    const result = listHeldTasks(TEST_DIR);
+    const result = listHeldTasks(join(TEST_DIR, "12-hold"));
     expect(result).toEqual([]);
   });
 
   it("returns empty array when 12-hold directory does not exist", () => {
     rmSync(join(TEST_DIR, "12-hold"), { recursive: true, force: true });
-    const result = listHeldTasks(TEST_DIR);
+    const result = listHeldTasks(join(TEST_DIR, "12-hold"));
     expect(result).toEqual([]);
   });
 
@@ -88,7 +88,7 @@ describe("listHeldTasks", () => {
     mkdirSync(join(TEST_DIR, "12-hold", "dir-task"), { recursive: true });
     writeFileSync(join(TEST_DIR, "12-hold", "some-file.json"), "{}", "utf-8");
 
-    const result = listHeldTasks(TEST_DIR);
+    const result = listHeldTasks(join(TEST_DIR, "12-hold"));
 
     expect(result).toEqual(["dir-task"]);
   });
@@ -103,7 +103,7 @@ describe("approveTask", () => {
     const logger = makeStubLogger();
 
     await expect(
-      approveTask(input, TEST_DIR, pipeline, logger),
+      approveTask(input, join(TEST_DIR, "12-hold"), pipeline, logger),
     ).rejects.toThrow(/ghost-task/);
   });
 
@@ -118,7 +118,7 @@ describe("approveTask", () => {
     const logger = makeStubLogger();
 
     const input: ApproveInput = { source: "slack", taskSlug: slug, feedback: "Looks great!" };
-    await approveTask(input, TEST_DIR, pipeline, logger);
+    await approveTask(input, join(TEST_DIR, "12-hold"), pipeline, logger);
 
     expect(calls).toHaveLength(1);
     expect(calls[0].slug).toBe(slug);
@@ -136,7 +136,7 @@ describe("approveTask", () => {
     const logger = makeStubLogger();
 
     const input: ApproveInput = { source: "dashboard", taskSlug: slug };
-    await approveTask(input, TEST_DIR, pipeline, logger);
+    await approveTask(input, join(TEST_DIR, "12-hold"), pipeline, logger);
 
     expect(calls).toHaveLength(1);
     expect(calls[0].slug).toBe(slug);
@@ -156,7 +156,7 @@ describe("approveTask", () => {
     const pipeline = makeStubPipeline();
 
     const input: ApproveInput = { source: "cli", taskSlug: slug };
-    await approveTask(input, TEST_DIR, pipeline, logger);
+    await approveTask(input, join(TEST_DIR, "12-hold"), pipeline, logger);
 
     expect(logs.some((l) => l.includes(slug))).toBe(true);
   });

@@ -43,7 +43,7 @@ describe("listHeldRecoveryTasks", () => {
   });
 
   it("returns empty array when no held tasks exist", () => {
-    const result = listHeldRecoveryTasks(runtimeDir);
+    const result = listHeldRecoveryTasks(join(runtimeDir, "12-hold"));
     expect(result).toEqual([]);
   });
 
@@ -58,7 +58,7 @@ describe("listHeldRecoveryTasks", () => {
     mkdirSync(taskDir, { recursive: true });
     writeFileSync(join(taskDir, "run-state.json"), JSON.stringify(makeHoldState({ slug })));
 
-    const result = listHeldRecoveryTasks(runtimeDir);
+    const result = listHeldRecoveryTasks(join(runtimeDir, "12-hold"));
     expect(result).toHaveLength(1);
     expect(result[0].slug).toBe(slug);
     expect(result[0].diagnosis).toBe("Tool permission missing in impl stage");
@@ -76,7 +76,7 @@ describe("listHeldRecoveryTasks", () => {
       JSON.stringify(makeHoldState({ slug, holdReason: "user_paused" })),
     );
 
-    const result = listHeldRecoveryTasks(runtimeDir);
+    const result = listHeldRecoveryTasks(join(runtimeDir, "12-hold"));
     expect(result).toHaveLength(0);
   });
 
@@ -95,7 +95,7 @@ describe("listHeldRecoveryTasks", () => {
       ),
     );
 
-    const result = listHeldRecoveryTasks(runtimeDir);
+    const result = listHeldRecoveryTasks(join(runtimeDir, "12-hold"));
     expect(result).toHaveLength(1);
     expect(result[0].issueUrl).toBeUndefined();
     expect(result[0].issueNumber).toBeUndefined();
@@ -117,14 +117,14 @@ describe("getRecoveryTaskDetail", () => {
     const state = makeHoldState({ slug });
     writeFileSync(join(taskDir, "run-state.json"), JSON.stringify(state));
 
-    const result = getRecoveryTaskDetail(runtimeDir, slug);
+    const result = getRecoveryTaskDetail(join(runtimeDir, "12-hold"), slug);
     expect(result).not.toBeNull();
     expect(result!.slug).toBe(slug);
     expect(result!.holdReason).toBe("awaiting_fix");
   });
 
   it("returns null for non-existent task", () => {
-    const result = getRecoveryTaskDetail(runtimeDir, "nonexistent");
+    const result = getRecoveryTaskDetail(join(runtimeDir, "12-hold"), "nonexistent");
     expect(result).toBeNull();
   });
 });

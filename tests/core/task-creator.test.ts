@@ -288,7 +288,7 @@ describe("createTask", () => {
       content: "Implement retry logic",
     };
 
-    const slug = createTask(input, TEST_DIR, config);
+    const slug = createTask(input, join(TEST_DIR, "00-inbox"), config);
 
     const taskFilePath = join(TEST_DIR, "00-inbox", `${slug}.task`);
     expect(existsSync(taskFilePath)).toBe(true);
@@ -301,7 +301,7 @@ describe("createTask", () => {
       content: "Build the new feature",
     };
 
-    const slug = createTask(input, TEST_DIR, config);
+    const slug = createTask(input, join(TEST_DIR, "00-inbox"), config);
 
     expect(slug).toMatch(/^build-the-new-feature-\d{14}$/);
     const taskFilePath = join(TEST_DIR, "00-inbox", `${slug}.task`);
@@ -316,7 +316,7 @@ describe("createTask", () => {
       repo: "org/repo",
     };
 
-    const slug = createTask(input, TEST_DIR, config);
+    const slug = createTask(input, join(TEST_DIR, "00-inbox"), config);
 
     const taskFilePath = join(TEST_DIR, "00-inbox", `${slug}.task`);
     const fileContent = readFileSync(taskFilePath, "utf-8");
@@ -335,7 +335,7 @@ describe("createTask", () => {
 
     // Create a second inbox to test; we can't guarantee timestamp uniqueness
     // within the same second, but we can verify the slug format is correct
-    const slug = createTask(input, TEST_DIR, config);
+    const slug = createTask(input, join(TEST_DIR, "00-inbox"), config);
     expect(slug).toMatch(/^same-content-task-\d{14}$/);
   });
 
@@ -346,7 +346,7 @@ describe("createTask", () => {
       content: "Fix the login bug\n\nAdditional context about the bug here.",
     };
 
-    const slug = createTask(input, TEST_DIR, config);
+    const slug = createTask(input, join(TEST_DIR, "00-inbox"), config);
 
     expect(slug).toMatch(/^fix-the-login-bug-\d{14}$/);
 

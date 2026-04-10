@@ -1,6 +1,7 @@
 import * as fs from "node:fs";
 import * as path from "node:path";
 import { STAGE_DIR_MAP, DIR_STAGE_MAP } from "./stage-map.js";
+import { TERMINAL_DIR_MAP } from "../config/paths.js";
 
 export interface ActiveTask {
   slug: string;
@@ -45,7 +46,7 @@ export function listActiveSlugs(runtimeDir: string): ActiveTask[] {
   }
 
   // Scan 12-hold (flat structure, no pending/done)
-  const holdDir = path.join(runtimeDir, "12-hold");
+  const holdDir = path.join(runtimeDir, TERMINAL_DIR_MAP.hold);
   if (fs.existsSync(holdDir)) {
     let entries: fs.Dirent[];
     try {
@@ -58,7 +59,7 @@ export function listActiveSlugs(runtimeDir: string): ActiveTask[] {
       if (!entry.isDirectory()) continue;
       results.push({
         slug: entry.name,
-        dir: "12-hold",
+        dir: TERMINAL_DIR_MAP.hold,
         stage: "hold",
         status: "held",
       });

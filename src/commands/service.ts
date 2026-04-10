@@ -4,8 +4,7 @@ import { join, dirname } from "node:path";
 import { homedir } from "node:os";
 import { execSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
-import { resolveConfigPath } from "../config/resolve-path.js";
-import { loadConfig } from "../config/loader.js";
+import { findConfigPath, loadConfig } from "../config/loader.js";
 
 // ─── Helpers ───────────────────────────────────────────────────────────────
 
@@ -71,10 +70,10 @@ export function registerServiceCommand(program: Command): void {
     .command("install")
     .description("Install the watchdog as a Windows Scheduled Task")
     .action(() => {
-      const configPath = resolveConfigPath();
+      const configPath = findConfigPath();
       const config = loadConfig(configPath);
 
-      const pidFile = join(config.pipeline.runtimeDir, "shkmn.pid");
+      const pidFile = config.paths.pidFile;
       const mode = config.service.mode;
       const repoPath = config.service.repoPath || process.cwd();
       const intervalMinutes = config.service.checkIntervalMinutes;
