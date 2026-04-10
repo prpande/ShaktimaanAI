@@ -24,7 +24,7 @@ export function registerStartCommand(program: Command): void {
   program
     .command("start")
     .description("Start the ShaktimaanAI pipeline watcher")
-    .action(async () => {
+    .action(async (_opts: unknown, cmd: Command) => {
       // 1. Resolve config and load env
       const configPath = resolveConfigPath();
       const config = loadConfig(configPath);
@@ -42,8 +42,8 @@ export function registerStartCommand(program: Command): void {
       }
 
       // 3. Show banner (after validation so errors aren't hidden behind animation)
-      const noBanner = program.opts?.()?.banner === false;
-      await showBanner({ noBanner, version: config.pipeline?.version ?? "" });
+      const noBanner = cmd.optsWithGlobals().banner === false;
+      await showBanner({ noBanner, version: program.version() ?? "" });
 
       // 4. Create system logger and agent registry
       const logDir = join(config.pipeline.runtimeDir, "logs");

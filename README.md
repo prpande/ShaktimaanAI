@@ -1,5 +1,6 @@
 <!-- Last verified: 2026-04-10 | Sources of truth: src/cli.ts (commands), src/config/defaults.ts (agent names, config, budgets) -->
 
+<!-- Banner: generate with `vhs demo.tape` and commit to assets/banner.gif -->
 <p align="center">
   <img src="./assets/banner.gif" alt="ShaktimaanAI CLI Banner" width="600">
 </p>
