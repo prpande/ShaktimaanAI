@@ -69,6 +69,27 @@ Also in `defaults.ts` (`STAGE_CONTEXT_RULES`): controls what context each stage 
 - **Windows EBUSY handling**: retry logic with exponential backoff exists for file operations
 - **Agent prompts**: `agents/*.md` — each file is a self-contained prompt template loaded at runtime
 
+## Document Lifecycle Directories
+
+Specs, plans, and validation docs follow a lifecycle convention:
+
+```
+docs/
+├── specs/          ← Design specifications
+│   ├── new/        ← Newly written, not yet implemented
+│   ├── pending/    ← Implementation in progress
+│   └── done/       ← Implemented and validated
+├── plans/          ← Implementation plans
+│   ├── new/        ← Newly written, not yet started
+│   └── done/       ← Executed and complete
+└── validation/     ← Validation reports
+```
+
+- **Specs** go in `docs/specs/new/` when first written. Move to `pending/` when implementation begins, and `done/` when complete.
+- **Plans** go in `docs/plans/new/` when created. Move to `done/` after execution.
+- Naming convention: `YYYY-MM-DD-spec<N>-<topic>-design.md` for specs (e.g., `2026-04-10-spec7-askuser-design.md`), `YYYY-MM-DD-<topic>.md` for plans. The spec number `<N>` is project-wide and sequential (check `docs/specs/done/` for the latest number). Sub-specs use letter suffixes (e.g., `spec5a`, `spec5b`).
+- Do NOT use `docs/superpowers/specs/` or `docs/superpowers/plans/` — those are legacy paths.
+
 ## Pipeline Diagnostics
 
 Run `/pipeline-diagnostics` to audit the pipeline runtime directory. The skill:
