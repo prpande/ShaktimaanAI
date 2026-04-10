@@ -406,7 +406,7 @@ export async function runRecoveryStartupScan(
             state.holdDetail = undefined;
             const { writeRunState: writeState } = await import("./pipeline.js");
             writeState(taskDir, state);
-            moveTaskDir(runtimeDir, held.slug, "12-hold", "11-failed");
+            moveTaskDir(runtimeDir, held.slug, TERMINAL_DIR_MAP.hold, TERMINAL_DIR_MAP.failed);
             terminal.push(held.slug);
             logger.info(`[startup-scan] Moved "${held.slug}" to failed — issue #${held.issueNumber} closed as NOT_PLANNED`);
           } catch (err) {

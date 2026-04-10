@@ -151,7 +151,7 @@ export function reenterTask(
   // 5. Move from 12-hold to {stage}/pending
   const targetSubdir = join(STAGE_DIR_MAP[reEntryStage], "pending");
   try {
-    moveTaskDir(runtimeDir, slug, "12-hold", targetSubdir);
+    moveTaskDir(runtimeDir, slug, TERMINAL_DIR_MAP.hold, targetSubdir);
   } catch (err) {
     return { success: false, error: `Failed to move task: ${err instanceof Error ? err.message : String(err)}` };
   }

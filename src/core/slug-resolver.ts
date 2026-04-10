@@ -59,7 +59,7 @@ export function listActiveSlugs(runtimeDir: string): ActiveTask[] {
       if (!entry.isDirectory()) continue;
       results.push({
         slug: entry.name,
-        dir: "12-hold",
+        dir: TERMINAL_DIR_MAP.hold,
         stage: "hold",
         status: "held",
       });

@@ -49,7 +49,7 @@ export function createWorktree(
   slug: string,
   worktreesDir: string,
   baseBranch?: string,
-  manifestPath?: string,
+  manifestPath: string,
 ): string {
   const worktreePath = join(worktreesDir, slug);
   const branchName = `shkmn/${slug}`;
@@ -72,10 +72,9 @@ export function createWorktree(
     stdio: "pipe",
   });
 
-  // Record creation in manifest (fall back to sibling of worktreesDir if not provided)
-  const resolvedManifestPath = manifestPath ?? join(dirname(worktreesDir), "worktree-manifest.json");
+  // Record creation in manifest
   try {
-    recordWorktreeCreation(resolvedManifestPath, {
+    recordWorktreeCreation(manifestPath, {
       slug,
       repoPath,
       worktreePath,
