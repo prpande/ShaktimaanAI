@@ -73,7 +73,7 @@ export function registerServiceCommand(program: Command): void {
       const configPath = findConfigPath();
       const config = loadConfig(configPath);
 
-      const pidFile = join(config.pipeline.runtimeDir, "shkmn.pid");
+      const pidFile = config.paths.pidFile;
       const mode = config.service.mode;
       const repoPath = config.service.repoPath || process.cwd();
       const intervalMinutes = config.service.checkIntervalMinutes;

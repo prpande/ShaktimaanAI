@@ -8,8 +8,8 @@ export function writeControlFile(
   payload: Record<string, unknown>,
 ): string {
   const config = loadConfig(findConfigPath());
-  const slug = resolveSlugOrExit(rawSlug, config.pipeline.runtimeDir);
-  const inboxDir = join(config.pipeline.runtimeDir, "00-inbox");
+  const slug = resolveSlugOrExit(rawSlug, config.paths.runtimeDir);
+  const inboxDir = config.paths.terminals.inbox;
   mkdirSync(inboxDir, { recursive: true });
   writeFileSync(
     join(inboxDir, `${slug}.control`),

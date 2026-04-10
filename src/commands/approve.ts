@@ -12,9 +12,9 @@ export function registerApproveCommand(program: Command): void {
     .option("--feedback <feedback>", "Optional feedback message")
     .action((slug: string, opts: { feedback?: string }) => {
       const config = loadConfig(findConfigPath());
-      const resolved = resolveSlugOrExit(slug, config.pipeline.runtimeDir);
+      const resolved = resolveSlugOrExit(slug, config.paths.runtimeDir);
 
-      const taskPath = findHeldTask(config.pipeline.runtimeDir, resolved);
+      const taskPath = findHeldTask(config.paths.terminals.hold, resolved);
       if (taskPath === null) {
         console.error(`Task "${resolved}" not found in hold (12-hold). Is it waiting for review?`);
         process.exit(1);

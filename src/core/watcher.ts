@@ -172,18 +172,18 @@ export function createWatcher(options: WatcherOptions): Watcher {
       } catch { /* no hold dir */ }
 
       // Build Narada payload
-      const payload = buildNaradaPayload(runtimeDir, {
-        channelId: config.slack.channelId,
-        allowDMs: config.slack.allowDMs,
-        dmUserIds: config.slack.dmUserIds,
-        heldSlugs,
-        outboundPrefix: config.slack.outboundPrefix,
-      }, {
+      const payload = buildNaradaPayload({
         outbox:  config.paths.slackOutbox,
         inbox:   config.paths.slackInbox,
         sent:    config.paths.slackSent,
         threads: config.paths.slackThreads,
         cursor:  config.paths.slackCursor,
+      }, {
+        channelId: config.slack.channelId,
+        allowDMs: config.slack.allowDMs,
+        dmUserIds: config.slack.dmUserIds,
+        heldSlugs,
+        outboundPrefix: config.slack.outboundPrefix,
       });
 
       // Warn if DMs enabled but no user IDs
@@ -193,7 +193,7 @@ export function createWatcher(options: WatcherOptions): Watcher {
 
       // Truncate slack-io stream file to prevent unbounded growth
       try {
-        writeFileSync(join(runtimeDir, "slack-io-output-stream.jsonl"), "", "utf-8");
+        writeFileSync(config.paths.slackIoOutputStream, "", "utf-8");
       } catch { /* swallow — file may not exist yet */ }
 
       // Spawn Narada
@@ -203,7 +203,7 @@ export function createWatcher(options: WatcherOptions): Watcher {
         slug: "slack-io-poll",
         taskContent: JSON.stringify(payload, null, 2),
         previousOutput: "",
-        outputPath: join(runtimeDir, "slack-io-output.md"),
+        outputPath: config.paths.slackIoOutput,
         cwd: runtimeDir,
         config,
         abortController,
@@ -229,7 +229,7 @@ export function createWatcher(options: WatcherOptions): Watcher {
       } catch { /* swallow */ }
 
       // Post-process inbox
-      const inboxEntries = readInbox(runtimeDir);
+      const inboxEntries = readInbox(config.paths.slackInbox);
 
       for (const entry of inboxEntries) {
         // Skip malformed entries (e.g., sent log entries written to inbox by mistake)
@@ -338,9 +338,9 @@ export function createWatcher(options: WatcherOptions): Watcher {
 
               // Track conversation thread BEFORE checking success — always register the thread
               const answerThreadTs = entry.thread_ts ?? entry.ts;
-              const threadMap = loadThreadMap(runtimeDir);
+              const threadMap = loadThreadMap(config.paths.slackThreads);
               threadMap[`astra-${entry.ts.replace(".", "-")}`] = answerThreadTs;
-              saveThreadMap(runtimeDir, threadMap);
+              saveThreadMap(config.paths.slackThreads, threadMap);
 
               if (executeResult.success && executeResult.output) {
                 writeOutboxEntry(
@@ -383,7 +383,7 @@ export function createWatcher(options: WatcherOptions): Watcher {
                 stageHints: triageResult.stageHints ?? undefined,
                 requiredMcpServers: triageResult.requiredMcpServers ?? undefined,
               },
-              runtimeDir,
+              config.paths.terminals.inbox,
               config,
               triageResult.enrichedContext ?? undefined,
               triageResult.repoSummary ?? undefined,
@@ -396,11 +396,11 @@ export function createWatcher(options: WatcherOptions): Watcher {
 
       // Clear inbox after processing
       if (inboxEntries.length > 0) {
-        clearInbox(runtimeDir);
+        clearInbox(config.paths.slackInbox);
       }
 
       // Log sent confirmations
-      const sentEntries = readSentLog(runtimeDir);
+      const sentEntries = readSentLog(config.paths.slackSent);
       if (sentEntries.length > 0) {
         logger.info(`[watcher] Slack: ${sentEntries.length} message(s) confirmed sent`);
       }

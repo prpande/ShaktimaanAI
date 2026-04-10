@@ -3,7 +3,6 @@ import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { findConfigPath, loadConfig } from "../config/loader.js";
 import { reenterTask, type ReentryResult } from "../core/recovery-reentry.js";
-import { TERMINAL_DIR_MAP } from "../config/paths.js";
 
 // ─── Types ─────────────────────────────────────────────────────────────────
 
@@ -20,8 +19,7 @@ export interface HeldRecoveryTask {
 /**
  * Lists all tasks in 12-hold/ with holdReason "awaiting_fix".
  */
-export function listHeldRecoveryTasks(runtimeDir: string): HeldRecoveryTask[] {
-  const holdDir = join(runtimeDir, TERMINAL_DIR_MAP.hold);
+export function listHeldRecoveryTasks(holdDir: string): HeldRecoveryTask[] {
   if (!existsSync(holdDir)) return [];
 
   const results: HeldRecoveryTask[] = [];
@@ -59,10 +57,10 @@ export function listHeldRecoveryTasks(runtimeDir: string): HeldRecoveryTask[] {
  * Returns the full run-state JSON for a specific held task, or null if not found.
  */
 export function getRecoveryTaskDetail(
-  runtimeDir: string,
+  holdDir: string,
   slug: string,
 ): Record<string, unknown> | null {
-  const stateFile = join(runtimeDir, TERMINAL_DIR_MAP.hold, slug, "run-state.json");
+  const stateFile = join(holdDir, slug, "run-state.json");
   if (!existsSync(stateFile)) return null;
 
   try {
@@ -85,7 +83,7 @@ export function registerRecoverCommand(program: Command): void {
 
       if (!slug) {
         // List all held recovery tasks
-        const tasks = listHeldRecoveryTasks(config.paths.runtimeDir);
+        const tasks = listHeldRecoveryTasks(config.paths.terminals.hold);
         if (tasks.length === 0) {
           console.log("No held recovery tasks.");
           return;
@@ -103,7 +101,7 @@ export function registerRecoverCommand(program: Command): void {
 
       if (options.reenter) {
         // Re-enter the task
-        const result: ReentryResult = reenterTask(config.paths.runtimeDir, slug);
+        const result: ReentryResult = reenterTask(config.paths.runtimeDir, slug);  // runtimeDir needed for reentry logic
         if (result.success) {
           console.log(`Task "${slug}" re-entered pipeline at stage "${result.reEntryStage}".`);
         } else {
@@ -114,9 +112,9 @@ export function registerRecoverCommand(program: Command): void {
       }
 
       // Show detail for specific task
-      const detail = getRecoveryTaskDetail(config.paths.runtimeDir, slug);
+      const detail = getRecoveryTaskDetail(config.paths.terminals.hold, slug);
       if (!detail) {
-        console.error(`Task "${slug}" not found in ${TERMINAL_DIR_MAP.hold}.`);
+        console.error(`Task "${slug}" not found in hold.`);
         process.exit(1);
       }
 

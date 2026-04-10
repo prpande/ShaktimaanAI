@@ -1,5 +1,5 @@
 import { appendFileSync, mkdirSync } from "node:fs";
-import { join, dirname } from "node:path";
+import { dirname } from "node:path";
 import { randomBytes } from "node:crypto";
 import type { Notifier, NotifyEvent, NotifyLevel } from "./types.js";
 import { shouldNotify } from "./types.js";
@@ -10,10 +10,11 @@ import { loadThreadMap } from "../core/slack-queue.js";
 export interface SlackNotifierOptions {
   channelId: string;
   notifyLevel: NotifyLevel;
-  runtimeDir: string;
+  /** Path to slack-outbox.jsonl (from config.paths.slackOutbox). */
+  outboxPath: string;
+  /** Path to slack-threads.json (from config.paths.slackThreads). */
+  threadsPath: string;
   timezone?: string;
-  /** Explicit path to slack-outbox.jsonl — overrides join(runtimeDir, "slack-outbox.jsonl"). */
-  outboxPath?: string;
   /** Called after writing to outbox — wire to triggerNaradaSend for immediate delivery. */
   onOutboxWrite?: () => void;
 }
@@ -208,15 +209,14 @@ export function formatEvent(event: NotifyEvent, timezone: string = "UTC"): strin
 // ─── createSlackNotifier ──────────────────────────────────────────────────────
 
 export function createSlackNotifier(options: SlackNotifierOptions): Notifier {
-  const { channelId, notifyLevel, runtimeDir, onOutboxWrite } = options;
-  const outboxPath = options.outboxPath ?? join(runtimeDir, "slack-outbox.jsonl");
+  const { channelId, notifyLevel, outboxPath, threadsPath, onOutboxWrite } = options;
 
   return {
     async notify(event: NotifyEvent): Promise<void> {
       if (!shouldNotify(notifyLevel, event)) return;
 
       const text = formatEvent(event, options.timezone);
-      const threadMap = loadThreadMap(runtimeDir);
+      const threadMap = loadThreadMap(threadsPath);
 
       let thread_ts: string | null = null;
       if (event.type === "task_created" && "slackThread" in event && event.slackThread) {

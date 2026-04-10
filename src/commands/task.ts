@@ -53,7 +53,7 @@ export function registerTaskCommand(program: Command): void {
           stages,
           stageHints: Object.keys(stageHints).length > 0 ? stageHints : undefined,
         },
-        config.pipeline.runtimeDir,
+        config.paths.terminals.inbox,
         config,
       );
 

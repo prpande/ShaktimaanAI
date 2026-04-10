@@ -62,6 +62,8 @@ export interface RuntimePaths {
   readonly slackThreads: string;
   readonly slackCursor: string;
   readonly slackProcessed: string;
+  readonly slackIoOutput: string;
+  readonly slackIoOutputStream: string;
 
   // Task path resolver — pipeline stage overload
   resolveTask(slug: string, stage: PipelineStageName, location: "pending" | "done", retryNumber?: number): TaskPaths;
@@ -148,12 +150,14 @@ export function buildPaths(runtimeDir: string): RuntimePaths {
     configFile:        join(runtimeDir, "shkmn.config.json"),
 
     // Slack files
-    slackOutbox:   join(runtimeDir, "slack-outbox.jsonl"),
-    slackInbox:    join(runtimeDir, "slack-inbox.jsonl"),
-    slackSent:     join(runtimeDir, "slack-sent.jsonl"),
-    slackThreads:  join(runtimeDir, "slack-threads.json"),
-    slackCursor:   join(runtimeDir, "slack-cursor.json"),
-    slackProcessed: join(runtimeDir, "slack-processed.json"),
+    slackOutbox:        join(runtimeDir, "slack-outbox.jsonl"),
+    slackInbox:         join(runtimeDir, "slack-inbox.jsonl"),
+    slackSent:          join(runtimeDir, "slack-sent.jsonl"),
+    slackThreads:       join(runtimeDir, "slack-threads.json"),
+    slackCursor:        join(runtimeDir, "slack-cursor.json"),
+    slackProcessed:     join(runtimeDir, "slack-processed.json"),
+    slackIoOutput:      join(runtimeDir, "slack-io-output.md"),
+    slackIoOutputStream: join(runtimeDir, "slack-io-output-stream.jsonl"),
 
     resolveTask: resolveTask as RuntimePaths["resolveTask"],
   });

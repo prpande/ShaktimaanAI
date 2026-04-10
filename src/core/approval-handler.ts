@@ -3,7 +3,6 @@ import { join } from "node:path";
 
 import { type Pipeline } from "./pipeline.js";
 import { type TaskLogger } from "./logger.js";
-import { TERMINAL_DIR_MAP } from "../config/paths.js";
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -16,11 +15,12 @@ export interface ApproveInput {
 // ─── findHeldTask ────────────────────────────────────────────────────────────
 
 /**
- * Checks whether {runtimeDir}/12-hold/{slug} exists as a directory.
+ * Checks whether {holdDir}/{slug} exists as a directory.
  * Returns the full path if found, null otherwise.
+ * Pass config.paths.terminals.hold as holdDir.
  */
-export function findHeldTask(runtimeDir: string, slug: string): string | null {
-  const taskPath = join(runtimeDir, TERMINAL_DIR_MAP.hold, slug);
+export function findHeldTask(holdDir: string, slug: string): string | null {
+  const taskPath = join(holdDir, slug);
   try {
     if (existsSync(taskPath) && statSync(taskPath).isDirectory()) {
       return taskPath;
@@ -34,12 +34,12 @@ export function findHeldTask(runtimeDir: string, slug: string): string | null {
 // ─── listHeldTasks ───────────────────────────────────────────────────────────
 
 /**
- * Lists directory names (task slugs) in {runtimeDir}/12-hold/.
+ * Lists directory names (task slugs) in holdDir (12-hold/).
  * Returns an empty array if the directory doesn't exist or is empty.
  * Files are ignored — only directories are returned.
+ * Pass config.paths.terminals.hold as holdDir.
  */
-export function listHeldTasks(runtimeDir: string): string[] {
-  const holdDir = join(runtimeDir, TERMINAL_DIR_MAP.hold);
+export function listHeldTasks(holdDir: string): string[] {
   if (!existsSync(holdDir)) {
     return [];
   }
@@ -63,13 +63,13 @@ export function listHeldTasks(runtimeDir: string): string[] {
  */
 export async function approveTask(
   input: ApproveInput,
-  runtimeDir: string,
+  holdDir: string,
   pipeline: Pipeline,
   logger: TaskLogger,
 ): Promise<void> {
   const { taskSlug, feedback } = input;
 
-  const taskPath = findHeldTask(runtimeDir, taskSlug);
+  const taskPath = findHeldTask(holdDir, taskSlug);
   if (taskPath === null) {
     throw new Error(`Task "${taskSlug}" not found in hold`);
   }

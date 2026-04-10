@@ -231,11 +231,12 @@ export function createPipeline(options: PipelineOptions): Pipeline {
     if (existsSync(holdPath)) return { dir: holdPath, subdir: TERMINAL_DIR_MAP.hold };
 
     // Check all stage dirs (pending and done)
-    for (const stageDir of STAGES_WITH_PENDING_DONE) {
-      const pendingPath = join(runtimeDir, stageDir, "pending", slug);
-      if (existsSync(pendingPath)) return { dir: pendingPath, subdir: join(stageDir, "pending") };
-      const donePath = join(runtimeDir, stageDir, "done", slug);
-      if (existsSync(donePath)) return { dir: donePath, subdir: join(stageDir, "done") };
+    for (const [stageName, stageAbsDir] of Object.entries(config.paths.stages)) {
+      if (!STAGES_WITH_PENDING_DONE.includes(STAGE_DIR_MAP[stageName as PipelineStageName])) continue;
+      const pendingPath = join(stageAbsDir, "pending", slug);
+      if (existsSync(pendingPath)) return { dir: pendingPath, subdir: join(STAGE_DIR_MAP[stageName as PipelineStageName], "pending") };
+      const donePath = join(stageAbsDir, "done", slug);
+      if (existsSync(donePath)) return { dir: donePath, subdir: join(STAGE_DIR_MAP[stageName as PipelineStageName], "done") };
     }
 
     return null;

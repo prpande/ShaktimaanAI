@@ -100,8 +100,8 @@ export function registerStartCommand(program: Command): void {
         pipeline.addNotifier(createSlackNotifier({
           channelId: config.slack.channelId,
           notifyLevel: config.slack.notifyLevel,
-          runtimeDir: config.pipeline.runtimeDir,
           outboxPath: config.paths.slackOutbox,
+          threadsPath: config.paths.slackThreads,
           timezone: config.slack.timezone,
           onOutboxWrite: () => activeWatcher?.triggerSlackSend(),
         }));

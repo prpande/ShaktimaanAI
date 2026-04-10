@@ -166,11 +166,12 @@ export function buildTaskFileContent(
 
 /**
  * Creates a task: extracts title, generates slug, builds .task file content,
- * writes to {runtimeDir}/00-inbox/{slug}.task, and returns the slug.
+ * writes to {inboxDir}/{slug}.task, and returns the slug.
+ * Pass config.paths.terminals.inbox as inboxDir.
  */
 export function createTask(
   input: CreateTaskInput,
-  runtimeDir: string,
+  inboxDir: string,
   config: ResolvedConfig,
   enrichedContext?: string,
   repoSummary?: string,
@@ -179,7 +180,7 @@ export function createTask(
   const title = sanitized && sanitized.length > 0 ? sanitized : extractTitle(input.content);
   const slug = generateSlug(title);
   const content = buildTaskFileContent(input, config, enrichedContext, repoSummary);
-  const filePath = join(runtimeDir, "00-inbox", `${slug}.task`);
+  const filePath = join(inboxDir, `${slug}.task`);
   mkdirSync(dirname(filePath), { recursive: true });
   writeFileSync(filePath, content, "utf-8");
   return slug;

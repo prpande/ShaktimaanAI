@@ -112,7 +112,7 @@ describe("stripPrefix", () => {
 describe("loadCursor", () => {
   it("returns defaults when file is missing", () => {
     const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "shai-test-"));
-    const cursor = loadCursor(tmpDir);
+    const cursor = loadCursor(path.join(tmpDir, "slack-cursor.json"));
     expect(cursor).toEqual({ channelTs: "now", dmTs: "now" });
     fs.rmdirSync(tmpDir);
   });
@@ -120,7 +120,7 @@ describe("loadCursor", () => {
   it("returns defaults when file is corrupt JSON", () => {
     const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "shai-test-"));
     fs.writeFileSync(path.join(tmpDir, "slack-cursor.json"), "not-json");
-    const cursor = loadCursor(tmpDir);
+    const cursor = loadCursor(path.join(tmpDir, "slack-cursor.json"));
     expect(cursor).toEqual({ channelTs: "now", dmTs: "now" });
     fs.rmdirSync(tmpDir, { recursive: true } as fs.RmDirOptions);
   });
@@ -128,7 +128,7 @@ describe("loadCursor", () => {
   it("returns defaults when JSON has wrong shape (missing fields)", () => {
     const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "shai-test-"));
     fs.writeFileSync(path.join(tmpDir, "slack-cursor.json"), JSON.stringify({ foo: "bar" }));
-    const cursor = loadCursor(tmpDir);
+    const cursor = loadCursor(path.join(tmpDir, "slack-cursor.json"));
     expect(cursor).toEqual({ channelTs: "now", dmTs: "now" });
     fs.rmSync(tmpDir, { recursive: true, force: true });
   });
@@ -136,7 +136,7 @@ describe("loadCursor", () => {
   it("returns defaults when field types are wrong", () => {
     const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "shai-test-"));
     fs.writeFileSync(path.join(tmpDir, "slack-cursor.json"), JSON.stringify({ channelTs: 123, dmTs: true }));
-    const cursor = loadCursor(tmpDir);
+    const cursor = loadCursor(path.join(tmpDir, "slack-cursor.json"));
     expect(cursor).toEqual({ channelTs: "now", dmTs: "now" });
     fs.rmSync(tmpDir, { recursive: true, force: true });
   });
@@ -144,7 +144,7 @@ describe("loadCursor", () => {
   it("loads a valid cursor correctly", () => {
     const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "shai-test-"));
     fs.writeFileSync(path.join(tmpDir, "slack-cursor.json"), JSON.stringify({ channelTs: "1234.5678", dmTs: "9876.5432" }));
-    const cursor = loadCursor(tmpDir);
+    const cursor = loadCursor(path.join(tmpDir, "slack-cursor.json"));
     expect(cursor).toEqual({ channelTs: "1234.5678", dmTs: "9876.5432" });
     fs.rmSync(tmpDir, { recursive: true, force: true });
   });
@@ -153,9 +153,10 @@ describe("loadCursor", () => {
 describe("saveCursor / loadCursor round-trip", () => {
   it("persists cursor and reads it back", () => {
     const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "shai-test-"));
+    const cursorPath = path.join(tmpDir, "slack-cursor.json");
     const cursor = { channelTs: "1234.5678", dmTs: "9999.0000" };
-    saveCursor(tmpDir, cursor);
-    const loaded = loadCursor(tmpDir);
+    saveCursor(cursorPath, cursor);
+    const loaded = loadCursor(cursorPath);
     expect(loaded).toEqual(cursor);
     fs.rmdirSync(tmpDir, { recursive: true } as fs.RmDirOptions);
   });

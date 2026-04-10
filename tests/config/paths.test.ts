@@ -40,6 +40,8 @@ describe("buildPaths — system paths resolve from runtimeDir", () => {
   it("slackThreads", () => expect(p.slackThreads).toBe(join(RUNTIME, "slack-threads.json")));
   it("slackCursor", () => expect(p.slackCursor).toBe(join(RUNTIME, "slack-cursor.json")));
   it("slackProcessed", () => expect(p.slackProcessed).toBe(join(RUNTIME, "slack-processed.json")));
+  it("slackIoOutput", () => expect(p.slackIoOutput).toBe(join(RUNTIME, "slack-io-output.md")));
+  it("slackIoOutputStream", () => expect(p.slackIoOutputStream).toBe(join(RUNTIME, "slack-io-output-stream.jsonl")));
 });
 
 // ─── Stage dirs ──────────────────────────────────────────────────────────────
