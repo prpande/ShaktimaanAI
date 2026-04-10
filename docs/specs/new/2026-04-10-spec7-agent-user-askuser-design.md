@@ -525,8 +525,8 @@ Complete lifecycle of an agent asking a question:
 
 8. Pipeline processes .control file → resumeStage()
    ├─ Moves task from 12-hold/ → 03-design/pending/
-   ├─ Loads checkpoint from artifacts/design-checkpoint.json
-   ├─ Calls query({ resume: sessionId }) with user's answer as tool result
+   ├─ Loads checkpoint from artifacts/{stage}-checkpoint.json
+   ├─ Calls query({ options: { resume: checkpoint.sdkSessionId } }) with user's answer as tool result
    │   linked via parent_tool_use_id
    └─ Deletes checkpoint file
 
