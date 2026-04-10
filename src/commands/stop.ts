@@ -1,8 +1,7 @@
 import { Command } from "commander";
 import { readFileSync, writeFileSync, existsSync, unlinkSync, mkdirSync } from "node:fs";
 import { join } from "node:path";
-import { resolveConfigPath } from "../config/resolve-path.js";
-import { loadConfig } from "../config/loader.js";
+import { findConfigPath, loadConfig } from "../config/loader.js";
 
 // ─── registerStopCommand ─────────────────────────────────────────────────────
 
@@ -12,7 +11,7 @@ export function registerStopCommand(program: Command): void {
     .description("Stop the ShaktimaanAI pipeline watcher")
     .action(async () => {
       // 1. Resolve config
-      const configPath = resolveConfigPath();
+      const configPath = findConfigPath();
       const config = loadConfig(configPath);
 
       const runtimeDir = config.pipeline.runtimeDir;

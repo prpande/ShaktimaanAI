@@ -1,8 +1,7 @@
 import { Command } from "commander";
 import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
-import { resolveConfigPath } from "../config/resolve-path.js";
-import { loadConfig } from "../config/loader.js";
+import { findConfigPath, loadConfig } from "../config/loader.js";
 import { reenterTask, type ReentryResult } from "../core/recovery-reentry.js";
 
 // ─── Types ─────────────────────────────────────────────────────────────────
@@ -80,7 +79,7 @@ export function registerRecoverCommand(program: Command): void {
     .description("List held recovery tasks, view details, or re-enter a task")
     .option("--reenter", "Re-enter the specified task into the pipeline")
     .action((slug: string | undefined, options: { reenter?: boolean }) => {
-      const configPath = resolveConfigPath();
+      const configPath = findConfigPath();
       const config = loadConfig(configPath);
       const runtimeDir = config.pipeline.runtimeDir;
 

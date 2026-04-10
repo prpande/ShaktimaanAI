@@ -1,8 +1,7 @@
 import { Command } from "commander";
 import { writeFileSync, unlinkSync, existsSync, readFileSync } from "node:fs";
 import { join, dirname } from "node:path";
-import { resolveConfigPath } from "../config/resolve-path.js";
-import { loadConfig, loadEnvFile } from "../config/loader.js";
+import { findConfigPath, loadConfig, loadEnvFile } from "../config/loader.js";
 import { verifyRuntimeDirs } from "../runtime/dirs.js";
 import { createSystemLogger } from "../core/logger.js";
 import { createAgentRegistry } from "../core/registry.js";
@@ -26,7 +25,7 @@ export function registerStartCommand(program: Command): void {
     .description("Start the ShaktimaanAI pipeline watcher")
     .action(async (_opts: unknown, cmd: Command) => {
       // 1. Resolve config and load env
-      const configPath = resolveConfigPath();
+      const configPath = findConfigPath();
       const config = loadConfig(configPath);
       const envPath = join(dirname(configPath), ".env");
       loadEnvFile(envPath);

@@ -1,8 +1,7 @@
 import { readdirSync, readFileSync, existsSync } from "node:fs";
 import { join } from "node:path";
 import type { Command } from "commander";
-import { resolveConfigPath } from "../config/resolve-path.js";
-import { loadConfig } from "../config/loader.js";
+import { findConfigPath, loadConfig } from "../config/loader.js";
 
 export interface HistoryEntry {
   slug: string;
@@ -68,7 +67,7 @@ export function registerHistoryCommand(program: Command): void {
         process.exit(1);
       }
 
-      const configPath = resolveConfigPath();
+      const configPath = findConfigPath();
       const config = loadConfig(configPath);
       const entries = listCompletedTasks(config.pipeline.runtimeDir, count);
 

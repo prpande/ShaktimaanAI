@@ -275,7 +275,7 @@ function deepMergeDefaults(
 // ── Config Resolution (non-exiting) ───────────────────────────────────
 
 /**
- * Same logic as resolveConfigPath() in src/config/resolve-path.ts
+ * Same logic as findConfigPath() in src/config/loader.ts
  * but returns null instead of calling process.exit(1).
  */
 export function tryResolveConfigPath(): string | null {

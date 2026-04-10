@@ -1,14 +1,13 @@
 import { writeFileSync, mkdirSync } from "node:fs";
 import { join } from "node:path";
-import { resolveConfigPath } from "../config/resolve-path.js";
-import { loadConfig } from "../config/loader.js";
+import { findConfigPath, loadConfig } from "../config/loader.js";
 import { resolveSlugOrExit } from "./resolve-slug-or-exit.js";
 
 export function writeControlFile(
   rawSlug: string,
   payload: Record<string, unknown>,
 ): string {
-  const config = loadConfig(resolveConfigPath());
+  const config = loadConfig(findConfigPath());
   const slug = resolveSlugOrExit(rawSlug, config.pipeline.runtimeDir);
   const inboxDir = join(config.pipeline.runtimeDir, "00-inbox");
   mkdirSync(inboxDir, { recursive: true });

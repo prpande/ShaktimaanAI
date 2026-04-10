@@ -3,8 +3,7 @@ import { join } from "node:path";
 import type { DailyLogEntry } from "../core/interactions.js";
 import { readAllDailyLogs } from "../core/interactions.js";
 import { PIPELINE_STAGES } from "../core/stage-map.js";
-import { resolveConfigPath } from "../config/resolve-path.js";
-import { loadConfig } from "../config/loader.js";
+import { findConfigPath, loadConfig } from "../config/loader.js";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -421,7 +420,7 @@ export function registerStatsCommand(program: Command): void {
         process.exit(1);
       }
 
-      const configPath = resolveConfigPath();
+      const configPath = findConfigPath();
       const config = loadConfig(configPath);
 
       executeStats({

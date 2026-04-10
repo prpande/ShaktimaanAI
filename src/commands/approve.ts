@@ -1,6 +1,5 @@
 import type { Command } from "commander";
-import { resolveConfigPath } from "../config/resolve-path.js";
-import { loadConfig } from "../config/loader.js";
+import { findConfigPath, loadConfig } from "../config/loader.js";
 import { findHeldTask } from "../core/approval-handler.js";
 import { resolveSlugOrExit } from "./resolve-slug-or-exit.js";
 import { writeControlFile } from "./write-control.js";
@@ -12,7 +11,7 @@ export function registerApproveCommand(program: Command): void {
     .argument("<slug>", "Task slug to approve")
     .option("--feedback <feedback>", "Optional feedback message")
     .action((slug: string, opts: { feedback?: string }) => {
-      const config = loadConfig(resolveConfigPath());
+      const config = loadConfig(findConfigPath());
       const resolved = resolveSlugOrExit(slug, config.pipeline.runtimeDir);
 
       const taskPath = findHeldTask(config.pipeline.runtimeDir, resolved);
