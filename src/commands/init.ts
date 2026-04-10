@@ -1,6 +1,6 @@
 import { writeFileSync, existsSync } from "node:fs";
 import { join } from "node:path";
-import { intro, text, outro, isCancel, log } from "@clack/prompts";
+import { intro, text, confirm, select, outro, isCancel, log } from "@clack/prompts";
 import { DEFAULT_CONFIG, DEFAULT_AGENT_NAMES } from "../config/defaults.js";
 import { createRuntimeDirs } from "../runtime/dirs.js";
 import { checkAllTools } from "./auth.js";
@@ -13,6 +13,10 @@ export interface InitAnswers {
   adoOrg: string;
   adoProject: string;
   adoArea: string;
+  slackEnabled: boolean;
+  slackChannel: string;
+  slackChannelId: string;
+  slackNotifyLevel: "minimal" | "bookends" | "stages";
 }
 
 /**
@@ -38,12 +42,12 @@ export function writeInitConfig(dir: string, answers: InitAnswers): void {
       defaultArea: answers.adoArea,
     },
     slack: {
-      enabled: d.slack.enabled,
-      channel: d.slack.channel,
-      channelId: d.slack.channelId,
+      enabled: answers.slackEnabled,
+      channel: answers.slackChannel,
+      channelId: answers.slackChannelId,
       pollIntervalActiveSec: d.slack.pollIntervalActiveSec,
       pollIntervalIdleSec: d.slack.pollIntervalIdleSec,
-      notifyLevel: d.slack.notifyLevel,
+      notifyLevel: answers.slackNotifyLevel,
       requirePrefix: d.slack.requirePrefix,
       prefix: d.slack.prefix,
       allowDMs: d.slack.allowDMs,
@@ -185,6 +189,57 @@ export async function runInitWizard(): Promise<void> {
     return;
   }
 
+  // Slack integration
+  const slackEnabled = await confirm({
+    message: "Enable Slack integration?",
+    initialValue: false,
+  });
+  if (isCancel(slackEnabled)) {
+    log.warn("Setup cancelled.");
+    return;
+  }
+
+  let slackChannel = "#agent-pipeline";
+  let slackChannelId = "";
+  let slackNotifyLevel: "minimal" | "bookends" | "stages" = "bookends";
+
+  if (slackEnabled) {
+    const channelVal = await text({
+      message: "Slack channel name",
+      placeholder: "#agent-pipeline",
+    });
+    if (isCancel(channelVal)) {
+      log.warn("Setup cancelled.");
+      return;
+    }
+    slackChannel = String(channelVal) || "#agent-pipeline";
+
+    const channelIdVal = await text({
+      message: "Slack channel ID (from channel details in Slack)",
+      placeholder: "C0123456789",
+    });
+    if (isCancel(channelIdVal)) {
+      log.warn("Setup cancelled.");
+      return;
+    }
+    slackChannelId = String(channelIdVal);
+
+    const notifyLevelVal = await select({
+      message: "Slack notification level",
+      options: [
+        { value: "minimal", label: "Minimal — only failures" },
+        { value: "bookends", label: "Bookends — start + end of each task (default)" },
+        { value: "stages", label: "Stages — every stage transition" },
+      ],
+      initialValue: "bookends",
+    });
+    if (isCancel(notifyLevelVal)) {
+      log.warn("Setup cancelled.");
+      return;
+    }
+    slackNotifyLevel = notifyLevelVal as "minimal" | "bookends" | "stages";
+  }
+
   const answers: InitAnswers = {
     runtimeDir: String(runtimeDir),
     reposRoot: String(reposRoot),
@@ -193,6 +248,10 @@ export async function runInitWizard(): Promise<void> {
     adoArea: String(adoArea),
     dashboardRepoUrl: String(dashboardRepoUrl),
     dashboardRepoLocal: String(dashboardRepoLocal),
+    slackEnabled,
+    slackChannel,
+    slackChannelId,
+    slackNotifyLevel,
   };
 
   // Create runtime directories
