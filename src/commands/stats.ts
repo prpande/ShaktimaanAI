@@ -338,6 +338,7 @@ export function formatStatsJson(stats: StageStats[], summary: PipelineSummary): 
 
 export interface StatsOptions {
   runtimeDir: string;
+  interactionsDir?: string;
   json: boolean;
   task?: string;
   from?: string;
@@ -346,7 +347,7 @@ export interface StatsOptions {
 
 /** Core stats logic, separated from Commander for testability. */
 export function executeStats(options: StatsOptions): void {
-  const interactionsDir = join(options.runtimeDir, "interactions");
+  const interactionsDir = options.interactionsDir ?? join(options.runtimeDir, "interactions");
 
   // Read all daily logs with optional date range
   const allEntries = readAllDailyLogs(interactionsDir, {
@@ -424,7 +425,8 @@ export function registerStatsCommand(program: Command): void {
       const config = loadConfig(configPath);
 
       executeStats({
-        runtimeDir: config.pipeline.runtimeDir,
+        runtimeDir: config.paths.runtimeDir,
+        interactionsDir: config.paths.interactionsDir,
         json: opts.json,
         task: opts.task,
         from: opts.from,

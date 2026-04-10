@@ -2,6 +2,7 @@ import { readdirSync, readFileSync, existsSync } from "node:fs";
 import { join } from "node:path";
 import type { Command } from "commander";
 import { findConfigPath, loadConfig } from "../config/loader.js";
+import { TERMINAL_DIR_MAP } from "../config/paths.js";
 
 export interface HistoryEntry {
   slug: string;
@@ -15,7 +16,7 @@ export interface HistoryEntry {
 export function listCompletedTasks(runtimeDir: string, count?: number): HistoryEntry[] {
   const entries: HistoryEntry[] = [];
 
-  for (const dir of ["10-complete", "11-failed"]) {
+  for (const dir of [TERMINAL_DIR_MAP.complete, TERMINAL_DIR_MAP.failed]) {
     const dirPath = join(runtimeDir, dir);
     if (!existsSync(dirPath)) continue;
 
@@ -69,7 +70,7 @@ export function registerHistoryCommand(program: Command): void {
 
       const configPath = findConfigPath();
       const config = loadConfig(configPath);
-      const entries = listCompletedTasks(config.pipeline.runtimeDir, count);
+      const entries = listCompletedTasks(config.paths.runtimeDir, count);
 
       if (entries.length === 0) {
         console.log("No completed tasks found.");

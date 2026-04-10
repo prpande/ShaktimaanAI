@@ -1,6 +1,5 @@
 import { Command } from "commander";
 import { writeFileSync, unlinkSync, existsSync, readFileSync } from "node:fs";
-import { join, dirname } from "node:path";
 import { findConfigPath, loadConfig, loadEnvFile } from "../config/loader.js";
 import { verifyRuntimeDirs } from "../runtime/dirs.js";
 import { createSystemLogger } from "../core/logger.js";
@@ -27,8 +26,7 @@ export function registerStartCommand(program: Command): void {
       // 1. Resolve config and load env
       const configPath = findConfigPath();
       const config = loadConfig(configPath);
-      const envPath = join(dirname(configPath), ".env");
-      loadEnvFile(envPath);
+      loadEnvFile(config.paths.envFile);
 
       // 2. Verify runtime dirs
       const { valid, missing } = verifyRuntimeDirs(config.paths);
@@ -45,14 +43,12 @@ export function registerStartCommand(program: Command): void {
       await showBanner({ noBanner, version: program.version() ?? "" });
 
       // 4. Create system logger and agent registry
-      const logDir = join(config.pipeline.runtimeDir, "logs");
-      const logger = createSystemLogger(logDir);
+      const logger = createSystemLogger(config.paths.logsDir);
       const registry = createAgentRegistry(config.agents.maxConcurrentTotal);
 
       // 4. Run worktree cleanup on startup if enabled
       if (config.worktree.cleanupOnStartup) {
-        const manifestPath = join(config.pipeline.runtimeDir, "worktree-manifest.json");
-        const removed = cleanupExpired(manifestPath, config.worktree.retentionDays);
+        const removed = cleanupExpired(config.paths.worktreeManifest, config.worktree.retentionDays);
         if (removed.length > 0) {
           logger.info(`[startup] Cleaned up ${removed.length} expired worktree(s)`);
         }
@@ -115,7 +111,7 @@ export function registerStartCommand(program: Command): void {
       activeWatcher.start();
 
       // 8. Write PID file (with stale PID detection)
-      const pidFile = join(config.pipeline.runtimeDir, "shkmn.pid");
+      const pidFile = config.paths.pidFile;
       if (existsSync(pidFile)) {
         const existingPid = parseInt(readFileSync(pidFile, "utf-8").trim(), 10);
         if (!isNaN(existingPid)) {

@@ -36,10 +36,10 @@ export function registerLogsCommand(program: Command): void {
     .action((slug: string, opts: { follow?: boolean; lines: string }) => {
       const configPath = findConfigPath();
       const config = loadConfig(configPath);
-      const resolved = resolveSlugOrExit(slug, config.pipeline.runtimeDir);
+      const resolved = resolveSlugOrExit(slug, config.paths.runtimeDir);
 
       const lineCount = parseLineCount(opts.lines);
-      const logFile = join(config.pipeline.runtimeDir, "logs", `${resolved}.log`);
+      const logFile = join(config.paths.logsDir, `${resolved}.log`);
 
       if (!existsSync(logFile)) {
         console.error(`Log file not found: ${logFile}`);

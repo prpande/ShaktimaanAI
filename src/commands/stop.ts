@@ -14,8 +14,7 @@ export function registerStopCommand(program: Command): void {
       const configPath = findConfigPath();
       const config = loadConfig(configPath);
 
-      const runtimeDir = config.pipeline.runtimeDir;
-      const pidFile = join(runtimeDir, "shkmn.pid");
+      const pidFile = config.paths.pidFile;
 
       // 2. Check for PID file
       if (!existsSync(pidFile)) {
@@ -49,9 +48,8 @@ export function registerStopCommand(program: Command): void {
       }
 
       // 4. Write shutdown.control file to trigger graceful drain
-      const inboxDir = join(runtimeDir, "00-inbox");
-      mkdirSync(inboxDir, { recursive: true });
-      const controlPath = join(inboxDir, "shutdown.control");
+      mkdirSync(config.paths.terminals.inbox, { recursive: true });
+      const controlPath = join(config.paths.terminals.inbox, "shutdown.control");
       writeFileSync(
         controlPath,
         JSON.stringify({ operation: "shutdown", slug: "system" }),
