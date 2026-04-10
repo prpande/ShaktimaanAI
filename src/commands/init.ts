@@ -106,8 +106,8 @@ export function writeInitEnv(dir: string): void {
  * Prompts the user for all required config values, creates runtime dirs,
  * writes config and .env files.
  */
-export async function runInitWizard(options?: { noBanner?: boolean }): Promise<void> {
-  await showBanner({ noBanner: options?.noBanner });
+export async function runInitWizard(options?: { noBanner?: boolean; version?: string }): Promise<void> {
+  await showBanner({ noBanner: options?.noBanner, version: options?.version });
   intro("ShaktimaanAI Setup");
 
   // Check required tools

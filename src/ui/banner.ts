@@ -247,7 +247,9 @@ function renderStage(grid: ChakraGrid, stage: number): string[] {
         } else {
           const actualWeight = "░▒▓█".indexOf(ch);
           const stageWeight = "░▒▓█".indexOf(RIM_STAGE_CHARS[stage]);
-          line += chalk.hex(rc)(actualWeight <= stageWeight ? RIM_STAGE_CHARS[stage] : ch);
+          // Cap at stage weight so heavy chars don't appear too early
+          const useChar = actualWeight <= stageWeight ? ch : RIM_STAGE_CHARS[stage];
+          line += chalk.hex(rc)(useChar);
         }
       } else if (type === "spoke") {
         const sd = SPOKE_DISPLAY[stage];
@@ -309,7 +311,7 @@ function colorVortexLine(line: string, c1: string, c2: string, c3: string): stri
     else if (ch === "█") out += chalk.hex(c3)(ch);
     else if (ch === "▓") out += chalk.hex(c2)(ch);
     else if (ch === "▒" || ch === "░") out += chalk.hex(c1)(ch);
-    else if ("╲╱|─═".includes(ch)) out += chalk.hex(c2)(ch);
+    else if ("╲╱|│─═".includes(ch)) out += chalk.hex(c2)(ch);
     else if (ch === " ") out += ch;
     else out += chalk.hex(c1)(ch);
   }
@@ -406,7 +408,7 @@ async function phase2Chakra(
 
 // ─── Phase 3: Title reveal ──────────────────────────────────────────────────
 
-async function phase3Title(prevLineCount: number): Promise<void> {
+async function phase3Title(_prevLineCount: number, version: string): Promise<void> {
   // Gap between chakra and title
   write("\n\n");
 
@@ -440,9 +442,10 @@ async function phase3Title(prevLineCount: number): Promise<void> {
   await sleep(250);
 
   // Version
-  const version = "v0.1.0";
-  const verPad = " ".repeat(Math.max(0, Math.floor((termWidth() - version.length) / 2)));
-  write(`${verPad}${chalk.hex("#555555")(version)}\n`);
+  if (version) {
+    const verPad = " ".repeat(Math.max(0, Math.floor((termWidth() - version.length) / 2)));
+    write(`${verPad}${chalk.hex("#555555")(version)}\n`);
+  }
 
   // Trailing gap before next output
   write("\n\n");
@@ -450,11 +453,17 @@ async function phase3Title(prevLineCount: number): Promise<void> {
 
 // ─── Public API ─────────────────────────────────────────────────────────────
 
-export async function showBanner(options?: { noBanner?: boolean }): Promise<void> {
+export async function showBanner(options?: { noBanner?: boolean; version?: string }): Promise<void> {
   // Skip conditions
   if (options?.noBanner) return;
   if (!process.stdout.isTTY) return;
   if (process.env["NO_COLOR"]) return;
+
+  // Skip if terminal is too narrow for the animation
+  const MIN_WIDTH = 55; // GRID_W (51) + a few chars padding
+  if (termWidth() < MIN_WIDTH) return;
+
+  const ver = options?.version ? `v${options.version}` : "";
 
   // Pre-generate chakra and all stage frames
   const grid = generateChakra();
@@ -469,7 +478,7 @@ export async function showBanner(options?: { noBanner?: boolean }): Promise<void
     write("\n\n");
     const spinLines = await phase1Spin();
     const chakraLines = await phase2Chakra(stageFrames, spinLines);
-    await phase3Title(chakraLines);
+    await phase3Title(chakraLines, ver);
   } finally {
     showCursor();
   }

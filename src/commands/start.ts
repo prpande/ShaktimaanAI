@@ -31,11 +31,7 @@ export function registerStartCommand(program: Command): void {
       const envPath = join(dirname(configPath), ".env");
       loadEnvFile(envPath);
 
-      // 2. Show banner
-      const noBanner = program.opts?.()?.banner === false;
-      await showBanner({ noBanner });
-
-      // 3. Verify runtime dirs
+      // 2. Verify runtime dirs
       const { valid, missing } = verifyRuntimeDirs(config.pipeline.runtimeDir);
       if (!valid) {
         console.error(
@@ -45,7 +41,11 @@ export function registerStartCommand(program: Command): void {
         process.exit(1);
       }
 
-      // 3. Create system logger and agent registry
+      // 3. Show banner (after validation so errors aren't hidden behind animation)
+      const noBanner = program.opts?.()?.banner === false;
+      await showBanner({ noBanner, version: config.pipeline?.version ?? "" });
+
+      // 4. Create system logger and agent registry
       const logDir = join(config.pipeline.runtimeDir, "logs");
       const logger = createSystemLogger(logDir);
       const registry = createAgentRegistry(config.agents.maxConcurrentTotal);

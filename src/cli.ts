@@ -37,7 +37,7 @@ program
   .description("Interactive setup wizard — creates config, runtime dirs, dashboard repo")
   .action(async () => {
     const noBanner = program.opts().banner === false;
-    await runInitWizard({ noBanner });
+    await runInitWizard({ noBanner, version: __VERSION__ });
   });
 
 const configCmd = program

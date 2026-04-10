@@ -14,10 +14,13 @@ Adds an animated ASCII art welcome banner to the ShaktimaanAI CLI, inspired by S
 ### API
 
 ```typescript
-export async function showBanner(): Promise<void>
+export async function showBanner(options?: {
+  noBanner?: boolean;
+  version?: string;
+}): Promise<void>
 ```
 
-Single exported function. Writes directly to `process.stdout`. Uses ANSI escape codes for color and cursor control.
+Single exported function. Writes directly to `process.stdout`. Uses ANSI escape codes for color and cursor control. Accepts optional `noBanner` flag and `version` string (displayed below the subtitle).
 
 ### Auto-skip conditions
 
@@ -25,6 +28,7 @@ Banner is silently skipped when any of:
 - `process.stdout.isTTY` is falsy (piped output)
 - `NO_COLOR` environment variable is set
 - `--no-banner` flag is passed to the command
+- Terminal width is below 55 columns
 
 ### Dependencies (new)
 
@@ -44,7 +48,7 @@ Frame data is hardcoded string arrays using `· ░ ▒ ▓ █ ╲ ╱ │ ─ 
 
 **Phase 2: Chakra Assembly (~0.7s)**
 
-The Ashoka Chakra materializes through rapid continuous morphing. The wheel is generated mathematically: 24 spokes plotted on a 51x21 character grid with outer rim (radius 24x10), inner hub (radius 8x3.5), and center `☸`.
+The Ashoka Chakra materializes through rapid continuous morphing. The wheel is generated mathematically: 24 spokes plotted on a 51x21 character grid with outer rim (radius 24x10), inner hub (radius 7x3.0), and a hexagonal center block in orange.
 
 Six density stages rendered as full-frame swaps (no per-line reveal):
 - Stage 0: faint dots `·`
@@ -58,7 +62,7 @@ Timing accelerates: 120ms, 100ms, 80ms, 65ms, 50ms, 40ms. Quick bounce (stage 3 
 
 **Phase 3: Title Reveal (~0.8s)**
 
-Letter-by-letter typing of `S H A K T I M A A N  AI` with per-letter fire gradient (`#ff2200` → `#ffee11`, "AI" in `#ffaa00`/`#ffcc00`). Blinking cursor `▌` during typing. Subtitle "☸ Agentic Development Pipeline ☸" fades in, then version string.
+Letter-by-letter typing of `S H A K T I M A A N  AI` with per-letter fire gradient (`#ff2200` → `#ffee11`, "AI" in `#ffaa00`/`#ffcc00`). Blinking cursor `▌` during typing. Subtitle "Agentic Development Pipeline" fades in, then dynamic version string.
 
 ### Color Palette
 
@@ -67,7 +71,7 @@ fire gradient:  #ff1100 → #ff4400 → #ff8800 → #ffaa00 → #ffcc00 → #ffe
 rim:            row-distance gradient #ffaa00 (center) → #ff3333 (edges)
 spokes:         #ffcc44 (stage 4 final: #ffcc44)
 hub:            #ffdd44
-center ☸:       #ffffff bold
+center hex:     #ff8811 bold (orange, hexagonal block shape)
 title:          per-letter #ff2200 → #ffee11
 subtitle:       #666666
 ```
@@ -78,22 +82,22 @@ subtitle:       #666666
 Grid: 51 wide x 21 tall
 Center: (25, 10)
 Outer rim: ellipse rx=24, ry=10, ring where 0.75 <= d <= 1.15
-Hub: ellipse rx=8, ry=3.5, ring where 0.6 <= d <= 1.4
+Hub: ellipse rx=7, ry=3.0, ring where 0.6 <= d <= 1.4
 Spokes: 24 lines at 15-degree intervals, plotted from hub edge to rim edge
 Spoke char selection by angle: ─ (0/180), ╲ (45/225), │ (90/270), ╱ (135/315)
 ```
 
-Pre-rendered into 6 stage frames at module load time.
+Pre-rendered into 6 stage frames inside `showBanner()` on each call.
 
 ## Integration Points
 
 ### `shkmn start` (`src/commands/start.ts`)
 
-Call `showBanner()` after config/env loading but before the "pipeline started" log:
+Call `showBanner()` after config/env loading and runtime dir validation (so errors aren't hidden behind the animation):
 
 ```typescript
-// After step 2 (verify runtime dirs), before step 3
-await showBanner();
+// After verifyRuntimeDirs succeeds
+await showBanner({ noBanner, version });
 ```
 
 ### `shkmn init` (`src/commands/init.ts`)
