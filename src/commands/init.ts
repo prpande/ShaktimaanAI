@@ -122,7 +122,7 @@ export async function runInitWizard(options?: { noBanner?: boolean; version?: st
 
   // Prompt for runtime directory
   const runtimeDir = await text({
-    message: "Runtime directory (where task files and logs are stored)",
+    message: "Base directory (task files and logs will be stored in a runtime/ subdirectory)",
     placeholder: "~/.shkmn/runtime",
     validate: (val) => (val.trim() ? undefined : "Runtime directory is required"),
   });
@@ -270,10 +270,10 @@ export async function runInitWizard(options?: { noBanner?: boolean; version?: st
 
   // Write config and .env
   writeInitConfig(paths.configFile, { ...answers, runtimeDir: fullRuntimeDir });
-  log.success(`Written shkmn.config.json to: ${fullRuntimeDir}`);
+  log.success(`Written shkmn.config.json to: ${paths.configFile}`);
 
   writeInitEnv(paths.envFile);
-  log.success(`Written .env template to: ${fullRuntimeDir}`);
+  log.success(`Written .env template to: ${paths.envFile}`);
 
   outro("Setup complete! Run 'shkmn start' to begin.");
 }

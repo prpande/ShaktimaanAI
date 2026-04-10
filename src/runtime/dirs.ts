@@ -4,7 +4,9 @@ import type { RuntimePaths } from "../config/paths.js";
 
 /**
  * Collects all directories that should exist under the runtime root.
- * Derives paths from the RuntimePaths object — no hardcoded directory names.
+ * Derives base paths from the RuntimePaths object. Only "pending" and "done"
+ * subdirectory names are hardcoded here as they are structural conventions of
+ * the pipeline stage directories, not configurable names.
  */
 function getAllDirPaths(paths: RuntimePaths): string[] {
   const dirs: string[] = [];
